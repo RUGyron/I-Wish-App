@@ -29,7 +29,8 @@ final class AppSettings {
 
     /// Загружает существующие или создаёт новые settings. Гарантирует ровно один instance.
     static func loadOrCreate(in context: ModelContext) -> AppSettings {
-        let descriptor = FetchDescriptor<AppSettings>()
+        var descriptor = FetchDescriptor<AppSettings>()
+        descriptor.fetchLimit = 1
         if let existing = try? context.fetch(descriptor).first {
             return existing
         }
