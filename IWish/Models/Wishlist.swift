@@ -3,7 +3,9 @@ import SwiftData
 
 @Model
 final class Wishlist {
-    @Attribute(.unique) var id: UUID
+    // Без `@Attribute(.unique)` — CloudKit mirror не поддерживает unique constraints.
+    // Уникальность гарантируется `UUID()`.
+    var id: UUID
     var name: String
     var coverImageData: Data?
     var coverEmoji: String?

@@ -331,7 +331,9 @@ import SwiftData
 
 @Model
 final class Wishlist {
-    @Attribute(.unique) var id: UUID
+    // Без `@Attribute(.unique)` — CloudKit mirror не поддерживает unique constraints.
+    // Уникальность гарантируется `UUID()`.
+    var id: UUID
     var name: String
     var coverImageData: Data?
     var coverEmoji: String?
@@ -441,7 +443,8 @@ import SwiftData
 
 @Model
 final class Item {
-    @Attribute(.unique) var id: UUID
+    // Без `@Attribute(.unique)` — см. коммент в `Wishlist`.
+    var id: UUID
     var name: String
     var descriptionText: String?
     var coverImageData: Data?
@@ -511,8 +514,10 @@ import SwiftData
 
 @Model
 final class AppSettings {
-    /// Singleton — всегда один instance в БД.
-    @Attribute(.unique) var id: UUID
+    /// Singleton — всегда один instance в БД. Инвариант поддерживается
+    /// `loadOrCreate(in:)`, а не schema constraint (CloudKit mirror
+    /// не поддерживает `@Attribute(.unique)`).
+    var id: UUID
     var themeModeRaw: String
     var defaultCurrency: String
     var hasCompletedOnboarding: Bool

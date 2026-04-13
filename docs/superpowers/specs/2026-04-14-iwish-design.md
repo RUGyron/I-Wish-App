@@ -74,6 +74,11 @@
 
 Синк со SwiftData-CloudKit mirror автоматический. Offline-first: всё пишется локально, потом догоняет в облако. Конфликты — last-write-wins на уровне поля (стандартное поведение CloudKit).
 
+**CloudKit-ready schema constraints:**
+- Не используем `@Attribute(.unique)` ни в одной модели — CloudKit mirror его не поддерживает (runtime schema validation error). Уникальность `id: UUID` гарантируется `UUID()` на уровне приложения.
+- Все to-many relationships имеют default `= []`, все scalar-поля — либо optional, либо имеют дефолтное значение в init (CloudKit может доставить частичные записи).
+- `AppSettings` singleton-инвариант поддерживается runtime-проверкой в `loadOrCreate(in:)`, а не schema constraint.
+
 ---
 
 ## Data Model
