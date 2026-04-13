@@ -12,7 +12,9 @@ import SwiftData
 struct IWishApp: App {
     var sharedModelContainer: ModelContainer = {
         let schema = Schema([
+            Wishlist.self,
             Item.self,
+            AppSettings.self,
         ])
         let modelConfiguration = ModelConfiguration(schema: schema, isStoredInMemoryOnly: false)
 
