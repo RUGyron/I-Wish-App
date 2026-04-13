@@ -23,5 +23,5 @@ enum ItemTier: String, Codable, CaseIterable, Sendable, Identifiable {
         }
     }
 
-    static var defaultTier: ItemTier { .maybe }
+    static let defaultTier: ItemTier = .maybe
 }
