@@ -737,8 +737,13 @@ struct ImageCompressorTests {
         #expect(abs(restored.size.width - 200) < 2)
     }
 
+    /// Produces a UIImage at scale=1 so that JPEG round-trip preserves size.
+    /// Real-world user-supplied images (camera, photo library) also have scale=1,
+    /// so this matches production behavior.
     private func makeImage(size: CGSize, color: UIColor) -> UIImage {
-        let renderer = UIGraphicsImageRenderer(size: size)
+        let format = UIGraphicsImageRendererFormat()
+        format.scale = 1.0
+        let renderer = UIGraphicsImageRenderer(size: size, format: format)
         return renderer.image { ctx in
             color.setFill()
             ctx.fill(CGRect(origin: .zero, size: size))
@@ -784,7 +789,12 @@ private extension UIImage {
         guard maxSide > maxEdge else { return self }
         let scale = maxEdge / maxSide
         let newSize = CGSize(width: size.width * scale, height: size.height * scale)
-        let renderer = UIGraphicsImageRenderer(size: newSize)
+        // Pin scale to 1 so the output JPEG's pixel dimensions equal `newSize`
+        // regardless of device screen scale. Matches the convention for images
+        // originating from camera/photo library (which are also scale=1).
+        let format = UIGraphicsImageRendererFormat()
+        format.scale = 1.0
+        let renderer = UIGraphicsImageRenderer(size: newSize, format: format)
         return renderer.image { _ in self.draw(in: CGRect(origin: .zero, size: newSize)) }
     }
 }

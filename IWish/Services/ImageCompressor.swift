@@ -24,7 +24,12 @@ private extension UIImage {
         guard maxSide > maxEdge else { return self }
         let scale = maxEdge / maxSide
         let newSize = CGSize(width: size.width * scale, height: size.height * scale)
-        let renderer = UIGraphicsImageRenderer(size: newSize)
+        // Pin scale to 1 so the output JPEG's pixel dimensions equal `newSize`
+        // regardless of device screen scale. Matches the convention for images
+        // originating from camera/photo library (which are also scale=1).
+        let format = UIGraphicsImageRendererFormat()
+        format.scale = 1.0
+        let renderer = UIGraphicsImageRenderer(size: newSize, format: format)
         return renderer.image { _ in self.draw(in: CGRect(origin: .zero, size: newSize)) }
     }
 }
