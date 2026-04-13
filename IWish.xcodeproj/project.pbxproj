@@ -6,20 +6,56 @@
 	objectVersion = 77;
 	objects = {
 
+/* Begin PBXContainerItemProxy section */
+		C90616072F8D817C005AC61C /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = C90615E72F8D5AC1005AC61C /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = C90615EE2F8D5AC1005AC61C;
+			remoteInfo = IWish;
+		};
+/* End PBXContainerItemProxy section */
+
 /* Begin PBXFileReference section */
 		C90615EF2F8D5AC1005AC61C /* IWish.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = IWish.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		C90616032F8D817C005AC61C /* IWishTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = IWishTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 /* End PBXFileReference section */
+
+/* Begin PBXFileSystemSynchronizedBuildFileExceptionSet section */
+		C906160E2F8D81D4005AC61C /* Exceptions for "IWish" folder in "IWish" target */ = {
+			isa = PBXFileSystemSynchronizedBuildFileExceptionSet;
+			membershipExceptions = (
+				Info.plist,
+			);
+			target = C90615EE2F8D5AC1005AC61C /* IWish */;
+		};
+/* End PBXFileSystemSynchronizedBuildFileExceptionSet section */
 
 /* Begin PBXFileSystemSynchronizedRootGroup section */
 		C90615F12F8D5AC1005AC61C /* IWish */ = {
 			isa = PBXFileSystemSynchronizedRootGroup;
+			exceptions = (
+				C906160E2F8D81D4005AC61C /* Exceptions for "IWish" folder in "IWish" target */,
+			);
 			path = IWish;
+			sourceTree = "<group>";
+		};
+		C90616042F8D817C005AC61C /* IWishTests */ = {
+			isa = PBXFileSystemSynchronizedRootGroup;
+			path = IWishTests;
 			sourceTree = "<group>";
 		};
 /* End PBXFileSystemSynchronizedRootGroup section */
 
 /* Begin PBXFrameworksBuildPhase section */
 		C90615EC2F8D5AC1005AC61C /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		C90616002F8D817C005AC61C /* Frameworks */ = {
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
@@ -33,6 +69,7 @@
 			isa = PBXGroup;
 			children = (
 				C90615F12F8D5AC1005AC61C /* IWish */,
+				C90616042F8D817C005AC61C /* IWishTests */,
 				C90615F02F8D5AC1005AC61C /* Products */,
 			);
 			sourceTree = "<group>";
@@ -41,6 +78,7 @@
 			isa = PBXGroup;
 			children = (
 				C90615EF2F8D5AC1005AC61C /* IWish.app */,
+				C90616032F8D817C005AC61C /* IWishTests.xctest */,
 			);
 			name = Products;
 			sourceTree = "<group>";
@@ -70,6 +108,29 @@
 			productReference = C90615EF2F8D5AC1005AC61C /* IWish.app */;
 			productType = "com.apple.product-type.application";
 		};
+		C90616022F8D817C005AC61C /* IWishTests */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = C90616092F8D817C005AC61C /* Build configuration list for PBXNativeTarget "IWishTests" */;
+			buildPhases = (
+				C90615FF2F8D817C005AC61C /* Sources */,
+				C90616002F8D817C005AC61C /* Frameworks */,
+				C90616012F8D817C005AC61C /* Resources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+				C90616082F8D817C005AC61C /* PBXTargetDependency */,
+			);
+			fileSystemSynchronizedGroups = (
+				C90616042F8D817C005AC61C /* IWishTests */,
+			);
+			name = IWishTests;
+			packageProductDependencies = (
+			);
+			productName = IWishTests;
+			productReference = C90616032F8D817C005AC61C /* IWishTests.xctest */;
+			productType = "com.apple.product-type.bundle.unit-test";
+		};
 /* End PBXNativeTarget section */
 
 /* Begin PBXProject section */
@@ -82,6 +143,10 @@
 				TargetAttributes = {
 					C90615EE2F8D5AC1005AC61C = {
 						CreatedOnToolsVersion = 26.4;
+					};
+					C90616022F8D817C005AC61C = {
+						CreatedOnToolsVersion = 26.4;
+						TestTargetID = C90615EE2F8D5AC1005AC61C;
 					};
 				};
 			};
@@ -100,12 +165,20 @@
 			projectRoot = "";
 			targets = (
 				C90615EE2F8D5AC1005AC61C /* IWish */,
+				C90616022F8D817C005AC61C /* IWishTests */,
 			);
 		};
 /* End PBXProject section */
 
 /* Begin PBXResourcesBuildPhase section */
 		C90615ED2F8D5AC1005AC61C /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		C90616012F8D817C005AC61C /* Resources */ = {
 			isa = PBXResourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
@@ -122,7 +195,22 @@
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
+		C90615FF2F8D817C005AC61C /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 /* End PBXSourcesBuildPhase section */
+
+/* Begin PBXTargetDependency section */
+		C90616082F8D817C005AC61C /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = C90615EE2F8D5AC1005AC61C /* IWish */;
+			targetProxy = C90616072F8D817C005AC61C /* PBXContainerItemProxy */;
+		};
+/* End PBXTargetDependency section */
 
 /* Begin XCBuildConfiguration section */
 		C90615FA2F8D5AC1005AC61C /* Debug */ = {
@@ -251,11 +339,13 @@
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
+				CODE_SIGN_ENTITLEMENTS = IWish/IWish.entitlements;
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
 				DEVELOPMENT_TEAM = N8VX7T6P4D;
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_FILE = IWish/Info.plist;
 				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
 				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
 				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
@@ -283,11 +373,13 @@
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
+				CODE_SIGN_ENTITLEMENTS = IWish/IWish.entitlements;
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
 				DEVELOPMENT_TEAM = N8VX7T6P4D;
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_FILE = IWish/Info.plist;
 				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
 				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
 				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
@@ -310,6 +402,48 @@
 			};
 			name = Release;
 		};
+		C906160A2F8D817C005AC61C /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				BUNDLE_LOADER = "$(TEST_HOST)";
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = N8VX7T6P4D;
+				GENERATE_INFOPLIST_FILE = YES;
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = RUGyron.IWishTests;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				STRING_CATALOG_GENERATE_SYMBOLS = NO;
+				SWIFT_APPROACHABLE_CONCURRENCY = YES;
+				SWIFT_EMIT_LOC_STRINGS = NO;
+				SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY = YES;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = "1,2";
+				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/IWish.app/$(BUNDLE_EXECUTABLE_FOLDER_PATH)/IWish";
+			};
+			name = Debug;
+		};
+		C906160B2F8D817C005AC61C /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				BUNDLE_LOADER = "$(TEST_HOST)";
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = N8VX7T6P4D;
+				GENERATE_INFOPLIST_FILE = YES;
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = RUGyron.IWishTests;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				STRING_CATALOG_GENERATE_SYMBOLS = NO;
+				SWIFT_APPROACHABLE_CONCURRENCY = YES;
+				SWIFT_EMIT_LOC_STRINGS = NO;
+				SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY = YES;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = "1,2";
+				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/IWish.app/$(BUNDLE_EXECUTABLE_FOLDER_PATH)/IWish";
+			};
+			name = Release;
+		};
 /* End XCBuildConfiguration section */
 
 /* Begin XCConfigurationList section */
@@ -327,6 +461,15 @@
 			buildConfigurations = (
 				C90615FD2F8D5AC1005AC61C /* Debug */,
 				C90615FE2F8D5AC1005AC61C /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+		C90616092F8D817C005AC61C /* Build configuration list for PBXNativeTarget "IWishTests" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				C906160A2F8D817C005AC61C /* Debug */,
+				C906160B2F8D817C005AC61C /* Release */,
 			);
 			defaultConfigurationIsVisible = 0;
 			defaultConfigurationName = Release;
