@@ -1,5 +1,6 @@
 import SwiftUI
 import SwiftData
+import LinkPresentation
 
 struct AddItemSheet: View {
     @Environment(\.modelContext) private var context
@@ -14,13 +15,15 @@ struct AddItemSheet: View {
     @State private var name: String = ""
     @State private var coverImageData: Data?
     @State private var coverEmoji: String?
-    @State private var previewID = UUID()
     @State private var tier: ItemTier = .maybe
     @State private var priceString: String = ""
     @State private var currency: String = ""
     @State private var descriptionText: String = ""
     @State private var probationEnabled: Bool = false
     @State private var probationDays: Int = 30
+
+    @State private var urlStatus: URLPasteStatus = .idle
+    @State private var isFetchingMetadata = false
 
     // MARK: - Derived
 
@@ -63,11 +66,43 @@ struct AddItemSheet: View {
 
     private var urlSection: some View {
         Section("Ссылка") {
-            TextField("https://...", text: $urlString)
-                .keyboardType(.URL)
-                .textContentType(.URL)
-                .textInputAutocapitalization(.never)
-                .autocorrectionDisabled()
+            if urlString.isEmpty {
+                Button {
+                    pasteURL()
+                } label: {
+                    Label("Вставить ссылку", systemImage: "doc.on.clipboard")
+                }
+
+                if case .noURL = urlStatus {
+                    Text("Нет ссылки в буфере")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
+            } else {
+                HStack {
+                    Text(urlString)
+                        .font(.subheadline)
+                        .foregroundStyle(.secondary)
+                        .lineLimit(1)
+                        .truncationMode(.middle)
+
+                    Spacer()
+
+                    if isFetchingMetadata {
+                        ProgressView()
+                            .controlSize(.small)
+                    }
+
+                    Button {
+                        urlString = ""
+                        urlStatus = .idle
+                    } label: {
+                        Image(systemName: "xmark.circle.fill")
+                            .foregroundStyle(.secondary)
+                    }
+                    .buttonStyle(.plain)
+                }
+            }
         }
     }
 
@@ -81,14 +116,18 @@ struct AddItemSheet: View {
     private var coverSection: some View {
         CoverPickerSection(
             imageData: $coverImageData,
-            emoji: $coverEmoji,
-            previewID: previewID
+            emoji: $coverEmoji
         )
     }
 
     private var tierSection: some View {
         Section("Важность") {
-            TierPicker(selection: $tier)
+            Picker("Важность", selection: $tier) {
+                ForEach(ItemTier.allCases) { tier in
+                    Text(tier.icon).tag(tier)
+                }
+            }
+            .pickerStyle(.segmented)
         }
     }
 
@@ -99,8 +138,8 @@ struct AddItemSheet: View {
                     .keyboardType(.numberPad)
 
                 Picker("Валюта", selection: $currency) {
-                    Text("RUB").tag("RUB")
-                    Text("USD").tag("USD")
+                    Text("\u{20BD}").tag("RUB")
+                    Text("$").tag("USD")
                 }
                 .labelsHidden()
                 .pickerStyle(.menu)
@@ -129,6 +168,52 @@ struct AddItemSheet: View {
         } footer: {
             if probationEnabled {
                 Text("Желание скроется до окончания срока — если за это время не передумаешь, оно останется.")
+            }
+        }
+    }
+
+    // MARK: - URL Paste + Metadata
+
+    private func pasteURL() {
+        guard let clipboard = UIPasteboard.general.string,
+              let url = URL(string: clipboard),
+              url.scheme != nil else {
+            urlStatus = .noURL
+            return
+        }
+
+        urlString = clipboard
+        urlStatus = .pasted
+        fetchMetadata(for: url)
+    }
+
+    private func fetchMetadata(for url: URL) {
+        isFetchingMetadata = true
+        let provider = LPMetadataProvider()
+
+        provider.startFetchingMetadata(for: url) { metadata, _ in
+            Task { @MainActor in
+                isFetchingMetadata = false
+                guard let metadata else { return }
+
+                // Auto-fill name if empty
+                if name.trimmingCharacters(in: .whitespaces).isEmpty,
+                   let title = metadata.title {
+                    name = title
+                }
+
+                // Auto-fill cover image if none selected
+                if let imageProvider = metadata.imageProvider {
+                    imageProvider.loadObject(ofClass: UIImage.self) { object, _ in
+                        if let image = object as? UIImage {
+                            Task { @MainActor in
+                                if coverImageData == nil {
+                                    coverImageData = ImageCompressor.compress(image)
+                                }
+                            }
+                        }
+                    }
+                }
             }
         }
     }
@@ -198,6 +283,14 @@ struct AddItemSheet: View {
             return "дней"
         }
     }
+}
+
+// MARK: - URL paste status
+
+private enum URLPasteStatus {
+    case idle
+    case pasted
+    case noURL
 }
 
 #Preview {

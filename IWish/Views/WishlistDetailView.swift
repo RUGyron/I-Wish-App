@@ -25,9 +25,13 @@ private enum SortOption: String, CaseIterable, Identifiable {
 
 struct WishlistDetailView: View {
     @Environment(\.modelContext) private var context
+    @Environment(\.dismiss) private var dismiss
     let wishlist: Wishlist
     @State private var showingAddItem = false
     @State private var selectedSort: SortOption = .importance
+    @State private var showingArchive = false
+    @State private var showingShare = false
+    @State private var showingDeleteConfirmation = false
 
     private var activeItems: [Item] {
         wishlist.items.filter { !$0.isArchived }
@@ -43,9 +47,70 @@ struct WishlistDetailView: View {
         }
         .navigationTitle(wishlist.name)
         .navigationBarTitleDisplayMode(.inline)
+        .toolbar {
+            ToolbarItem(placement: .topBarTrailing) {
+                Menu {
+                    ForEach(SortOption.allCases) { option in
+                        Button {
+                            selectedSort = option
+                        } label: {
+                            if selectedSort == option {
+                                Label(option.label, systemImage: "checkmark")
+                            } else {
+                                Text(option.label)
+                            }
+                        }
+                    }
+                } label: {
+                    Image(systemName: "arrow.up.arrow.down")
+                }
+            }
+
+            ToolbarItem(placement: .topBarTrailing) {
+                Menu {
+                    let archivedCount = wishlist.items.filter { $0.isArchived }.count
+                    if archivedCount > 0 {
+                        Button {
+                            showingArchive = true
+                        } label: {
+                            Label("Архив (\(archivedCount))", systemImage: "archivebox")
+                        }
+                    }
+
+                    Button {
+                        showingShare = true
+                    } label: {
+                        Label("Поделиться", systemImage: "square.and.arrow.up")
+                    }
+
+                    Divider()
+
+                    Button(role: .destructive) {
+                        showingDeleteConfirmation = true
+                    } label: {
+                        Label("Удалить список", systemImage: "trash")
+                    }
+                } label: {
+                    Image(systemName: "ellipsis.circle")
+                }
+            }
+        }
         .sheet(isPresented: $showingAddItem) {
             AddItemSheet(wishlist: wishlist)
                 .applyTheme()
+        }
+        .sheet(isPresented: $showingArchive) {
+            ArchiveView(wishlist: wishlist)
+        }
+        .alert("Шеринг будет доступен в следующем обновлении", isPresented: $showingShare) {
+            Button("ОК", role: .cancel) { }
+        }
+        .confirmationDialog("Удалить «\(wishlist.name)»?", isPresented: $showingDeleteConfirmation, titleVisibility: .visible) {
+            Button("Удалить список", role: .destructive) {
+                context.delete(wishlist)
+                try? context.save()
+                dismiss()
+            }
         }
         .overlay(alignment: .bottom) {
             addButton
@@ -70,47 +135,10 @@ struct WishlistDetailView: View {
         .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
 
-    // MARK: - Sort Chips
-
-    private var sortChips: some View {
-        ScrollView(.horizontal, showsIndicators: false) {
-            HStack(spacing: 8) {
-                ForEach(SortOption.allCases) { option in
-                    Button {
-                        withAnimation(.snappy(duration: 0.2)) {
-                            selectedSort = option
-                        }
-                    } label: {
-                        Text(option.label)
-                            .font(.subheadline)
-                            .padding(.horizontal, 12)
-                            .padding(.vertical, 6)
-                            .background(
-                                selectedSort == option
-                                    ? AnyShapeStyle(.tint.opacity(0.15))
-                                    : AnyShapeStyle(.fill.quaternary),
-                                in: Capsule()
-                            )
-                            .foregroundStyle(selectedSort == option ? .primary : .secondary)
-                    }
-                    .buttonStyle(.plain)
-                }
-            }
-            .padding(.horizontal)
-            .padding(.vertical, 8)
-        }
-    }
-
     // MARK: - Item List
 
     private var itemList: some View {
         List {
-            Section {
-                sortChips
-                    .listRowInsets(EdgeInsets())
-                    .listRowSeparator(.hidden)
-            }
-
             if selectedSort == .importance {
                 groupedByTier
             } else {
@@ -211,15 +239,16 @@ struct WishlistDetailView: View {
                 }
 
                 HStack(spacing: 6) {
+                    Text(item.createdAt, format: .dateTime.day().month(.abbreviated))
                     if let domain = extractDomain(from: item.url) {
-                        Text("\u{1F517} \(domain)")
+                        Text("· \u{1F517} \(domain)")
                     }
                     if let days = probationDaysLeft(item) {
-                        Text("\u{231B} \(days) дней")
+                        Text("· \u{231B} \(days) дней")
                     }
                 }
                 .font(.caption2)
-                .foregroundStyle(.secondary)
+                .foregroundStyle(.tertiary)
             }
 
             Spacer()

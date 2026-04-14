@@ -20,6 +20,7 @@ struct HomeView: View {
             }
         }
         .navigationTitle("Желания")
+        .navigationBarTitleDisplayMode(.inline)
         .toolbar {
             ToolbarItem(placement: .topBarTrailing) {
                 Button {

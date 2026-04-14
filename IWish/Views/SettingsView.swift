@@ -1,5 +1,6 @@
 import SwiftUI
 import SwiftData
+import UserNotifications
 
 struct SettingsView: View {
     @Environment(\.modelContext) private var context
@@ -47,10 +48,10 @@ struct SettingsView: View {
     }
 
     private var wishesSection: some View {
-        Section {
+        Section("Желания") {
             Picker("Валюта по умолчанию", selection: currencyBinding) {
-                Text("Рубль (RUB)").tag("RUB")
-                Text("Доллар (USD)").tag("USD")
+                Text("\u{20BD} Рубль").tag("RUB")
+                Text("$ Доллар").tag("USD")
             }
 
             Toggle("Испытательный срок по умолчанию", isOn: probationEnabledBinding)
@@ -63,12 +64,6 @@ struct SettingsView: View {
                 )
 
                 Toggle("Уведомлять о конце срока", isOn: notifyProbationBinding)
-            }
-        } header: {
-            Text("Желания")
-        } footer: {
-            if settings.probationEnabledByDefault {
-                Text("При включении уведомлений запросим разрешение")
             }
         }
     }
@@ -166,11 +161,25 @@ struct SettingsView: View {
     private var notifyProbationBinding: Binding<Bool> {
         Binding(
             get: { settings.notifyOnProbationEnd },
-            set: {
-                settings.notifyOnProbationEnd = $0
+            set: { newValue in
+                settings.notifyOnProbationEnd = newValue
                 try? context.save()
+                if newValue {
+                    requestNotificationPermission()
+                }
             }
         )
+    }
+
+    private func requestNotificationPermission() {
+        UNUserNotificationCenter.current().requestAuthorization(options: [.alert, .badge, .sound]) { granted, _ in
+            if !granted {
+                Task { @MainActor in
+                    settings.notifyOnProbationEnd = false
+                    try? context.save()
+                }
+            }
+        }
     }
 
     private var inviteTTLBinding: Binding<InviteTTL> {

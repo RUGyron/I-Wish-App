@@ -1,62 +1,79 @@
 import SwiftUI
 import PhotosUI
 
-/// Секция для выбора обложки: галерея, эмодзи, или mesh-дефолт.
+/// Секция для выбора обложки: камера, галерея, эмодзи.
 /// Reusable — используется и в AddWishlistSheet, и в AddItemSheet.
 struct CoverPickerSection: View {
     @Binding var imageData: Data?
     @Binding var emoji: String?
 
     @State private var selectedPhoto: PhotosPickerItem?
+    @State private var showingPhotoPicker = false
+    @State private var showingCamera = false
     @State private var showingEmojiInput = false
     @State private var emojiDraft: String = ""
 
-    /// UUID для MeshGradient fallback preview.
-    let previewID: UUID
-
     var body: some View {
         Section("Обложка") {
-            HStack(spacing: 12) {
-                coverPreview
-                    .frame(width: 60, height: 60)
-                    .clipShape(RoundedRectangle(cornerRadius: 12))
+            // Current selection preview + remove
+            if let imageData, let image = UIImage(data: imageData) {
+                HStack(spacing: 12) {
+                    Image(uiImage: image)
+                        .resizable()
+                        .scaledToFill()
+                        .frame(width: 48, height: 48)
+                        .clipShape(RoundedRectangle(cornerRadius: 10))
 
-                VStack(alignment: .leading, spacing: 4) {
-                    coverStatusText
-                        .font(.subheadline)
-                        .foregroundStyle(.secondary)
+                    Spacer()
+
+                    Button("Убрать", role: .destructive) {
+                        self.imageData = nil
+                    }
+                    .font(.subheadline)
                 }
+            } else if let emoji, !emoji.isEmpty {
+                HStack(spacing: 12) {
+                    Text(emoji)
+                        .font(.largeTitle)
 
-                Spacer()
+                    Spacer()
 
-                Menu {
-                    PhotosPicker(selection: $selectedPhoto, matching: .images) {
-                        Label("Галерея", systemImage: "photo.on.rectangle")
+                    Button("Убрать", role: .destructive) {
+                        self.emoji = nil
                     }
-                    Button {
-                        emojiDraft = emoji ?? ""
-                        showingEmojiInput = true
-                    } label: {
-                        Label("Эмодзи", systemImage: "face.smiling")
-                    }
-                    if imageData != nil || emoji != nil {
-                        Divider()
-                        Button("Авто (mesh)", systemImage: "paintbrush") {
-                            imageData = nil
-                            emoji = nil
-                        }
-                    }
-                } label: {
-                    Text("Выбрать")
-                        .font(.subheadline)
+                    .font(.subheadline)
                 }
             }
 
+            // Camera
+            if UIImagePickerController.isSourceTypeAvailable(.camera) {
+                Button {
+                    showingCamera = true
+                } label: {
+                    Label("Камера", systemImage: "camera")
+                }
+            }
+
+            // Gallery
+            Button {
+                showingPhotoPicker = true
+            } label: {
+                Label("Галерея", systemImage: "photo.on.rectangle")
+            }
+
+            // Emoji
+            Button {
+                emojiDraft = emoji ?? ""
+                showingEmojiInput.toggle()
+            } label: {
+                Label("Эмодзи", systemImage: "face.smiling")
+            }
+
+            // Inline emoji input
             if showingEmojiInput {
                 HStack {
                     TextField("Введи эмодзи", text: $emojiDraft)
                         .onChange(of: emojiDraft) { _, newValue in
-                            // Оставляем только последний символ-эмодзи
                             if let last = newValue.last, last.isEmoji {
                                 emoji = String(last)
                                 imageData = nil
@@ -69,6 +86,16 @@ struct CoverPickerSection: View {
                         showingEmojiInput = false
                     }
                     .font(.subheadline)
+                }
+            }
+        }
+        .photosPicker(isPresented: $showingPhotoPicker, selection: $selectedPhoto, matching: .images)
+        .fullScreenCover(isPresented: $showingCamera) {
+            CameraImagePicker { image in
+                if let compressed = ImageCompressor.compress(image) {
+                    imageData = compressed
+                    emoji = nil
+                    showingEmojiInput = false
                 }
             }
         }
@@ -85,29 +112,46 @@ struct CoverPickerSection: View {
             }
         }
     }
+}
 
-    @ViewBuilder
-    private var coverPreview: some View {
-        if let imageData, let image = UIImage(data: imageData) {
-            Image(uiImage: image)
-                .resizable()
-                .scaledToFill()
-        } else {
-            DefaultCoverView(
-                id: previewID,
-                imageData: nil,
-                emoji: emoji
-            )
-        }
+// MARK: - CameraImagePicker (UIImagePickerController wrapper)
+
+struct CameraImagePicker: UIViewControllerRepresentable {
+    @Environment(\.dismiss) private var dismiss
+    let onImageCaptured: (UIImage) -> Void
+
+    func makeUIViewController(context: Context) -> UIImagePickerController {
+        let picker = UIImagePickerController()
+        picker.sourceType = .camera
+        picker.delegate = context.coordinator
+        return picker
     }
 
-    private var coverStatusText: Text {
-        if imageData != nil {
-            Text("Фото выбрано")
-        } else if let emoji, !emoji.isEmpty {
-            Text("Эмодзи: \(emoji)")
-        } else {
-            Text("Автоматическая")
+    func updateUIViewController(_ uiViewController: UIImagePickerController, context: Context) {}
+
+    func makeCoordinator() -> Coordinator {
+        Coordinator(dismiss: dismiss, onImageCaptured: onImageCaptured)
+    }
+
+    final class Coordinator: NSObject, UIImagePickerControllerDelegate, UINavigationControllerDelegate {
+        let dismiss: DismissAction
+        let onImageCaptured: (UIImage) -> Void
+
+        init(dismiss: DismissAction, onImageCaptured: @escaping (UIImage) -> Void) {
+            self.dismiss = dismiss
+            self.onImageCaptured = onImageCaptured
+        }
+
+        func imagePickerController(_ picker: UIImagePickerController,
+                                   didFinishPickingMediaWithInfo info: [UIImagePickerController.InfoKey: Any]) {
+            if let image = info[.originalImage] as? UIImage {
+                onImageCaptured(image)
+            }
+            dismiss()
+        }
+
+        func imagePickerControllerDidCancel(_ picker: UIImagePickerController) {
+            dismiss()
         }
     }
 }

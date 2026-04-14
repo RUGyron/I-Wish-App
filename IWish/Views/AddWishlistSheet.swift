@@ -9,7 +9,6 @@ struct AddWishlistSheet: View {
     @State private var name: String = ""
     @State private var coverImageData: Data?
     @State private var coverEmoji: String?
-    @State private var previewID = UUID()
 
     var body: some View {
         NavigationStack {
@@ -21,8 +20,7 @@ struct AddWishlistSheet: View {
 
                 CoverPickerSection(
                     imageData: $coverImageData,
-                    emoji: $coverEmoji,
-                    previewID: previewID
+                    emoji: $coverEmoji
                 )
             }
             .navigationTitle("Новый список")
