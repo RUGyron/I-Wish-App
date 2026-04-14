@@ -228,16 +228,19 @@ struct ShareWishlistSheet: View {
 
             gc.translateBy(x: padding, y: padding)
 
-            let gap = mod * 0.08
             let half = nf / 2
-            let logoZone = nf * 0.16
+            let logoZone = nf * 0.20
+            let overlap: CGFloat = 1.0
 
-            func isBlack(_ r: Int, _ c: Int) -> Bool {
-                r >= 0 && r < n && c >= 0 && c < n && matrix[r][c] && !isFinder(r, c)
-            }
+            let dotInset = mod * 0.12
+            let cr = mod * 0.50
 
             func isFinder(_ r: Int, _ c: Int) -> Bool {
                 (r < 7 && c < 7) || (r < 7 && c >= n - 7) || (r >= n - 7 && c < 7)
+            }
+
+            func isData(_ r: Int, _ c: Int) -> Bool {
+                r >= 0 && r < n && c >= 0 && c < n && matrix[r][c] && !isFinder(r, c)
             }
 
             func isLogo(_ r: Int, _ c: Int) -> Bool {
@@ -252,38 +255,39 @@ struct ShareWishlistSheet: View {
                     let t = (CGFloat(row) + CGFloat(col)) / (2 * nf)
                     colorTL.blend(with: colorBR, ratio: t).setFill()
 
-                    let hasR = isBlack(row, col + 1) && !isLogo(row, col + 1)
-                    let hasL = isBlack(row, col - 1) && !isLogo(row, col - 1)
-                    let hasB = isBlack(row + 1, col) && !isLogo(row + 1, col)
-                    let hasT = isBlack(row - 1, col) && !isLogo(row - 1, col)
-                    let alone = !hasR && !hasL && !hasB && !hasT
+                    let R = isData(row, col + 1) && !isLogo(row, col + 1)
+                    let L = isData(row, col - 1) && !isLogo(row, col - 1)
+                    let B = isData(row + 1, col) && !isLogo(row + 1, col)
+                    let T = isData(row - 1, col) && !isLogo(row - 1, col)
 
-                    var x = CGFloat(col) * mod + gap
-                    var y = CGFloat(row) * mod + gap
-                    var w = mod - gap * 2
-                    var h = mod - gap * 2
-
-                    if alone {
-                        UIBezierPath(ovalIn: CGRect(x: x, y: y, width: w, height: h)).fill()
+                    if !R && !L && !B && !T {
+                        let d = mod - dotInset * 2
+                        UIBezierPath(ovalIn: CGRect(
+                            x: CGFloat(col) * mod + dotInset,
+                            y: CGFloat(row) * mod + dotInset,
+                            width: d, height: d
+                        )).fill()
                         continue
                     }
 
-                    if hasL { x -= gap; w += gap }
-                    if hasR { w += gap }
-                    if hasT { y -= gap; h += gap }
-                    if hasB { h += gap }
+                    var x = CGFloat(col) * mod
+                    var y = CGFloat(row) * mod
+                    var w = mod
+                    var h = mod
 
-                    let cr = mod * 0.50
-                    let c: UIRectCorner = [
-                        (!hasT && !hasL) ? .topLeft : [],
-                        (!hasT && !hasR) ? .topRight : [],
-                        (!hasB && !hasL) ? .bottomLeft : [],
-                        (!hasB && !hasR) ? .bottomRight : [],
+                    if R { w += overlap }
+                    if B { h += overlap }
+
+                    let corners: UIRectCorner = [
+                        (!T && !L) ? .topLeft : [],
+                        (!T && !R) ? .topRight : [],
+                        (!B && !L) ? .bottomLeft : [],
+                        (!B && !R) ? .bottomRight : [],
                     ].reduce([]) { $0.union($1) }
 
                     UIBezierPath(
                         roundedRect: CGRect(x: x, y: y, width: w, height: h),
-                        byRoundingCorners: c,
+                        byRoundingCorners: corners,
                         cornerRadii: CGSize(width: cr, height: cr)
                     ).fill()
                 }
