@@ -49,6 +49,12 @@ struct AddItemSheet: View {
             .navigationTitle("Новое желание")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
+                ToolbarItemGroup(placement: .keyboard) {
+                    Spacer()
+                    Button("Готово") {
+                        UIApplication.shared.sendAction(#selector(UIResponder.resignFirstResponder), to: nil, from: nil, for: nil)
+                    }
+                }
                 ToolbarItem(placement: .cancellationAction) {
                     Button("Отмена") { dismiss() }
                 }
@@ -122,12 +128,19 @@ struct AddItemSheet: View {
 
     private var tierSection: some View {
         Section("Важность") {
-            Picker("Важность", selection: $tier) {
-                ForEach(ItemTier.allCases) { tier in
-                    Text(tier.icon).tag(tier)
+            VStack(spacing: 8) {
+                Picker("Важность", selection: $tier) {
+                    ForEach(ItemTier.allCases) { tier in
+                        Text(tier.icon).tag(tier)
+                    }
                 }
+                .pickerStyle(.segmented)
+
+                Text(tier.label)
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                    .frame(maxWidth: .infinity, alignment: .center)
             }
-            .pickerStyle(.segmented)
         }
     }
 
@@ -159,11 +172,13 @@ struct AddItemSheet: View {
             Toggle("Испытательный срок", isOn: $probationEnabled)
 
             if probationEnabled {
-                Stepper(
-                    "\(probationDays) \(daysDeclension(probationDays))",
-                    value: $probationDays,
-                    in: 1...365
-                )
+                Picker("Длительность", selection: $probationDays) {
+                    ForEach(1...365, id: \.self) { day in
+                        Text("\(day) \(daysDeclension(day))").tag(day)
+                    }
+                }
+                .pickerStyle(.wheel)
+                .frame(height: 120)
             }
         } footer: {
             if probationEnabled {

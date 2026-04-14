@@ -85,6 +85,7 @@ struct CoverPickerSection: View {
                     showingEmojiInput = false
                 }
             }
+            .ignoresSafeArea()
         }
         .onChange(of: selectedPhoto) { _, item in
             Task {
@@ -110,6 +111,8 @@ struct CameraImagePicker: UIViewControllerRepresentable {
         let picker = UIImagePickerController()
         picker.sourceType = .camera
         picker.delegate = context.coordinator
+        picker.overrideUserInterfaceStyle = .dark
+        picker.modalPresentationStyle = .fullScreen
         return picker
     }
 

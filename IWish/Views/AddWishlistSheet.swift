@@ -26,6 +26,12 @@ struct AddWishlistSheet: View {
             .navigationTitle("Новый список")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
+                ToolbarItemGroup(placement: .keyboard) {
+                    Spacer()
+                    Button("Готово") {
+                        UIApplication.shared.sendAction(#selector(UIResponder.resignFirstResponder), to: nil, from: nil, for: nil)
+                    }
+                }
                 ToolbarItem(placement: .cancellationAction) {
                     Button("Отмена") { dismiss() }
                 }
@@ -37,10 +43,34 @@ struct AddWishlistSheet: View {
         .applyTheme()
     }
 
+    private static let autoNames = [
+        "Мечты на завтра",
+        "Список вдохновения",
+        "Хотелки",
+        "Коллекция желаний",
+        "Мои находки",
+        "Список идей",
+        "Избранное",
+        "Заветные мечты",
+        "На заметку",
+        "Просто хочу",
+        "Для души",
+        "Собираю на мечту",
+        "Приглянулось",
+        "Буду копить",
+        "Поймал момент",
+    ]
+
+    private func generateName() -> String {
+        let used = Set(wishlists.map(\.name))
+        let available = Self.autoNames.filter { !used.contains($0) }
+        return available.randomElement() ?? "Список \(wishlists.count + 1)"
+    }
+
     private func save() {
         let trimmed = name.trimmingCharacters(in: .whitespaces)
         let finalName = trimmed.isEmpty
-            ? "Список \(wishlists.count + 1)"
+            ? generateName()
             : trimmed
 
         let wishlist = Wishlist(
