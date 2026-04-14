@@ -12,15 +12,15 @@ final class AppSettings {
     var hasCompletedOnboarding: Bool
 
     // Probation defaults
-    var probationEnabledByDefault: Bool
-    var defaultProbationDuration: Double // TimeInterval в секундах
-    var notifyOnProbationEnd: Bool
+    var probationEnabledByDefault: Bool = false
+    var defaultProbationDuration: Double = 2_592_000 // 30 дней в секундах
+    var notifyOnProbationEnd: Bool = false
 
     // Invite defaults
-    var defaultInviteTTLRaw: String
+    var defaultInviteTTLRaw: String = "15m"
 
     // App icon
-    var selectedAppIconRaw: String
+    var selectedAppIconRaw: String = "auto"
 
     // MARK: - Computed bridges
 
