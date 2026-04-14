@@ -137,18 +137,21 @@ struct ShareWishlistSheet: View {
     // MARK: - Actions
 
     private var actionButtons: some View {
-        VStack(spacing: 12) {
-            // Share button
+        HStack(spacing: 12) {
             Button {
                 showingShareSheet = true
             } label: {
-                Label("Поделиться", systemImage: "square.and.arrow.up")
-                    .frame(maxWidth: .infinity)
+                VStack(spacing: 5) {
+                    Image(systemName: "square.and.arrow.up")
+                        .font(.title3)
+                    Text("Поделиться")
+                        .font(.caption)
+                }
+                .frame(maxWidth: .infinity)
+                .padding(.vertical, 14)
+                .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 14))
             }
-            .buttonStyle(.bordered)
-            .controlSize(.large)
 
-            // Copy URL button
             Button {
                 if let url = shareManager.shareURL {
                     UIPasteboard.general.string = url.absoluteString
@@ -158,15 +161,19 @@ struct ShareWishlistSheet: View {
                     }
                 }
             } label: {
-                Label(
-                    copied ? "Скопировано" : "Скопировать ссылку",
-                    systemImage: copied ? "checkmark" : "doc.on.doc"
-                )
+                VStack(spacing: 5) {
+                    Image(systemName: copied ? "checkmark" : "doc.on.doc")
+                        .font(.title3)
+                    Text(copied ? "Скопировано" : "Скопировать")
+                        .font(.caption)
+                }
                 .frame(maxWidth: .infinity)
+                .padding(.vertical, 14)
+                .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 14))
             }
-            .buttonStyle(.bordered)
-            .controlSize(.regular)
         }
+        .buttonStyle(.plain)
+        .foregroundStyle(.primary)
         .sheet(isPresented: $showingShareSheet) {
             if let url = shareManager.shareURL {
                 ShareSheetView(items: shareItems(for: url))
@@ -180,9 +187,9 @@ struct ShareWishlistSheet: View {
             dismiss()
         } label: {
             Text("Отозвать все приглашения")
-                .font(.subheadline)
+                .font(.caption)
         }
-        .padding(.top, 8)
+        .padding(.top, 16)
     }
 
     // MARK: - QR Generation
