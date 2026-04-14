@@ -201,7 +201,7 @@ struct ShareWishlistSheet: View {
     private func generateQRCode(from string: String) -> UIImage? {
         let filter = CIFilter.qrCodeGenerator()
         filter.message = Data(string.utf8)
-        filter.correctionLevel = "L"
+        filter.correctionLevel = "M"
 
         guard let ciImage = filter.outputImage else { return nil }
 
@@ -229,7 +229,7 @@ struct ShareWishlistSheet: View {
             let colorTL = UIColor(red: 0.82, green: 0.48, blue: 0.14, alpha: 1)
             let colorBR = UIColor(red: 0.58, green: 0.30, blue: 0.08, alpha: 1)
 
-            let inset = mod * 0.06  // micro-gap between modules
+            let inset = mod * 0.04
             let nf = CGFloat(n)
 
             for row in 0..<n {
@@ -238,7 +238,7 @@ struct ShareWishlistSheet: View {
                     if isFinderZone(row: row, col: col, n: n) { continue }
 
                     let half = nf / 2
-                    let cz = nf * 0.30
+                    let cz = nf * 0.18
                     if CGFloat(row) > half - cz && CGFloat(row) < half + cz &&
                        CGFloat(col) > half - cz && CGFloat(col) < half + cz { continue }
 
