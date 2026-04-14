@@ -3,14 +3,12 @@ import SwiftData
 
 @Model
 final class Wishlist {
-    // Без `@Attribute(.unique)` — CloudKit mirror не поддерживает unique constraints.
-    // Уникальность гарантируется `UUID()`.
-    var id: UUID
-    var name: String
+    var id: UUID = UUID()
+    var name: String = ""
     var coverImageData: Data?
     var coverEmoji: String?
-    var createdAt: Date
-    var updatedAt: Date
+    var createdAt: Date = Date()
+    var updatedAt: Date = Date()
     var ownerRecordID: String?
 
     @Relationship(deleteRule: .cascade, inverse: \Item.wishlist)

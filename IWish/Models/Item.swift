@@ -3,21 +3,21 @@ import SwiftData
 
 @Model
 final class Item {
-    var id: UUID
-    var name: String
+    var id: UUID = UUID()
+    var name: String = ""
     var descriptionText: String?
     var coverImageData: Data?
     var coverEmoji: String?
     var priceValue: Double?
-    var currency: String
+    var currency: String = "RUB"
     var url: String?
     var linkMetadataData: Data?
-    var tierRaw: String
-    var sortIndex: Double
+    var tierRaw: String = "maybe"
+    var sortIndex: Double = 1000.0
     var probationEndAt: Date?
-    var isArchived: Bool
-    var createdAt: Date
-    var updatedAt: Date
+    var isArchived: Bool = false
+    var createdAt: Date = Date()
+    var updatedAt: Date = Date()
     var wishlist: Wishlist?
 
     var tier: ItemTier {
@@ -50,10 +50,8 @@ final class Item {
         self.priceValue = price
         self.currency = currency
         self.url = url
-        self.linkMetadataData = nil
         self.tierRaw = tier.rawValue
         self.sortIndex = sortIndex
-        self.probationEndAt = nil
         self.isArchived = false
         self.createdAt = now
         self.updatedAt = now
