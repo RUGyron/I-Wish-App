@@ -205,7 +205,7 @@ struct WishlistDetailView: View {
     }
 
     private func tierHeader(tier: ItemTier, items: [Item]) -> some View {
-        let total = items.compactMap(\.price).reduce(Decimal.zero, +)
+        let total = items.compactMap(\.price).reduce(0.0, +)
         let currency = items.first?.currency ?? "RUB"
         let priceText = total > 0 ? " \u{00B7} \(formatPrice(total, currency: currency))" : ""
 
@@ -326,12 +326,12 @@ struct WishlistDetailView: View {
 
     // MARK: - Helpers
 
-    private func formatPrice(_ price: Decimal, currency: String) -> String {
+    private func formatPrice(_ price: Double, currency: String) -> String {
         let formatter = NumberFormatter()
         formatter.numberStyle = .currency
         formatter.currencyCode = currency
         formatter.maximumFractionDigits = 0
-        return formatter.string(from: price as NSDecimalNumber) ?? "\(price) \(currency)"
+        return formatter.string(from: NSNumber(value: price)) ?? "\(price) \(currency)"
     }
 
     private func extractDomain(from urlString: String?) -> String? {
@@ -441,7 +441,7 @@ private extension View {
     let wishlist = Wishlist(name: "День рождения")
     container.mainContext.insert(wishlist)
 
-    let items: [(String, ItemTier, Decimal?, String?)] = [
+    let items: [(String, ItemTier, Double?, String?)] = [
         ("Наушники Sony WH-1000XM5", .must, 29990, "https://www.wildberries.ru/product/123"),
         ("MacBook Air M4", .must, 89990, nil),
         ("Книга Дюна", .maybe, 1500, "https://ozon.ru/product/456"),

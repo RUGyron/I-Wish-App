@@ -287,10 +287,10 @@ struct AddItemSheet: View {
         return SortIndexCalculator.midpoint(after: maxIndex, before: nil)
     }
 
-    private func parsePrice(_ string: String) -> Decimal? {
+    private func parsePrice(_ string: String) -> Double? {
         let trimmed = string.trimmingCharacters(in: .whitespaces)
         guard !trimmed.isEmpty else { return nil }
-        return Decimal(string: trimmed)
+        return Double(trimmed)
     }
 
     private func daysDeclension(_ n: Int) -> String {

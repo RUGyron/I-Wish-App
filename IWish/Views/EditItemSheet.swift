@@ -119,7 +119,7 @@ struct EditItemSheet: View {
         item.coverImageData = coverImageData
         item.coverEmoji = coverEmoji
         item.tier = tier
-        item.price = Decimal(string: priceString)
+        item.price = Double(priceString)
         item.currency = currency
         item.url = urlString.isEmpty ? nil : urlString
         item.updatedAt = .now

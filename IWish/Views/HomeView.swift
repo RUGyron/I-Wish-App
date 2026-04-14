@@ -190,7 +190,7 @@ struct HomeView: View {
     container.mainContext.insert(wl1)
     container.mainContext.insert(wl2)
 
-    let items: [(String, ItemTier, Decimal?)] = [
+    let items: [(String, ItemTier, Double?)] = [
         ("Наушники Sony", .must, 12990),
         ("Книга", .maybe, 1500),
         ("Стикеры", .idea, nil),

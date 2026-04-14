@@ -3,18 +3,16 @@ import SwiftData
 
 @Model
 final class Item {
-    // Без `@Attribute(.unique)` — CloudKit mirror не поддерживает unique constraints.
-    // Уникальность гарантируется `UUID()`.
     var id: UUID
     var name: String
     var descriptionText: String?
     var coverImageData: Data?
     var coverEmoji: String?
-    var price: Decimal?
+    var priceValue: Double?
     var currency: String
     var url: String?
     var linkMetadataData: Data?
-    var tier: ItemTier
+    var tierRaw: String
     var sortIndex: Double
     var probationEndAt: Date?
     var isArchived: Bool
@@ -22,12 +20,22 @@ final class Item {
     var updatedAt: Date
     var wishlist: Wishlist?
 
+    var tier: ItemTier {
+        get { ItemTier(rawValue: tierRaw) ?? .maybe }
+        set { tierRaw = newValue.rawValue }
+    }
+
+    var price: Double? {
+        get { priceValue }
+        set { priceValue = newValue }
+    }
+
     init(
         name: String,
         tier: ItemTier = .maybe,
         sortIndex: Double = 1000.0,
         currency: String = "RUB",
-        price: Decimal? = nil,
+        price: Double? = nil,
         descriptionText: String? = nil,
         url: String? = nil,
         coverImageData: Data? = nil,
@@ -39,11 +47,11 @@ final class Item {
         self.descriptionText = descriptionText
         self.coverImageData = coverImageData
         self.coverEmoji = coverEmoji
-        self.price = price
+        self.priceValue = price
         self.currency = currency
         self.url = url
         self.linkMetadataData = nil
-        self.tier = tier
+        self.tierRaw = tier.rawValue
         self.sortIndex = sortIndex
         self.probationEndAt = nil
         self.isArchived = false
