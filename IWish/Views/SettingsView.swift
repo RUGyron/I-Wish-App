@@ -18,6 +18,13 @@ struct SettingsView: View {
             invitesSection
             aboutSection
         }
+        .safeAreaInset(edge: .bottom) {
+            Text("Версия \(appVersion)")
+                .font(.caption)
+                .foregroundStyle(.tertiary)
+                .frame(maxWidth: .infinity)
+                .padding(.bottom, 8)
+        }
         .navigationTitle("Настройки")
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {
@@ -37,31 +44,63 @@ struct SettingsView: View {
                 }
             }
 
-            // TODO: Actual icon switching via UIApplication.shared.setAlternateIconName
-            // is deferred to a later phase. For now we only persist the preference.
-            Picker("Иконка приложения", selection: appIconBinding) {
-                ForEach(AppIconVariant.allCases) { variant in
-                    Text(variant.label).tag(variant)
+            VStack(alignment: .leading, spacing: 8) {
+                Text("Иконка приложения")
+                    .font(.subheadline)
+                    .foregroundStyle(.secondary)
+
+                HStack(spacing: 16) {
+                    ForEach(AppIconVariant.allCases) { variant in
+                        iconPreview(variant)
+                    }
                 }
             }
+            .padding(.vertical, 4)
+        }
+    }
+
+    private func iconPreview(_ variant: AppIconVariant) -> some View {
+        let isSelected = settings.selectedAppIcon == variant
+        return VStack(spacing: 6) {
+            RoundedRectangle(cornerRadius: 14, style: .continuous)
+                .fill(isSelected ? Color.accentColor.opacity(0.15) : Color(.secondarySystemFill))
+                .frame(width: 60, height: 60)
+                .overlay(
+                    Image(systemName: variant.symbolName)
+                        .font(.title2)
+                        .foregroundStyle(isSelected ? Color.accentColor : .secondary)
+                )
+                .overlay(
+                    RoundedRectangle(cornerRadius: 14, style: .continuous)
+                        .strokeBorder(isSelected ? Color.accentColor : .clear, lineWidth: 2)
+                )
+
+            Text(variant.label)
+                .font(.caption)
+                .foregroundStyle(isSelected ? .primary : .secondary)
+        }
+        .onTapGesture {
+            appIconBinding.wrappedValue = variant
         }
     }
 
     private var wishesSection: some View {
         Section("Желания") {
             Picker("Валюта по умолчанию", selection: currencyBinding) {
-                Text("\u{20BD} Рубль").tag("RUB")
-                Text("$ Доллар").tag("USD")
+                Text("\u{20BD}").tag("RUB")
+                Text("$").tag("USD")
             }
 
             Toggle("Испытательный срок по умолчанию", isOn: probationEnabledBinding)
 
             if settings.probationEnabledByDefault {
-                Stepper(
-                    "\(settings.probationDurationDays) \(daysDeclension(settings.probationDurationDays))",
-                    value: probationDaysBinding,
-                    in: 1...365
-                )
+                Picker("Длительность", selection: probationDaysBinding) {
+                    ForEach(1...365, id: \.self) { day in
+                        Text("\(day) \(daysDeclension(day))").tag(day)
+                    }
+                }
+                .pickerStyle(.wheel)
+                .frame(height: 120)
 
                 Toggle("Уведомлять о конце срока", isOn: notifyProbationBinding)
             }
@@ -79,8 +118,7 @@ struct SettingsView: View {
     }
 
     private var aboutSection: some View {
-        Section("О приложении") {
-            LabeledContent("Версия", value: appVersion)
+        Section {
             Text("Политика приватности")
                 .foregroundStyle(.secondary)
         }

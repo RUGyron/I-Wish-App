@@ -31,6 +31,7 @@ struct WishlistDetailView: View {
     @State private var selectedSort: SortOption = .importance
     @State private var showingArchive = false
     @State private var showingShare = false
+    @State private var showingParticipants = false
     @State private var showingDeleteConfirmation = false
 
     private var activeItems: [Item] {
@@ -83,6 +84,12 @@ struct WishlistDetailView: View {
                         Label("Поделиться", systemImage: "square.and.arrow.up")
                     }
 
+                    Button {
+                        showingParticipants = true
+                    } label: {
+                        Label("Участники", systemImage: "person.2")
+                    }
+
                     Divider()
 
                     Button(role: .destructive) {
@@ -102,8 +109,13 @@ struct WishlistDetailView: View {
         .sheet(isPresented: $showingArchive) {
             ArchiveView(wishlist: wishlist)
         }
-        .alert("Шеринг будет доступен в следующем обновлении", isPresented: $showingShare) {
-            Button("ОК", role: .cancel) { }
+        .sheet(isPresented: $showingShare) {
+            ShareWishlistSheet(wishlist: wishlist)
+                .applyTheme()
+        }
+        .sheet(isPresented: $showingParticipants) {
+            ParticipantsView(wishlist: wishlist)
+                .applyTheme()
         }
         .confirmationDialog("Удалить «\(wishlist.name)»?", isPresented: $showingDeleteConfirmation, titleVisibility: .visible) {
             Button("Удалить список", role: .destructive) {
@@ -222,43 +234,57 @@ struct WishlistDetailView: View {
     // MARK: - Item Row
 
     private func itemRow(_ item: Item) -> some View {
-        HStack(spacing: 12) {
+        HStack(alignment: .top, spacing: 12) {
             DefaultCoverView(
                 id: item.id,
                 imageData: item.coverImageData,
                 emoji: item.coverEmoji
             )
-            .frame(width: 40, height: 40)
+            .frame(width: 52, height: 52)
 
-            VStack(alignment: .leading, spacing: 2) {
-                HStack(spacing: 4) {
-                    Text(item.tier.icon)
+            VStack(alignment: .leading, spacing: 4) {
+                HStack(alignment: .firstTextBaseline) {
                     Text(item.name)
-                        .font(.subheadline)
-                        .lineLimit(1)
+                        .font(.body)
+                        .lineLimit(2)
+
+                    Spacer(minLength: 4)
+
+                    if let price = item.price {
+                        Text(formatPrice(price, currency: item.currency))
+                            .font(.subheadline)
+                            .foregroundStyle(.secondary)
+                            .layoutPriority(1)
+                    }
                 }
 
-                HStack(spacing: 6) {
-                    Text(item.createdAt, format: .dateTime.day().month(.abbreviated))
-                    if let domain = extractDomain(from: item.url) {
-                        Text("· \u{1F517} \(domain)")
-                    }
-                    if let days = probationDaysLeft(item) {
-                        Text("· \u{231B} \(days) дней")
+                HStack(spacing: 0) {
+                    let parts = itemMetadataParts(item)
+                    ForEach(Array(parts.enumerated()), id: \.offset) { index, part in
+                        if index > 0 {
+                            Text(" \u{00B7} ")
+                        }
+                        Text(part)
                     }
                 }
-                .font(.caption2)
-                .foregroundStyle(.tertiary)
-            }
-
-            Spacer()
-
-            if let price = item.price {
-                Text(formatPrice(price, currency: item.currency))
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
+                .font(.caption)
+                .foregroundStyle(.secondary)
             }
         }
+        .padding(.vertical, 6)
+    }
+
+    private func itemMetadataParts(_ item: Item) -> [String] {
+        var parts: [String] = []
+        parts.append(item.tier.icon)
+        parts.append(item.createdAt.formatted(.dateTime.day().month(.abbreviated)))
+        if let domain = extractDomain(from: item.url) {
+            parts.append(domain)
+        }
+        if let days = probationDaysLeft(item) {
+            parts.append("\u{23F3} \(days) дн.")
+        }
+        return parts
     }
 
     // MARK: - FAB

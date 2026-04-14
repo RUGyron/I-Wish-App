@@ -14,4 +14,12 @@ enum AppIconVariant: String, Codable, CaseIterable, Sendable, Identifiable {
         case .dark:  return "Тёмная"
         }
     }
+
+    var symbolName: String {
+        switch self {
+        case .auto:  return "circle.lefthalf.filled"
+        case .light: return "sun.max.fill"
+        case .dark:  return "moon.fill"
+        }
+    }
 }
