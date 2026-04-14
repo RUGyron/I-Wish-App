@@ -229,36 +229,31 @@ struct ShareWishlistSheet: View {
             gc.translateBy(x: padding, y: padding)
 
             let half = nf / 2
-            let logoZone = nf * 0.20
-            let overlap: CGFloat = 1.0
+            let logoR = nf * 0.19
+            let cr = mod * 0.45
+            let dotInset = mod * 0.14
+            let bleed: CGFloat = 0.25
 
-            let dotInset = mod * 0.12
-            let cr = mod * 0.50
-
-            func isFinder(_ r: Int, _ c: Int) -> Bool {
-                (r < 7 && c < 7) || (r < 7 && c >= n - 7) || (r >= n - 7 && c < 7)
-            }
-
-            func isData(_ r: Int, _ c: Int) -> Bool {
-                r >= 0 && r < n && c >= 0 && c < n && matrix[r][c] && !isFinder(r, c)
-            }
-
-            func isLogo(_ r: Int, _ c: Int) -> Bool {
-                CGFloat(r) > half - logoZone && CGFloat(r) < half + logoZone &&
-                CGFloat(c) > half - logoZone && CGFloat(c) < half + logoZone
+            func skip(_ r: Int, _ c: Int) -> Bool {
+                if r < 0 || r >= n || c < 0 || c >= n { return true }
+                if !matrix[r][c] { return true }
+                if (r < 7 && c < 7) || (r < 7 && c >= n - 7) || (r >= n - 7 && c < 7) { return true }
+                let dr = CGFloat(r) - half, dc = CGFloat(c) - half
+                if dr > -logoR && dr < logoR && dc > -logoR && dc < logoR { return true }
+                return false
             }
 
             for row in 0..<n {
                 for col in 0..<n {
-                    guard matrix[row][col], !isFinder(row, col), !isLogo(row, col) else { continue }
+                    if skip(row, col) { continue }
 
                     let t = (CGFloat(row) + CGFloat(col)) / (2 * nf)
                     colorTL.blend(with: colorBR, ratio: t).setFill()
 
-                    let R = isData(row, col + 1) && !isLogo(row, col + 1)
-                    let L = isData(row, col - 1) && !isLogo(row, col - 1)
-                    let B = isData(row + 1, col) && !isLogo(row + 1, col)
-                    let T = isData(row - 1, col) && !isLogo(row - 1, col)
+                    let R = !skip(row, col + 1)
+                    let L = !skip(row, col - 1)
+                    let B = !skip(row + 1, col)
+                    let T = !skip(row - 1, col)
 
                     if !R && !L && !B && !T {
                         let d = mod - dotInset * 2
@@ -270,13 +265,10 @@ struct ShareWishlistSheet: View {
                         continue
                     }
 
-                    var x = CGFloat(col) * mod
-                    var y = CGFloat(row) * mod
-                    var w = mod
-                    var h = mod
-
-                    if R { w += overlap }
-                    if B { h += overlap }
+                    let x = CGFloat(col) * mod
+                    let y = CGFloat(row) * mod
+                    let w = mod + (R ? bleed : 0)
+                    let h = mod + (B ? bleed : 0)
 
                     let corners: UIRectCorner = [
                         (!T && !L) ? .topLeft : [],
