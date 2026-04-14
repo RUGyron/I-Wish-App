@@ -13,10 +13,17 @@ enum AppIconVariant: String, Codable, CaseIterable, Sendable, Identifiable {
         }
     }
 
-    var symbolName: String {
+    var previewAsset: String {
         switch self {
-        case .light: return "sun.max.fill"
-        case .dark:  return "moon.fill"
+        case .light: return "IconPreviewLight"
+        case .dark:  return "IconPreviewDark"
+        }
+    }
+
+    var alternateIconName: String? {
+        switch self {
+        case .light: return nil
+        case .dark:  return "DarkIcon"
         }
     }
 }

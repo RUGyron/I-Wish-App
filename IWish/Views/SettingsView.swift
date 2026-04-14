@@ -63,17 +63,18 @@ struct SettingsView: View {
     private func iconPreview(_ variant: AppIconVariant) -> some View {
         let isSelected = settings.selectedAppIcon == variant
         return VStack(spacing: 6) {
-            RoundedRectangle(cornerRadius: 14, style: .continuous)
-                .fill(isSelected ? Color.accentColor.opacity(0.15) : Color(.secondarySystemFill))
+            Image(variant.previewAsset)
+                .resizable()
+                .scaledToFit()
                 .frame(width: 60, height: 60)
+                .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
                 .overlay(
-                    Image(systemName: variant.symbolName)
-                        .font(.title2)
-                        .foregroundStyle(isSelected ? Color.accentColor : .secondary)
+                    RoundedRectangle(cornerRadius: 14, style: .continuous)
+                        .strokeBorder(Theme.titaniumGradient, lineWidth: 0.5)
                 )
                 .overlay(
                     RoundedRectangle(cornerRadius: 14, style: .continuous)
-                        .strokeBorder(isSelected ? Color.accentColor : .clear, lineWidth: 2)
+                        .strokeBorder(Color.accentColor, lineWidth: isSelected ? 2 : 0)
                 )
 
             Text(variant.label)
@@ -162,9 +163,10 @@ struct SettingsView: View {
     private var appIconBinding: Binding<AppIconVariant> {
         Binding(
             get: { settings.selectedAppIcon },
-            set: {
-                settings.selectedAppIcon = $0
+            set: { newValue in
+                settings.selectedAppIcon = newValue
                 try? context.save()
+                UIApplication.shared.setAlternateIconName(newValue.alternateIconName)
             }
         )
     }
