@@ -243,7 +243,8 @@ struct ShareWishlistSheet: View {
                 if r < 0 || r >= n || c < 0 || c >= n { return true }
                 if !matrix[r][c] { return true }
                 if isFinder(r, c) { return true }
-                let dr = CGFloat(r) - half, dc = CGFloat(c) - half
+                let logoShift: CGFloat = 0.35
+                let dr = CGFloat(r) - (half + logoShift), dc = CGFloat(c) - (half + logoShift)
                 if dr > -logoR && dr < logoR && dc > -logoR && dc < logoR { return true }
                 return false
             }
@@ -297,12 +298,13 @@ struct ShareWishlistSheet: View {
 
             gc.translateBy(x: -padding, y: -padding)
 
-            // Logo circle — compact, blends with QR background
+            // Logo circle — shifted slightly down-right to match visual center of QR data
             if let logo = UIImage(named: "IconPreviewLight") {
                 let circleD = canvasSize * 0.18
+                let visualShift = mod * 0.7
                 let circleRect = CGRect(
-                    x: (canvasSize - circleD) / 2,
-                    y: (canvasSize - circleD) / 2,
+                    x: (canvasSize - circleD) / 2 + visualShift / 2,
+                    y: (canvasSize - circleD) / 2 + visualShift / 2,
                     width: circleD, height: circleD
                 )
                 gc.saveGState()
