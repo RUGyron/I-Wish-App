@@ -14,6 +14,7 @@ struct RootView: View {
         .toolbarBackground(Theme.warmOverlay, for: .navigationBar)
         .environment(\.systemColorScheme, detectedSystemScheme)
         .preferredColorScheme(activeSettings.themeMode.colorScheme)
+        .animation(.easeInOut(duration: 0.35), value: activeSettings.themeMode)
         .onAppear {
             // Гарантируем что AppSettings существует в БД.
             if settingsList.isEmpty {

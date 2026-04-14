@@ -150,8 +150,10 @@ struct SettingsView: View {
     private var themeBinding: Binding<ThemeMode> {
         Binding(
             get: { settings.themeMode },
-            set: {
-                settings.themeMode = $0
+            set: { newValue in
+                withAnimation(.easeInOut(duration: 0.35)) {
+                    settings.themeMode = newValue
+                }
                 try? context.save()
             }
         )
