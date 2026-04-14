@@ -165,7 +165,7 @@ struct ShareWishlistSheet: View {
                 .frame(maxWidth: .infinity)
             }
             .buttonStyle(.bordered)
-            .controlSize(.large)
+            .controlSize(.regular)
         }
         .sheet(isPresented: $showingShareSheet) {
             if let url = shareManager.shareURL {
@@ -201,7 +201,7 @@ struct ShareWishlistSheet: View {
     private func generateQRCode(from string: String) -> UIImage? {
         let filter = CIFilter.qrCodeGenerator()
         filter.message = Data(string.utf8)
-        filter.correctionLevel = "H"
+        filter.correctionLevel = "M"
 
         guard let ciImage = filter.outputImage else { return nil }
 
@@ -258,7 +258,7 @@ struct ShareWishlistSheet: View {
 
                     let cx = CGFloat(col) * mod + mod / 2
                     let cy = CGFloat(row) * mod + mod / 2
-                    let dotR = mod * 0.40
+                    let dotR = mod * 0.48
 
                     let hasRight = col + 1 < n && matrix[row][col + 1] && !isFinderZone(row: row, col: col + 1, n: n)
                     let hasBottom = row + 1 < n && matrix[row + 1][col] && !isFinderZone(row: row + 1, col: col, n: n)
@@ -283,18 +283,15 @@ struct ShareWishlistSheet: View {
 
             gc.translateBy(x: -padding, y: -padding)
 
-            // Logo in center
+            // Logo in center — drawn directly, logo PNG already has matching background
             if let logo = UIImage(named: "IconPreviewLight") {
-                let logoSize = canvasSize * 0.20
+                let logoSize = canvasSize * 0.22
                 let logoRect = CGRect(
                     x: (canvasSize - logoSize) / 2,
                     y: (canvasSize - logoSize) / 2,
                     width: logoSize, height: logoSize
                 )
-                let bgPad: CGFloat = 10
-                let bgLogoRect = logoRect.insetBy(dx: -bgPad, dy: -bgPad)
-                UIColor.white.setFill()
-                UIBezierPath(roundedRect: bgLogoRect, cornerRadius: bgLogoRect.width * 0.22).fill()
+                UIBezierPath(roundedRect: logoRect, cornerRadius: logoSize * 0.22).addClip()
                 logo.draw(in: logoRect)
             }
         }
