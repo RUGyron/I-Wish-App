@@ -45,6 +45,7 @@ struct ArchiveView: View {
                     }
                 }
             }
+            .warmBackground()
             .navigationTitle("Архив")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {

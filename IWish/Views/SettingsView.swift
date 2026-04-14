@@ -18,6 +18,7 @@ struct SettingsView: View {
             invitesSection
             aboutSection
         }
+        .warmBackground()
         .safeAreaInset(edge: .bottom) {
             Text("Версия \(appVersion)")
                 .font(.caption)

@@ -78,6 +78,7 @@ struct HomeView: View {
         .padding()
         .padding(.bottom, 60)
         .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .background(Theme.background)
     }
 
     // MARK: - Wishlist List
@@ -108,6 +109,7 @@ struct HomeView: View {
             }
         }
         .contentMargins(.bottom, 80)
+        .warmBackground()
     }
 
     private func wishlistRow(_ wishlist: Wishlist) -> some View {

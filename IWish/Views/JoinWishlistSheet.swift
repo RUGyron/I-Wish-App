@@ -90,6 +90,7 @@ struct JoinWishlistSheet: View {
 
                 Spacer()
             }
+            .background(Theme.background.ignoresSafeArea())
             .navigationTitle("Присоединиться")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {

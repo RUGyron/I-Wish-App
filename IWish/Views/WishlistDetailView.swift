@@ -145,6 +145,7 @@ struct WishlistDetailView: View {
         .padding()
         .padding(.bottom, 60)
         .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .background(Theme.background)
     }
 
     // MARK: - Item List
@@ -158,6 +159,7 @@ struct WishlistDetailView: View {
             }
         }
         .contentMargins(.bottom, 80)
+        .warmBackground()
     }
 
     // MARK: - Grouped by Tier

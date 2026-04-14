@@ -10,6 +10,7 @@ struct RootView: View {
         NavigationStack {
             HomeView()
         }
+        .toolbarBackground(Theme.warmOverlay, for: .navigationBar)
         .environment(\.systemColorScheme, detectedSystemScheme)
         .preferredColorScheme(activeSettings.themeMode.colorScheme)
         .onAppear {
