@@ -4,7 +4,6 @@ import AudioToolbox
 
 struct JoinWishlistSheet: View {
     @Environment(\.dismiss) private var dismiss
-    @State private var linkText = ""
     @State private var showingScanner = false
     @State private var joinStatus: JoinStatus = .idle
 
@@ -18,74 +17,40 @@ struct JoinWishlistSheet: View {
     var body: some View {
         NavigationStack {
             VStack(spacing: 24) {
-                // Description
                 VStack(spacing: 8) {
                     Image(systemName: "person.badge.plus")
                         .font(.system(size: 48))
                         .foregroundStyle(.tint)
                     Text("Присоединиться к списку")
                         .font(.title3.weight(.semibold))
-                    Text("Отсканируй QR-код или вставь ссылку-приглашение")
+                    Text("Отсканируй QR-код или вставь ссылку из буфера")
                         .font(.subheadline)
                         .foregroundStyle(.secondary)
                         .multilineTextAlignment(.center)
                 }
-                .padding(.top, 20)
+                .padding(.top, 40)
 
-                // Scan QR button
-                Button {
-                    showingScanner = true
-                } label: {
-                    Label("Сканировать QR-код", systemImage: "qrcode.viewfinder")
-                        .frame(maxWidth: .infinity)
+                VStack(spacing: 12) {
+                    Button {
+                        showingScanner = true
+                    } label: {
+                        Label("Сканировать QR-код", systemImage: "qrcode.viewfinder")
+                            .frame(maxWidth: .infinity)
+                    }
+                    .buttonStyle(.borderedProminent)
+                    .controlSize(.large)
+
+                    Button {
+                        pasteAndJoin()
+                    } label: {
+                        Label("Вставить из буфера", systemImage: "doc.on.clipboard")
+                            .frame(maxWidth: .infinity)
+                    }
+                    .buttonStyle(.bordered)
+                    .controlSize(.large)
                 }
-                .buttonStyle(.borderedProminent)
-                .controlSize(.large)
                 .padding(.horizontal)
 
-                // Divider
-                HStack {
-                    Rectangle().fill(.quaternary).frame(height: 1)
-                    Text("или")
-                        .font(.caption)
-                        .foregroundStyle(.tertiary)
-                    Rectangle().fill(.quaternary).frame(height: 1)
-                }
-                .padding(.horizontal, 32)
-
-                // Paste link
-                VStack(spacing: 12) {
-                    TextField("Ссылка приглашения", text: $linkText)
-                        .textFieldStyle(.roundedBorder)
-                        .textInputAutocapitalization(.never)
-                        .autocorrectionDisabled()
-                        .padding(.horizontal)
-
-                    HStack(spacing: 12) {
-                        Button {
-                            if let clipboard = UIPasteboard.general.string {
-                                linkText = clipboard
-                            }
-                        } label: {
-                            Label("Вставить", systemImage: "doc.on.clipboard")
-                                .frame(maxWidth: .infinity)
-                        }
-                        .buttonStyle(.bordered)
-
-                        Button {
-                            joinByLink()
-                        } label: {
-                            Text("Войти")
-                                .frame(maxWidth: .infinity)
-                        }
-                        .buttonStyle(.borderedProminent)
-                        .disabled(linkText.isEmpty)
-                    }
-                    .controlSize(.large)
-                    .padding(.horizontal)
-                }
-
-                // Status
                 statusView
 
                 Spacer()
@@ -94,24 +59,14 @@ struct JoinWishlistSheet: View {
             .navigationTitle("Присоединиться")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
-                ToolbarItemGroup(placement: .keyboard) {
-                    Spacer()
-                    Button {
-                        UIApplication.shared.sendAction(#selector(UIResponder.resignFirstResponder), to: nil, from: nil, for: nil)
-                    } label: {
-                        Image(systemName: "keyboard.chevron.compact.down")
-                    }
-                    .padding(.trailing, 4)
-                }
                 ToolbarItem(placement: .cancellationAction) {
                     Button("Закрыть") { dismiss() }
                 }
             }
             .fullScreenCover(isPresented: $showingScanner) {
                 QRScannerView { code in
-                    linkText = code
                     showingScanner = false
-                    joinByLink()
+                    joinByLink(code)
                 }
             }
         }
@@ -138,8 +93,16 @@ struct JoinWishlistSheet: View {
         }
     }
 
-    private func joinByLink() {
-        guard let url = URL(string: linkText),
+    private func pasteAndJoin() {
+        guard let clipboard = UIPasteboard.general.string, !clipboard.isEmpty else {
+            joinStatus = .error("Буфер обмена пуст")
+            return
+        }
+        joinByLink(clipboard)
+    }
+
+    private func joinByLink(_ link: String) {
+        guard let url = URL(string: link),
               url.scheme == "iwish",
               url.host == "join" else {
             joinStatus = .error("Неверная ссылка")
@@ -180,15 +143,12 @@ final class QRScannerViewController: UIViewController, AVCaptureMetadataOutputOb
     private let captureSession = AVCaptureSession()
     private var previewLayer: AVCaptureVideoPreviewLayer!
 
+    private let scanSize: CGFloat = 250
+    private let scanOffsetY: CGFloat = -40
+
     override func viewDidLoad() {
         super.viewDidLoad()
         view.backgroundColor = .black
-
-        let closeButton = UIButton(type: .system)
-        closeButton.setImage(UIImage(systemName: "xmark.circle.fill"), for: .normal)
-        closeButton.tintColor = .white
-        closeButton.addTarget(self, action: #selector(closeTapped), for: .touchUpInside)
-        closeButton.translatesAutoresizingMaskIntoConstraints = false
 
         guard let videoCaptureDevice = AVCaptureDevice.default(for: .video),
               let videoInput = try? AVCaptureDeviceInput(device: videoCaptureDevice) else {
@@ -207,12 +167,84 @@ final class QRScannerViewController: UIViewController, AVCaptureMetadataOutputOb
         previewLayer.videoGravity = .resizeAspectFill
         view.layer.addSublayer(previewLayer)
 
+        // -- Viewfinder overlay --
+
+        let scanRect = CGRect(
+            x: (view.bounds.width - scanSize) / 2,
+            y: (view.bounds.height - scanSize) / 2 + scanOffsetY,
+            width: scanSize,
+            height: scanSize
+        )
+
+        // Dark overlay with cutout
+        let overlayPath = UIBezierPath(rect: view.bounds)
+        let cutoutPath = UIBezierPath(roundedRect: scanRect, cornerRadius: 12)
+        overlayPath.append(cutoutPath)
+        overlayPath.usesEvenOddFillRule = true
+
+        let maskLayer = CAShapeLayer()
+        maskLayer.path = overlayPath.cgPath
+        maskLayer.fillRule = .evenOdd
+        maskLayer.fillColor = UIColor.black.withAlphaComponent(0.5).cgColor
+        view.layer.addSublayer(maskLayer)
+
+        // Corner brackets
+        let bracketLength: CGFloat = 30
+        let bracketWidth: CGFloat = 3
+        let bracketColor = UIColor.white
+
+        func addCorner(x: CGFloat, y: CGFloat, isLeft: Bool, isTop: Bool) {
+            let horizontal = UIView(frame: CGRect(
+                x: isLeft ? x : x - bracketLength,
+                y: isTop ? y : y - bracketWidth,
+                width: bracketLength,
+                height: bracketWidth
+            ))
+            horizontal.backgroundColor = bracketColor
+            horizontal.layer.cornerRadius = bracketWidth / 2
+
+            let vertical = UIView(frame: CGRect(
+                x: isLeft ? x : x - bracketWidth,
+                y: isTop ? y : y - bracketLength,
+                width: bracketWidth,
+                height: bracketLength
+            ))
+            vertical.backgroundColor = bracketColor
+            vertical.layer.cornerRadius = bracketWidth / 2
+
+            view.addSubview(horizontal)
+            view.addSubview(vertical)
+        }
+
+        addCorner(x: scanRect.minX, y: scanRect.minY, isLeft: true, isTop: true)
+        addCorner(x: scanRect.maxX, y: scanRect.minY, isLeft: false, isTop: true)
+        addCorner(x: scanRect.minX, y: scanRect.maxY, isLeft: true, isTop: false)
+        addCorner(x: scanRect.maxX, y: scanRect.maxY, isLeft: false, isTop: false)
+
+        // Title label above cutout
+        let titleLabel = UILabel()
+        titleLabel.text = "Сканируй QR-код"
+        titleLabel.textColor = .white
+        titleLabel.font = .systemFont(ofSize: 20, weight: .semibold)
+        titleLabel.textAlignment = .center
+        titleLabel.translatesAutoresizingMaskIntoConstraints = false
+        view.addSubview(titleLabel)
+        NSLayoutConstraint.activate([
+            titleLabel.centerXAnchor.constraint(equalTo: view.centerXAnchor),
+            titleLabel.bottomAnchor.constraint(equalTo: view.topAnchor, constant: scanRect.minY - 30)
+        ])
+
+        // Close button (top-left, text style)
+        let closeButton = UIButton(type: .system)
+        closeButton.setTitle("Закрыть", for: .normal)
+        closeButton.titleLabel?.font = .systemFont(ofSize: 17)
+        closeButton.tintColor = .white
+        closeButton.addTarget(self, action: #selector(closeTapped), for: .touchUpInside)
+        closeButton.translatesAutoresizingMaskIntoConstraints = false
         view.addSubview(closeButton)
         NSLayoutConstraint.activate([
             closeButton.topAnchor.constraint(equalTo: view.safeAreaLayoutGuide.topAnchor, constant: 16),
-            closeButton.trailingAnchor.constraint(equalTo: view.trailingAnchor, constant: -16),
-            closeButton.widthAnchor.constraint(equalToConstant: 32),
-            closeButton.heightAnchor.constraint(equalToConstant: 32),
+            closeButton.leadingAnchor.constraint(equalTo: view.leadingAnchor, constant: 16),
         ])
 
         DispatchQueue.global(qos: .userInitiated).async { [weak self] in
