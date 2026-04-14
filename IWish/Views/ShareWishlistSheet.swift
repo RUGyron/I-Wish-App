@@ -169,12 +169,7 @@ struct ShareWishlistSheet: View {
         }
         .sheet(isPresented: $showingShareSheet) {
             if let url = shareManager.shareURL {
-                let text = shareManager.invitationText(wishlistName: wishlist.name)
-                let qrImage = generateQRCode(from: url.absoluteString)
-                let items: [Any] = [text, qrImage as Any, url].compactMap {
-                    $0 is NSNull ? nil : $0
-                }
-                ShareSheetView(items: items.isEmpty ? [text] : items)
+                ShareSheetView(items: shareItems(for: url))
             }
         }
     }
@@ -192,18 +187,82 @@ struct ShareWishlistSheet: View {
 
     // MARK: - QR Generation
 
+    private func shareItems(for url: URL) -> [Any] {
+        let text = shareManager.invitationText(wishlistName: wishlist.name)
+        var items: [Any] = [text]
+        if let qrImage = generateQRCode(from: url.absoluteString) {
+            items.append(qrImage)
+        }
+        return items
+    }
+
     private func generateQRCode(from string: String) -> UIImage? {
-        let context = CIContext()
         let filter = CIFilter.qrCodeGenerator()
         filter.message = Data(string.utf8)
-        filter.correctionLevel = "M"
+        filter.correctionLevel = "H"
 
-        guard let outputImage = filter.outputImage else { return nil }
-        let transform = CGAffineTransform(scaleX: 10, y: 10)
-        let scaledImage = outputImage.transformed(by: transform)
+        guard let ciImage = filter.outputImage else { return nil }
 
-        guard let cgImage = context.createCGImage(scaledImage, from: scaledImage.extent) else { return nil }
-        return UIImage(cgImage: cgImage)
+        let size: CGFloat = 720
+        let moduleCount = Int(ciImage.extent.width)
+        let moduleSize = size / CGFloat(moduleCount)
+        let cornerRadius = moduleSize * 0.3
+
+        let renderer = UIGraphicsImageRenderer(size: CGSize(width: size, height: size))
+        let image = renderer.image { ctx in
+            // White background with rounded corners
+            let bgRect = CGRect(origin: .zero, size: CGSize(width: size, height: size))
+            UIBezierPath(roundedRect: bgRect, cornerRadius: 20).addClip()
+            UIColor.white.setFill()
+            ctx.fill(bgRect)
+
+            // Get pixel data from CIImage
+            let context = CIContext()
+            guard let cgImage = context.createCGImage(ciImage, from: ciImage.extent),
+                  let dataProvider = cgImage.dataProvider,
+                  let data = dataProvider.data,
+                  let ptr = CFDataGetBytePtr(data) else { return }
+
+            let bpr = cgImage.bytesPerRow
+
+            // Draw rounded modules
+            UIColor.black.setFill()
+            for row in 0..<moduleCount {
+                for col in 0..<moduleCount {
+                    let offset = row * bpr + col * 4
+                    let isBlack = ptr[offset] == 0
+
+                    if isBlack {
+                        let rect = CGRect(
+                            x: CGFloat(col) * moduleSize,
+                            y: CGFloat(row) * moduleSize,
+                            width: moduleSize,
+                            height: moduleSize
+                        )
+                        UIBezierPath(roundedRect: rect, cornerRadius: cornerRadius).fill()
+                    }
+                }
+            }
+
+            // Logo overlay in center
+            if let logo = UIImage(named: "IconPreviewLight") {
+                let logoSize = size * 0.22
+                let logoRect = CGRect(
+                    x: (size - logoSize) / 2,
+                    y: (size - logoSize) / 2,
+                    width: logoSize,
+                    height: logoSize
+                )
+                let padding: CGFloat = 8
+                let bgLogoRect = logoRect.insetBy(dx: -padding, dy: -padding)
+                UIColor.white.setFill()
+                UIBezierPath(roundedRect: bgLogoRect, cornerRadius: bgLogoRect.width * 0.22).fill()
+
+                logo.draw(in: logoRect)
+            }
+        }
+
+        return image
     }
 }
 

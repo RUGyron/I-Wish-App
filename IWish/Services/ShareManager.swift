@@ -32,7 +32,7 @@ final class ShareManager {
         role: ShareRole,
         ttl: InviteTTL
     ) {
-        let url = URL(string: "iwish://join/\(wishlist.id.uuidString)")!
+        let url = URL(string: "iwish://join/\(wishlist.id.uuidString)?role=\(role.rawValue)&ttl=\(ttl.rawValue)")!
         self.shareURL = url
         self.expiresAt = ttl.duration.map { Date.now.addingTimeInterval($0) }
     }
@@ -47,6 +47,13 @@ final class ShareManager {
 
     /// Invitation text for sharing (includes wishlist name and link).
     func invitationText(wishlistName: String) -> String {
-        "Присоединяйся к списку желаний «\(wishlistName)» в I Wish!\n\(shareURL?.absoluteString ?? "")"
+        guard let url = shareURL else { return "" }
+        return """
+        Присоединяйся к моему списку желаний «\(wishlistName)» в I Wish!
+
+        \(url.absoluteString)
+
+        Открой ссылку на iPhone с установленным I Wish.
+        """
     }
 }

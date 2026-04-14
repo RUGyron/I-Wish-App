@@ -33,6 +33,7 @@ struct WishlistDetailView: View {
     @State private var showingShare = false
     @State private var showingParticipants = false
     @State private var showingDeleteConfirmation = false
+    @State private var editingItem: Item?
 
     private var activeItems: [Item] {
         wishlist.items.filter { !$0.isArchived }
@@ -117,6 +118,9 @@ struct WishlistDetailView: View {
             ParticipantsView(wishlist: wishlist)
                 .applyTheme()
         }
+        .sheet(item: $editingItem) { item in
+            EditItemSheet(item: item)
+        }
         .confirmationDialog("Удалить «\(wishlist.name)»?", isPresented: $showingDeleteConfirmation, titleVisibility: .visible) {
             Button("Удалить список", role: .destructive) {
                 context.delete(wishlist)
@@ -175,7 +179,7 @@ struct WishlistDetailView: View {
                 Section {
                     ForEach(tierItems) { item in
                         itemRow(item)
-                            .itemContextMenu(item: item, context: context)
+                            .itemContextMenu(item: item, context: context, editingItem: $editingItem)
                             .itemSwipeActions(item: item, context: context)
                     }
                 } header: {
@@ -205,7 +209,7 @@ struct WishlistDetailView: View {
         Section {
             ForEach(sorted) { item in
                 itemRow(item)
-                    .itemContextMenu(item: item, context: context)
+                    .itemContextMenu(item: item, context: context, editingItem: $editingItem)
                     .itemSwipeActions(item: item, context: context)
             }
         }
@@ -333,8 +337,14 @@ struct WishlistDetailView: View {
 // MARK: - Context Menu & Swipe Actions
 
 private extension View {
-    func itemContextMenu(item: Item, context: ModelContext) -> some View {
+    func itemContextMenu(item: Item, context: ModelContext, editingItem: Binding<Item?>) -> some View {
         self.contextMenu {
+            Button {
+                editingItem.wrappedValue = item
+            } label: {
+                Label("Изменить", systemImage: "pencil")
+            }
+
             if let urlString = item.url, let url = URL(string: urlString) {
                 Button {
                     UIApplication.shared.open(url)

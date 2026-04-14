@@ -58,8 +58,12 @@ struct CoverPickerSection: View {
                         }
                     }
                 } label: {
-                    Label(hasSelection ? "Сменить обложку" : "Выбрать обложку",
-                          systemImage: "photo")
+                    HStack {
+                        Label(hasSelection ? "Сменить обложку" : "Выбрать обложку",
+                              systemImage: "photo")
+                        Spacer()
+                    }
+                    .contentShape(Rectangle())
                 }
             }
 
