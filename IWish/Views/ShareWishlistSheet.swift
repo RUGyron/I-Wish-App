@@ -223,81 +223,95 @@ struct ShareWishlistSheet: View {
             UIColor.white.setFill()
             ctx.fill(bgRect)
 
-            // Draw QR modules in black first, then gradient mask
-            // Colored QR modules with gradient
-            UIColor.white.setFill()
-            UIBezierPath(roundedRect: bgRect, cornerRadius: canvasSize * 0.06).fill()
-
             gc.translateBy(x: padding, y: padding)
 
-            // Gradient colors for modules
-            let amberTop = UIColor(red: 0.85, green: 0.52, blue: 0.12, alpha: 1)
-            let amberBottom = UIColor(red: 0.62, green: 0.32, blue: 0.08, alpha: 1)
+            // Diagonal gradient corners
+            let colorTL = UIColor(red: 0.82, green: 0.48, blue: 0.14, alpha: 1)
+            let colorBR = UIColor(red: 0.58, green: 0.30, blue: 0.08, alpha: 1)
+
+            let inset = mod * 0.06  // micro-gap between modules
+            let nf = CGFloat(n)
 
             for row in 0..<n {
-                let t = CGFloat(row) / CGFloat(n)
-                let r = amberTop.cgColor.components![0] * (1 - t) + amberBottom.cgColor.components![0] * t
-                let g = amberTop.cgColor.components![1] * (1 - t) + amberBottom.cgColor.components![1] * t
-                let b = amberTop.cgColor.components![2] * (1 - t) + amberBottom.cgColor.components![2] * t
-                UIColor(red: r, green: g, blue: b, alpha: 1).setFill()
-
                 for col in 0..<n {
                     guard matrix[row][col] else { continue }
+                    if isFinderZone(row: row, col: col, n: n) { continue }
 
-                    // Logo zone — skip center
-                    let centerZone = CGFloat(n) * 0.35
-                    let half = CGFloat(n) / 2
-                    if CGFloat(row) > half - centerZone/2 && CGFloat(row) < half + centerZone/2 &&
-                       CGFloat(col) > half - centerZone/2 && CGFloat(col) < half + centerZone/2 {
-                        continue
-                    }
+                    let half = nf / 2
+                    let cz = nf * 0.30
+                    if CGFloat(row) > half - cz && CGFloat(row) < half + cz &&
+                       CGFloat(col) > half - cz && CGFloat(col) < half + cz { continue }
 
-                    if isFinderZone(row: row, col: col, n: n) {
-                        continue
-                    }
-
-                    let x = CGFloat(col) * mod
-                    let y = CGFloat(row) * mod
-                    let cr = mod * 0.30
+                    // Diagonal gradient: blend by (row+col) / (2*n)
+                    let t = (CGFloat(row) + CGFloat(col)) / (2 * nf)
+                    colorTL.blend(with: colorBR, ratio: t).setFill()
 
                     let right = col + 1 < n && matrix[row][col + 1] && !isFinderZone(row: row, col: col + 1, n: n)
                     let bottom = row + 1 < n && matrix[row + 1][col] && !isFinderZone(row: row + 1, col: col, n: n)
                     let left = col - 1 >= 0 && matrix[row][col - 1] && !isFinderZone(row: row, col: col - 1, n: n)
                     let top = row - 1 >= 0 && matrix[row - 1][col] && !isFinderZone(row: row - 1, col: col, n: n)
+                    let hasNeighbor = right || bottom || left || top
 
-                    let rect = CGRect(x: x, y: y, width: mod, height: mod)
-                    let corners: UIRectCorner = [
-                        (!top && !left) ? .topLeft : [],
-                        (!top && !right) ? .topRight : [],
-                        (!bottom && !left) ? .bottomLeft : [],
-                        (!bottom && !right) ? .bottomRight : [],
-                    ].reduce([]) { $0.union($1) }
+                    let x = CGFloat(col) * mod + inset
+                    let y = CGFloat(row) * mod + inset
+                    let w = mod - inset * 2
+                    let h = mod - inset * 2
 
-                    UIBezierPath(
-                        roundedRect: rect,
-                        byRoundingCorners: corners,
-                        cornerRadii: CGSize(width: cr, height: cr)
-                    ).fill()
+                    if !hasNeighbor {
+                        // Isolated dot → circle
+                        UIBezierPath(ovalIn: CGRect(x: x, y: y, width: w, height: h)).fill()
+                    } else {
+                        // Connected module — expand edges toward neighbors, round free corners
+                        var rx = x, ry = y, rw = w, rh = h
+                        if left  { rx -= inset; rw += inset }
+                        if right { rw += inset }
+                        if top   { ry -= inset; rh += inset }
+                        if bottom { rh += inset }
+
+                        let cr = mod * 0.35
+                        let corners: UIRectCorner = [
+                            (!top && !left) ? .topLeft : [],
+                            (!top && !right) ? .topRight : [],
+                            (!bottom && !left) ? .bottomLeft : [],
+                            (!bottom && !right) ? .bottomRight : [],
+                        ].reduce([]) { $0.union($1) }
+
+                        UIBezierPath(
+                            roundedRect: CGRect(x: rx, y: ry, width: rw, height: rh),
+                            byRoundingCorners: corners,
+                            cornerRadii: CGSize(width: cr, height: cr)
+                        ).fill()
+                    }
                 }
             }
 
-            // Finder patterns with gradient
-            drawStyledFinder(gc: gc, x: 0, y: 0, mod: mod, color: amberTop)
-            drawStyledFinder(gc: gc, x: CGFloat(n - 7) * mod, y: 0, mod: mod, color: amberTop.blend(with: amberBottom, ratio: 0.3))
-            drawStyledFinder(gc: gc, x: 0, y: CGFloat(n - 7) * mod, mod: mod, color: amberBottom.blend(with: amberTop, ratio: 0.3))
+            // Finder patterns with diagonal gradient
+            drawStyledFinder(gc: gc, x: 0, y: 0, mod: mod, color: colorTL)
+            drawStyledFinder(gc: gc, x: CGFloat(n - 7) * mod, y: 0, mod: mod, color: colorTL.blend(with: colorBR, ratio: 0.45))
+            drawStyledFinder(gc: gc, x: 0, y: CGFloat(n - 7) * mod, mod: mod, color: colorTL.blend(with: colorBR, ratio: 0.45))
 
             gc.translateBy(x: -padding, y: -padding)
 
-            // Logo in center — drawn directly, logo PNG already has matching background
+            // Logo in circle (like Telegram)
             if let logo = UIImage(named: "IconPreviewLight") {
-                let logoSize = canvasSize * 0.22
+                let logoSize = canvasSize * 0.20
+                let circleSize = logoSize * 1.25
+                let circleRect = CGRect(
+                    x: (canvasSize - circleSize) / 2,
+                    y: (canvasSize - circleSize) / 2,
+                    width: circleSize, height: circleSize
+                )
+                gc.saveGState()
+                UIColor.white.setFill()
+                UIBezierPath(ovalIn: circleRect).fill()
                 let logoRect = CGRect(
                     x: (canvasSize - logoSize) / 2,
                     y: (canvasSize - logoSize) / 2,
                     width: logoSize, height: logoSize
                 )
-                UIBezierPath(roundedRect: logoRect, cornerRadius: logoSize * 0.22).addClip()
+                UIBezierPath(ovalIn: circleRect).addClip()
                 logo.draw(in: logoRect)
+                gc.restoreGState()
             }
         }
     }
