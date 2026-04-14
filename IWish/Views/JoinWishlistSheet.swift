@@ -18,7 +18,7 @@ struct JoinWishlistSheet: View {
         NavigationStack {
             VStack(spacing: 24) {
                 VStack(spacing: 8) {
-                    Image(systemName: "person.badge.plus")
+                    Image(systemName: "qrcode.viewfinder")
                         .font(.system(size: 48))
                         .foregroundStyle(.tint)
                     Text("Присоединиться к списку")

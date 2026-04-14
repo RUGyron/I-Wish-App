@@ -28,7 +28,7 @@ struct HomeView: View {
                 Button {
                     showingJoin = true
                 } label: {
-                    Image(systemName: "person.badge.plus")
+                    Image(systemName: "qrcode.viewfinder")
                 }
             }
             ToolbarItem(placement: .topBarTrailing) {

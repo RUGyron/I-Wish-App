@@ -111,9 +111,12 @@ struct ShareWishlistSheet: View {
             Text("Роль")
                 .font(.subheadline)
                 .foregroundStyle(.secondary)
-            GlassSegmentedPicker(selection: $selectedRole) { role in
-                Text(role.label)
+            Picker("Роль", selection: $selectedRole) {
+                ForEach(ShareRole.allCases) { role in
+                    Text(role.label).tag(role)
+                }
             }
+            .pickerStyle(.segmented)
         }
     }
 
@@ -122,9 +125,12 @@ struct ShareWishlistSheet: View {
             Text("Срок действия")
                 .font(.subheadline)
                 .foregroundStyle(.secondary)
-            GlassSegmentedPicker(selection: $selectedTTL) { ttl in
-                Text(ttl.label)
+            Picker("TTL", selection: $selectedTTL) {
+                ForEach(InviteTTL.allCases) { ttl in
+                    Text(ttl.label).tag(ttl)
+                }
             }
+            .pickerStyle(.segmented)
         }
     }
 

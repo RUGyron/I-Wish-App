@@ -15,6 +15,14 @@ enum ItemTier: String, Codable, CaseIterable, Sendable, Identifiable {
         }
     }
 
+    var emoji: String {
+        switch self {
+        case .must:  return "\u{1F525}"
+        case .maybe: return "\u{1F914}"
+        case .idea:  return "\u{1F4AD}"
+        }
+    }
+
     var label: String {
         switch self {
         case .must:  return "Обязательно"
