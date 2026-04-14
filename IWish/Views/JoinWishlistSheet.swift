@@ -68,6 +68,7 @@ struct JoinWishlistSheet: View {
                     showingScanner = false
                     joinByLink(code)
                 }
+                .ignoresSafeArea(.all)
             }
         }
         .applyTheme()
@@ -140,6 +141,9 @@ final class QRScannerViewController: UIViewController, AVCaptureMetadataOutputOb
     var onCodeScanned: ((String) -> Void)?
     var onCancel: (() -> Void)?
 
+    override var prefersStatusBarHidden: Bool { true }
+    override var prefersHomeIndicatorAutoHidden: Bool { true }
+
     private let captureSession = AVCaptureSession()
     private var previewLayer: AVCaptureVideoPreviewLayer!
 
@@ -149,6 +153,8 @@ final class QRScannerViewController: UIViewController, AVCaptureMetadataOutputOb
     override func viewDidLoad() {
         super.viewDidLoad()
         view.backgroundColor = .black
+        view.insetsLayoutMarginsFromSafeArea = false
+        additionalSafeAreaInsets = .zero
 
         guard let videoCaptureDevice = AVCaptureDevice.default(for: .video),
               let videoInput = try? AVCaptureDeviceInput(device: videoCaptureDevice) else {
