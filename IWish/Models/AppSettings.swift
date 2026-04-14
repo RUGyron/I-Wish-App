@@ -6,10 +6,10 @@ final class AppSettings {
     /// Singleton — всегда один instance в БД. Инвариант поддерживается
     /// `loadOrCreate(in:)`, а не schema constraint (CloudKit mirror
     /// не поддерживает `@Attribute(.unique)`).
-    var id: UUID
-    var themeModeRaw: String
-    var defaultCurrency: String
-    var hasCompletedOnboarding: Bool
+    var id: UUID = UUID()
+    var themeModeRaw: String = "system"
+    var defaultCurrency: String = "RUB"
+    var hasCompletedOnboarding: Bool = false
 
     // Probation defaults
     var probationEnabledByDefault: Bool = false
