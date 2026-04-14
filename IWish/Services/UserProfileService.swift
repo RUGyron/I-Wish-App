@@ -40,10 +40,16 @@ final class UserProfileService {
 
     private func deviceOwnerName() -> String? {
         let name = UIDevice.current.name
-        // "iPhone Владислава" → "Владислав" — strip "iPhone" prefix
-        if name.lowercased().hasPrefix("iphone ") {
-            return String(name.dropFirst(7))
+        let lower = name.lowercased()
+        // "iPhone Владислава" → "Владислава"
+        for prefix in ["iphone ", "ipad ", "ipod "] {
+            if lower.hasPrefix(prefix) {
+                let stripped = String(name.dropFirst(prefix.count))
+                if !stripped.isEmpty { return stripped }
+            }
         }
+        // "iPhone" alone or generic → skip
+        if lower == "iphone" || lower == "ipad" { return nil }
         return name
     }
 }

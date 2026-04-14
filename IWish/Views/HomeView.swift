@@ -67,6 +67,11 @@ struct HomeView: View {
 
     private var emptyState: some View {
         VStack(spacing: 12) {
+            if let name = userProfile.userName {
+                Text("Привет, \(name)!")
+                    .font(.title2.weight(.semibold))
+                    .padding(.bottom, 8)
+            }
             Image(systemName: "sparkles")
                 .font(.system(size: 48))
                 .foregroundStyle(.tint)
