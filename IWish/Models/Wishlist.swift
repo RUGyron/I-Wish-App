@@ -14,7 +14,7 @@ final class Wishlist {
     var ownerRecordID: String?
 
     @Relationship(deleteRule: .cascade, inverse: \Item.wishlist)
-    var items: [Item] = []
+    var items: [Item]?
 
     init(
         name: String,

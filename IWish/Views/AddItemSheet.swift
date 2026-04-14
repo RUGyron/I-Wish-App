@@ -282,7 +282,7 @@ struct AddItemSheet: View {
     // MARK: - Helpers
 
     private func nextSortIndexForTier(_ tier: ItemTier) -> Double {
-        let tierItems = wishlist.items.filter { $0.tier == tier && !$0.isArchived }
+        let tierItems = (wishlist.items ?? []).filter { $0.tier == tier && !$0.isArchived }
         let maxIndex = tierItems.map(\.sortIndex).max()
         return SortIndexCalculator.midpoint(after: maxIndex, before: nil)
     }

@@ -40,7 +40,7 @@ struct ItemModelTests {
         try context.save()
 
         let fetched = try context.fetch(FetchDescriptor<Wishlist>())
-        #expect(fetched.first?.items.count == 1)
-        #expect(fetched.first?.items.first?.name == "Belongs")
+        #expect((fetched.first?.items ?? []).count == 1)
+        #expect((fetched.first?.items ?? []).first?.name == "Belongs")
     }
 }

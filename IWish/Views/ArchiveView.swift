@@ -7,7 +7,7 @@ struct ArchiveView: View {
     let wishlist: Wishlist
 
     private var archivedItems: [Item] {
-        wishlist.items.filter { $0.isArchived }
+        (wishlist.items ?? []).filter { $0.isArchived }
             .sorted { $0.updatedAt > $1.updatedAt }
     }
 

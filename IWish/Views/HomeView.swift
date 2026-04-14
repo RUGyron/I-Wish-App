@@ -10,7 +10,7 @@ struct HomeView: View {
     @State private var userProfile = UserProfileService()
 
     private var totalItems: Int {
-        wishlists.reduce(0) { $0 + $1.items.filter { !$0.isArchived }.count }
+        wishlists.reduce(0) { $0 + ($1.items ?? []).filter { !$0.isArchived }.count }
     }
 
     var body: some View {
@@ -113,7 +113,7 @@ struct HomeView: View {
     }
 
     private func wishlistRow(_ wishlist: Wishlist) -> some View {
-        let activeItems = wishlist.items.filter { !$0.isArchived }
+        let activeItems = (wishlist.items ?? []).filter { !$0.isArchived }
 
         return HStack(spacing: 12) {
             DefaultCoverView(

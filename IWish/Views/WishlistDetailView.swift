@@ -45,7 +45,7 @@ struct WishlistDetailView: View {
     @State private var editingItem: Item?
 
     private var activeItems: [Item] {
-        wishlist.items.filter { !$0.isArchived }
+        (wishlist.items ?? []).filter { !$0.isArchived }
     }
 
     var body: some View {
@@ -83,7 +83,7 @@ struct WishlistDetailView: View {
 
             ToolbarItem(placement: .topBarTrailing) {
                 Menu {
-                    let archivedCount = wishlist.items.filter { $0.isArchived }.count
+                    let archivedCount = (wishlist.items ?? []).filter { $0.isArchived }.count
                     if archivedCount > 0 {
                         Button {
                             showingArchive = true

@@ -11,7 +11,7 @@ struct WishlistModelTests {
         #expect(wishlist.name == "Hello")
         #expect(wishlist.coverImageData == nil)
         #expect(wishlist.coverEmoji == nil)
-        #expect(wishlist.items.isEmpty)
+        #expect((wishlist.items ?? []).isEmpty)
         #expect(abs(wishlist.createdAt.timeIntervalSinceNow) < 1.0)
         #expect(wishlist.createdAt == wishlist.updatedAt)
     }
