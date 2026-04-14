@@ -24,7 +24,7 @@ private enum SortOption: String, CaseIterable, Identifiable {
         switch self {
         case .importance: return "flame.fill"
         case .date:       return "calendar"
-        case .price:      return "banknote"
+        case .price:      return "dollarsign.circle"
         case .name:       return "textformat.abc"
         }
     }

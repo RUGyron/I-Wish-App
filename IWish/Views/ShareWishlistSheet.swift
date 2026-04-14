@@ -165,7 +165,8 @@ struct ShareWishlistSheet: View {
                 VStack(spacing: 5) {
                     Image(systemName: copied ? "checkmark" : "doc.on.doc")
                         .font(.title3)
-                    Text(copied ? "Скопировано" : "Скопировать")
+                        .frame(height: 22)
+                    Text("Скопировать")
                         .font(.caption)
                 }
                 .frame(maxWidth: .infinity)
