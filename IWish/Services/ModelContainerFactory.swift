@@ -13,7 +13,8 @@ enum ModelContainerFactory {
         let config = ModelConfiguration(
             schema: schema,
             isStoredInMemoryOnly: false,
-            allowsSave: true
+            allowsSave: true,
+            cloudKitDatabase: .none
         )
         do {
             return try ModelContainer(for: schema, configurations: [config])
