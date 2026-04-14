@@ -14,7 +14,16 @@ struct IWishApp: App {
 
     init() {
         self.container = ModelContainerFactory.makeProductionContainer()
+        configureAppearance()
         preheatKeyboard()
+    }
+
+    private func configureAppearance() {
+        let seg = UISegmentedControl.appearance()
+        seg.setContentHuggingPriority(.defaultLow, for: .vertical)
+        // Increase segmented control height via font size
+        seg.setTitleTextAttributes([.font: UIFont.systemFont(ofSize: 15, weight: .medium)], for: .normal)
+        seg.setTitleTextAttributes([.font: UIFont.systemFont(ofSize: 15, weight: .semibold)], for: .selected)
     }
 
     var body: some Scene {
