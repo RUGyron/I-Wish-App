@@ -56,6 +56,7 @@ struct ParticipantsView: View {
                     Text("Участники")
                 }
             }
+            .warmBackground()
             .navigationTitle("Участники")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
@@ -64,6 +65,7 @@ struct ParticipantsView: View {
                 }
             }
         }
+        .applyTheme()
     }
 }
 
