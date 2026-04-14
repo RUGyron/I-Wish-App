@@ -33,6 +33,7 @@ final class Item {
         coverImageData: Data? = nil,
         coverEmoji: String? = nil
     ) {
+        let now = Date.now
         self.id = UUID()
         self.name = name
         self.descriptionText = descriptionText
@@ -46,7 +47,7 @@ final class Item {
         self.sortIndex = sortIndex
         self.probationEndAt = nil
         self.isArchived = false
-        self.createdAt = .now
-        self.updatedAt = .now
+        self.createdAt = now
+        self.updatedAt = now
     }
 }

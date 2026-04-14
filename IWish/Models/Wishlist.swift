@@ -22,12 +22,13 @@ final class Wishlist {
         coverEmoji: String? = nil,
         ownerRecordID: String? = nil
     ) {
+        let now = Date.now
         self.id = UUID()
         self.name = name
         self.coverImageData = coverImageData
         self.coverEmoji = coverEmoji
-        self.createdAt = .now
-        self.updatedAt = .now
+        self.createdAt = now
+        self.updatedAt = now
         self.ownerRecordID = ownerRecordID
     }
 }

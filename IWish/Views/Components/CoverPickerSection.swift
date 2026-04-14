@@ -1,8 +1,7 @@
 import SwiftUI
 import PhotosUI
 
-/// Секция для выбора обложки: камера, галерея, эмодзи.
-/// Reusable — используется и в AddWishlistSheet, и в AddItemSheet.
+/// Одна кнопка "Обложка" → меню (камера/галерея/эмодзи/убрать).
 struct CoverPickerSection: View {
     @Binding var imageData: Data?
     @Binding var emoji: String?
@@ -13,60 +12,52 @@ struct CoverPickerSection: View {
     @State private var showingEmojiInput = false
     @State private var emojiDraft: String = ""
 
+    private var hasSelection: Bool {
+        imageData != nil || (emoji != nil && emoji?.isEmpty == false)
+    }
+
     var body: some View {
-        Section("Обложка") {
-            // Current selection preview + remove
+        Section {
+            // Preview current selection (if any) + remove
             if let imageData, let image = UIImage(data: imageData) {
-                HStack(spacing: 12) {
+                HStack {
                     Image(uiImage: image)
                         .resizable()
                         .scaledToFill()
                         .frame(width: 48, height: 48)
                         .clipShape(RoundedRectangle(cornerRadius: 10))
-
                     Spacer()
-
-                    Button("Убрать", role: .destructive) {
-                        self.imageData = nil
-                    }
-                    .font(.subheadline)
+                    Button("Убрать", role: .destructive) { self.imageData = nil }
+                        .font(.subheadline)
                 }
             } else if let emoji, !emoji.isEmpty {
-                HStack(spacing: 12) {
-                    Text(emoji)
-                        .font(.largeTitle)
-
+                HStack {
+                    Text(emoji).font(.largeTitle)
                     Spacer()
+                    Button("Убрать", role: .destructive) { self.emoji = nil }
+                        .font(.subheadline)
+                }
+            }
 
-                    Button("Убрать", role: .destructive) {
-                        self.emoji = nil
+            // Single menu button
+            Menu {
+                if UIImagePickerController.isSourceTypeAvailable(.camera) {
+                    Button { showingCamera = true } label: {
+                        Label("Камера", systemImage: "camera")
                     }
-                    .font(.subheadline)
                 }
-            }
-
-            // Camera
-            if UIImagePickerController.isSourceTypeAvailable(.camera) {
+                Button { showingPhotoPicker = true } label: {
+                    Label("Галерея", systemImage: "photo.on.rectangle")
+                }
                 Button {
-                    showingCamera = true
+                    emojiDraft = emoji ?? ""
+                    showingEmojiInput = true
                 } label: {
-                    Label("Камера", systemImage: "camera")
+                    Label("Эмодзи", systemImage: "face.smiling")
                 }
-            }
-
-            // Gallery
-            Button {
-                showingPhotoPicker = true
             } label: {
-                Label("Галерея", systemImage: "photo.on.rectangle")
-            }
-
-            // Emoji
-            Button {
-                emojiDraft = emoji ?? ""
-                showingEmojiInput.toggle()
-            } label: {
-                Label("Эмодзи", systemImage: "face.smiling")
+                Label(hasSelection ? "Сменить обложку" : "Выбрать обложку",
+                      systemImage: "photo")
             }
 
             // Inline emoji input
@@ -79,13 +70,9 @@ struct CoverPickerSection: View {
                                 imageData = nil
                             }
                         }
-                        .onSubmit {
-                            showingEmojiInput = false
-                        }
-                    Button("Готово") {
-                        showingEmojiInput = false
-                    }
-                    .font(.subheadline)
+                        .onSubmit { showingEmojiInput = false }
+                    Button("Готово") { showingEmojiInput = false }
+                        .font(.subheadline)
                 }
             }
         }
@@ -102,19 +89,18 @@ struct CoverPickerSection: View {
         .onChange(of: selectedPhoto) { _, item in
             Task {
                 guard let item else { return }
-                if let data = try? await item.loadTransferable(type: Data.self) {
-                    if let compressed = ImageCompressor.compress(UIImage(data: data) ?? UIImage()) {
-                        imageData = compressed
-                        emoji = nil
-                        showingEmojiInput = false
-                    }
+                if let data = try? await item.loadTransferable(type: Data.self),
+                   let compressed = ImageCompressor.compress(UIImage(data: data) ?? UIImage()) {
+                    imageData = compressed
+                    emoji = nil
+                    showingEmojiInput = false
                 }
             }
         }
     }
 }
 
-// MARK: - CameraImagePicker (UIImagePickerController wrapper)
+// MARK: - CameraImagePicker
 
 struct CameraImagePicker: UIViewControllerRepresentable {
     @Environment(\.dismiss) private var dismiss
