@@ -114,43 +114,55 @@ struct CameraImagePicker: UIViewControllerRepresentable {
     @Environment(\.dismiss) private var dismiss
     let onImageCaptured: (UIImage) -> Void
 
-    func makeUIViewController(context: Context) -> UIImagePickerController {
+    func makeUIViewController(context: Context) -> CameraWrapperController {
+        let wrapper = CameraWrapperController()
+        wrapper.onImageCaptured = onImageCaptured
+        wrapper.onDismiss = { dismiss() }
+        return wrapper
+    }
+
+    func updateUIViewController(_ uiViewController: CameraWrapperController, context: Context) {}
+}
+
+final class CameraWrapperController: UIViewController, UIImagePickerControllerDelegate, UINavigationControllerDelegate {
+    var onImageCaptured: ((UIImage) -> Void)?
+    var onDismiss: (() -> Void)?
+
+    override var prefersStatusBarHidden: Bool { true }
+    override var prefersHomeIndicatorAutoHidden: Bool { true }
+    override var childForStatusBarHidden: UIViewController? { nil }
+
+    override func viewDidLoad() {
+        super.viewDidLoad()
+        view.backgroundColor = .black
+
         let picker = UIImagePickerController()
         picker.sourceType = .camera
-        picker.delegate = context.coordinator
+        picker.delegate = self
         picker.overrideUserInterfaceStyle = .dark
-        picker.modalPresentationStyle = .fullScreen
-        picker.edgesForExtendedLayout = .all
-        picker.extendedLayoutIncludesOpaqueBars = true
-        return picker
+
+        addChild(picker)
+        view.addSubview(picker.view)
+        picker.view.translatesAutoresizingMaskIntoConstraints = false
+        NSLayoutConstraint.activate([
+            picker.view.topAnchor.constraint(equalTo: view.topAnchor),
+            picker.view.bottomAnchor.constraint(equalTo: view.bottomAnchor),
+            picker.view.leadingAnchor.constraint(equalTo: view.leadingAnchor),
+            picker.view.trailingAnchor.constraint(equalTo: view.trailingAnchor),
+        ])
+        picker.didMove(toParent: self)
     }
 
-    func updateUIViewController(_ uiViewController: UIImagePickerController, context: Context) {}
-
-    func makeCoordinator() -> Coordinator {
-        Coordinator(dismiss: dismiss, onImageCaptured: onImageCaptured)
+    func imagePickerController(_ picker: UIImagePickerController,
+                               didFinishPickingMediaWithInfo info: [UIImagePickerController.InfoKey: Any]) {
+        if let image = info[.originalImage] as? UIImage {
+            onImageCaptured?(image)
+        }
+        onDismiss?()
     }
 
-    final class Coordinator: NSObject, UIImagePickerControllerDelegate, UINavigationControllerDelegate {
-        let dismiss: DismissAction
-        let onImageCaptured: (UIImage) -> Void
-
-        init(dismiss: DismissAction, onImageCaptured: @escaping (UIImage) -> Void) {
-            self.dismiss = dismiss
-            self.onImageCaptured = onImageCaptured
-        }
-
-        func imagePickerController(_ picker: UIImagePickerController,
-                                   didFinishPickingMediaWithInfo info: [UIImagePickerController.InfoKey: Any]) {
-            if let image = info[.originalImage] as? UIImage {
-                onImageCaptured(image)
-            }
-            dismiss()
-        }
-
-        func imagePickerControllerDidCancel(_ picker: UIImagePickerController) {
-            dismiss()
-        }
+    func imagePickerControllerDidCancel(_ picker: UIImagePickerController) {
+        onDismiss?()
     }
 }
 
