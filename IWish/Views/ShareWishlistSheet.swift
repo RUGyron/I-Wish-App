@@ -229,15 +229,23 @@ struct ShareWishlistSheet: View {
             gc.translateBy(x: padding, y: padding)
 
             let half = nf / 2
-            let logoR = nf * 0.19
+            let logoR = nf * 0.14
             let cr = mod * 0.45
             let dotInset = mod * 0.14
             let bleed: CGFloat = 0.25
 
+            // Finder zone: 7x7 pattern + 1-module separator = rows/cols 0..7
+            func isFinder(_ r: Int, _ c: Int) -> Bool {
+                let inTL = r <= 7 && c <= 7
+                let inTR = r <= 7 && c >= n - 8
+                let inBL = r >= n - 8 && c <= 7
+                return inTL || inTR || inBL
+            }
+
             func skip(_ r: Int, _ c: Int) -> Bool {
                 if r < 0 || r >= n || c < 0 || c >= n { return true }
                 if !matrix[r][c] { return true }
-                if (r < 7 && c < 7) || (r < 7 && c >= n - 7) || (r >= n - 7 && c < 7) { return true }
+                if isFinder(r, c) { return true }
                 let dr = CGFloat(r) - half, dc = CGFloat(c) - half
                 if dr > -logoR && dr < logoR && dc > -logoR && dc < logoR { return true }
                 return false
@@ -285,16 +293,16 @@ struct ShareWishlistSheet: View {
                 }
             }
 
-            // Finder patterns
+            // Finder patterns — drawn at 7*mod, positioned inside the 8-module zone
             drawStyledFinder(gc: gc, x: 0, y: 0, mod: mod, color: colorTL)
             drawStyledFinder(gc: gc, x: CGFloat(n - 7) * mod, y: 0, mod: mod, color: colorTL.blend(with: colorBR, ratio: 0.4))
             drawStyledFinder(gc: gc, x: 0, y: CGFloat(n - 7) * mod, mod: mod, color: colorTL.blend(with: colorBR, ratio: 0.4))
 
             gc.translateBy(x: -padding, y: -padding)
 
-            // Logo — circle with pure white background matching QR bg
+            // Logo circle — compact, blends with QR background
             if let logo = UIImage(named: "IconPreviewLight") {
-                let circleD = canvasSize * 0.21
+                let circleD = canvasSize * 0.18
                 let circleRect = CGRect(
                     x: (canvasSize - circleD) / 2,
                     y: (canvasSize - circleD) / 2,
