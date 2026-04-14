@@ -67,11 +67,9 @@ struct HomeView: View {
 
     private var emptyState: some View {
         VStack(spacing: 12) {
-            if let name = userProfile.userName {
-                Text("Привет, \(name)!")
-                    .font(.title2.weight(.semibold))
-                    .padding(.bottom, 8)
-            }
+            Text(userProfile.userName.map { "Привет, \($0)!" } ?? "Привет!")
+                .font(.title2.weight(.semibold))
+                .padding(.bottom, 8)
             Image(systemName: "sparkles")
                 .font(.system(size: 48))
                 .foregroundStyle(.tint)
@@ -103,11 +101,6 @@ struct HomeView: View {
                 .onDelete(perform: deleteWishlists)
             } header: {
                 VStack(alignment: .leading, spacing: 4) {
-                    if let name = userProfile.userName {
-                        Text("Привет, \(name)!")
-                            .font(.subheadline)
-                            .foregroundStyle(.secondary)
-                    }
                     Text("\(wishlists.count) списков \u{00B7} \(totalItems) желаний")
                         .font(.subheadline)
                         .foregroundStyle(.secondary)

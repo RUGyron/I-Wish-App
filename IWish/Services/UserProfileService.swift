@@ -1,5 +1,4 @@
 import CloudKit
-import UIKit
 
 @Observable
 final class UserProfileService {
@@ -10,50 +9,55 @@ final class UserProfileService {
         guard userName == nil else { return }
         isLoading = true
 
-        let container = CKContainer.default()
-        container.requestApplicationPermission(.userDiscoverability) { [weak self] status, _ in
-            guard let self, status == .granted else {
+        let container = CKContainer(identifier: "iCloud.com.rugyron.iwish")
+
+        // Check account status first
+        container.accountStatus { [weak self] status, error in
+            guard let self else { return }
+
+            if status != .available {
+                print("[UserProfile] iCloud account not available: \(status.rawValue), error: \(String(describing: error))")
                 Task { @MainActor in
-                    self?.isLoading = false
-                    self?.userName = self?.deviceOwnerName()
+                    self.isLoading = false
+                    // No name, greeting will show "Привет!" without name
                 }
                 return
             }
 
-            container.fetchUserRecordID { [weak self] recordID, _ in
-                guard let self, let recordID else {
+            // Request discoverability
+            container.requestApplicationPermission(.userDiscoverability) { [weak self] permStatus, error in
+                guard let self else { return }
+                print("[UserProfile] Discoverability permission: \(permStatus.rawValue), error: \(String(describing: error))")
+
+                guard permStatus == .granted else {
                     Task { @MainActor in
-                        self?.isLoading = false
-                        self?.userName = self?.deviceOwnerName()
+                        self.isLoading = false
                     }
                     return
                 }
 
-                container.discoverUserIdentity(withUserRecordID: recordID) { [weak self] identity, _ in
-                    Task { @MainActor in
-                        self?.isLoading = false
-                        if let name = identity?.nameComponents {
-                            let fmt = PersonNameComponentsFormatter()
-                            fmt.style = .default
-                            self?.userName = fmt.string(from: name)
-                        } else {
-                            self?.userName = self?.deviceOwnerName()
+                container.fetchUserRecordID { [weak self] recordID, error in
+                    guard let self, let recordID else {
+                        print("[UserProfile] fetchUserRecordID failed: \(String(describing: error))")
+                        Task { @MainActor in self?.isLoading = false }
+                        return
+                    }
+
+                    container.discoverUserIdentity(withUserRecordID: recordID) { [weak self] identity, error in
+                        Task { @MainActor in
+                            self?.isLoading = false
+                            if let name = identity?.nameComponents {
+                                let fmt = PersonNameComponentsFormatter()
+                                fmt.style = .default
+                                self?.userName = fmt.string(from: name)
+                                print("[UserProfile] Got name: \(self?.userName ?? "nil")")
+                            } else {
+                                print("[UserProfile] No identity: \(String(describing: error))")
+                            }
                         }
                     }
                 }
             }
         }
-    }
-
-    private func deviceOwnerName() -> String? {
-        let name = UIDevice.current.name
-        let lower = name.lowercased()
-        for prefix in ["iphone ", "ipad ", "ipod "] {
-            if lower.hasPrefix(prefix) {
-                let stripped = String(name.dropFirst(prefix.count))
-                if !stripped.isEmpty { return stripped }
-            }
-        }
-        return name
     }
 }
