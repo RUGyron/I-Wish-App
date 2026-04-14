@@ -45,10 +45,12 @@ struct HomeView: View {
         }
         .sheet(isPresented: $showingSettings) {
             NavigationStack { SettingsView() }
+                .fontDesign(.rounded)
                 .applyTheme()
         }
         .sheet(isPresented: $showingJoin) {
             JoinWishlistSheet()
+                .applyTheme()
         }
         .onAppear {
             userProfile.fetchProfile()

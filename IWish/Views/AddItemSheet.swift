@@ -48,6 +48,7 @@ struct AddItemSheet: View {
             }
             .warmBackground()
             .navigationTitle("Новое желание")
+            .fontDesign(.rounded)
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItemGroup(placement: .keyboard) {

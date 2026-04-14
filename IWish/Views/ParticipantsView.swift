@@ -59,6 +59,7 @@ struct ParticipantsView: View {
             .warmBackground()
             .navigationTitle("Участники")
             .navigationBarTitleDisplayMode(.inline)
+            .fontDesign(.rounded)
             .toolbar {
                 ToolbarItem(placement: .confirmationAction) {
                     Button("Готово") { dismiss() }

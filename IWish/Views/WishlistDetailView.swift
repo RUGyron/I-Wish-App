@@ -122,6 +122,7 @@ struct WishlistDetailView: View {
         }
         .sheet(isPresented: $showingArchive) {
             ArchiveView(wishlist: wishlist)
+                .applyTheme()
         }
         .sheet(isPresented: $showingShare) {
             ShareWishlistSheet(wishlist: wishlist)
@@ -133,6 +134,7 @@ struct WishlistDetailView: View {
         }
         .sheet(item: $editingItem) { item in
             EditItemSheet(item: item)
+                .applyTheme()
         }
         .confirmationDialog("Удалить «\(wishlist.name)»?", isPresented: $showingDeleteConfirmation, titleVisibility: .visible) {
             Button("Удалить список", role: .destructive) {

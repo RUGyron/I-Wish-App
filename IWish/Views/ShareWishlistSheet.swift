@@ -44,6 +44,7 @@ struct ShareWishlistSheet: View {
             .background(Theme.background)
             .navigationTitle("Поделиться")
             .navigationBarTitleDisplayMode(.inline)
+            .fontDesign(.rounded)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
                     Button("Закрыть") { dismiss() }

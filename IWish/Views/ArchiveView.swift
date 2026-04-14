@@ -16,6 +16,8 @@ struct ArchiveView: View {
             Group {
                 if archivedItems.isEmpty {
                     ContentUnavailableView("Архив пуст", systemImage: "archivebox")
+                        .frame(maxWidth: .infinity, maxHeight: .infinity)
+                        .background(Theme.background)
                         .onAppear { dismiss() }
                 } else {
                     List {
@@ -48,6 +50,7 @@ struct ArchiveView: View {
             .warmBackground()
             .navigationTitle("Архив")
             .navigationBarTitleDisplayMode(.inline)
+            .fontDesign(.rounded)
             .toolbar {
                 ToolbarItem(placement: .confirmationAction) {
                     Button("Готово") { dismiss() }

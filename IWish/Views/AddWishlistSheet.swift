@@ -25,6 +25,7 @@ struct AddWishlistSheet: View {
             }
             .warmBackground()
             .navigationTitle("Новый список")
+            .fontDesign(.rounded)
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItemGroup(placement: .keyboard) {

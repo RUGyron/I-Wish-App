@@ -58,6 +58,7 @@ struct JoinWishlistSheet: View {
             .background(Theme.background.ignoresSafeArea())
             .navigationTitle("Присоединиться")
             .navigationBarTitleDisplayMode(.inline)
+            .fontDesign(.rounded)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
                     Button("Закрыть") { dismiss() }

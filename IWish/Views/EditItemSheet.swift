@@ -73,6 +73,7 @@ struct EditItemSheet: View {
             .warmBackground()
             .navigationTitle("Изменить")
             .navigationBarTitleDisplayMode(.inline)
+            .fontDesign(.rounded)
             .toolbar {
                 ToolbarItemGroup(placement: .keyboard) {
                     Spacer()
