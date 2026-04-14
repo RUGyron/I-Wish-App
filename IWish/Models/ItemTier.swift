@@ -7,11 +7,11 @@ enum ItemTier: String, Codable, CaseIterable, Sendable, Identifiable {
 
     var id: String { rawValue }
 
-    var icon: String {
+    var symbolName: String {
         switch self {
-        case .must:  return "🔥"
-        case .maybe: return "🤔"
-        case .idea:  return "💭"
+        case .must:  return "flame.fill"
+        case .maybe: return "questionmark.circle"
+        case .idea:  return "lightbulb"
         }
     }
 

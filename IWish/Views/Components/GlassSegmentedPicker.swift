@@ -1,15 +1,15 @@
 import SwiftUI
 
-struct GlassSegmentedPicker<T: Hashable & CaseIterable & Identifiable>: View where T.AllCases: RandomAccessCollection {
+struct GlassSegmentedPicker<T: Hashable & CaseIterable & Identifiable, Content: View>: View where T.AllCases: RandomAccessCollection {
     @Binding var selection: T
-    let label: (T) -> String
+    @ViewBuilder let content: (T) -> Content
     @Namespace private var animation
 
     var body: some View {
         HStack(spacing: 4) {
             ForEach(T.allCases) { item in
                 let isSelected = selection == item
-                Text(label(item))
+                content(item)
                     .font(.subheadline.weight(isSelected ? .semibold : .regular))
                     .foregroundStyle(isSelected ? .primary : .secondary)
                     .padding(.vertical, 12)

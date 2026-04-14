@@ -111,7 +111,9 @@ struct ShareWishlistSheet: View {
             Text("Роль")
                 .font(.subheadline)
                 .foregroundStyle(.secondary)
-            GlassSegmentedPicker(selection: $selectedRole) { $0.label }
+            GlassSegmentedPicker(selection: $selectedRole) { role in
+                Text(role.label)
+            }
         }
     }
 
@@ -120,7 +122,9 @@ struct ShareWishlistSheet: View {
             Text("Срок действия")
                 .font(.subheadline)
                 .foregroundStyle(.secondary)
-            GlassSegmentedPicker(selection: $selectedTTL) { $0.label }
+            GlassSegmentedPicker(selection: $selectedTTL) { ttl in
+                Text(ttl.label)
+            }
         }
     }
 

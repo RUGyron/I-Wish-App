@@ -13,10 +13,19 @@ private enum SortOption: String, CaseIterable, Identifiable {
 
     var label: String {
         switch self {
-        case .importance: return "\u{1F525} По важности"
-        case .date:       return "\u{1F4C5} По дате"
-        case .price:      return "\u{1F4B0} По цене"
-        case .name:       return "\u{1F524} По названию"
+        case .importance: return "По важности"
+        case .date:       return "По дате"
+        case .price:      return "По цене"
+        case .name:       return "По названию"
+        }
+    }
+
+    var symbolName: String {
+        switch self {
+        case .importance: return "flame.fill"
+        case .date:       return "calendar"
+        case .price:      return "banknote"
+        case .name:       return "textformat.abc"
         }
     }
 }
@@ -57,9 +66,13 @@ struct WishlistDetailView: View {
                             selectedSort = option
                         } label: {
                             if selectedSort == option {
-                                Label(option.label, systemImage: "checkmark")
+                                Label {
+                                    Text(option.label)
+                                } icon: {
+                                    Image(systemName: "checkmark")
+                                }
                             } else {
-                                Text(option.label)
+                                Label(option.label, systemImage: option.symbolName)
                             }
                         }
                     }
@@ -194,10 +207,13 @@ struct WishlistDetailView: View {
         let currency = items.first?.currency ?? "RUB"
         let priceText = total > 0 ? " \u{00B7} \(formatPrice(total, currency: currency))" : ""
 
-        return Text("\(tier.icon) \(tier.label)\(priceText) \u{00B7} \(items.count)")
-            .font(.subheadline.weight(.medium))
-            .foregroundStyle(.secondary)
-            .textCase(nil)
+        return HStack(spacing: 4) {
+            Image(systemName: tier.symbolName)
+            Text("\(tier.label)\(priceText) \u{00B7} \(items.count)")
+        }
+        .font(.subheadline.weight(.medium))
+        .foregroundStyle(.secondary)
+        .textCase(nil)
     }
 
     // MARK: - Flat Sorted
@@ -264,33 +280,30 @@ struct WishlistDetailView: View {
                     }
                 }
 
-                HStack(spacing: 0) {
-                    let parts = itemMetadataParts(item)
-                    ForEach(Array(parts.enumerated()), id: \.offset) { index, part in
-                        if index > 0 {
-                            Text(" \u{00B7} ")
-                        }
-                        Text(part)
-                    }
-                }
-                .font(.caption)
-                .foregroundStyle(.secondary)
+                itemMetadataRow(item)
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
             }
         }
         .padding(.vertical, 6)
     }
 
-    private func itemMetadataParts(_ item: Item) -> [String] {
-        var parts: [String] = []
-        parts.append(item.tier.icon)
-        parts.append(item.createdAt.formatted(.dateTime.day().month(.abbreviated)))
-        if let domain = extractDomain(from: item.url) {
-            parts.append(domain)
+    @ViewBuilder
+    private func itemMetadataRow(_ item: Item) -> some View {
+        HStack(spacing: 4) {
+            Image(systemName: item.tier.symbolName)
+            Text(item.createdAt.formatted(.dateTime.day().month(.abbreviated)))
+            if let domain = extractDomain(from: item.url) {
+                Text("\u{00B7}")
+                Image(systemName: "link")
+                Text(domain)
+            }
+            if let days = probationDaysLeft(item) {
+                Text("\u{00B7}")
+                Image(systemName: "clock")
+                Text("\(days) дн.")
+            }
         }
-        if let days = probationDaysLeft(item) {
-            parts.append("\u{23F3} \(days) дн.")
-        }
-        return parts
     }
 
     // MARK: - FAB
@@ -360,7 +373,15 @@ private extension View {
                         item.updatedAt = .now
                         try? context.save()
                     } label: {
-                        Label("\(tier.icon) \(tier.label)", systemImage: item.tier == tier ? "checkmark" : "")
+                        if item.tier == tier {
+                            Label {
+                                Text(tier.label)
+                            } icon: {
+                                Image(systemName: "checkmark")
+                            }
+                        } else {
+                            Label(tier.label, systemImage: tier.symbolName)
+                        }
                     }
                 }
             } label: {

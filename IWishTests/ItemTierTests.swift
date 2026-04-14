@@ -8,10 +8,10 @@ struct ItemTierTests {
         #expect(ItemTier.defaultTier == .maybe)
     }
 
-    @Test("each tier has unique icon")
-    func uniqueIcons() {
-        let icons = Set(ItemTier.allCases.map(\.icon))
-        #expect(icons.count == ItemTier.allCases.count)
+    @Test("each tier has unique SF Symbol name")
+    func uniqueSymbolNames() {
+        let symbols = Set(ItemTier.allCases.map(\.symbolName))
+        #expect(symbols.count == ItemTier.allCases.count)
     }
 
     @Test("each tier has non-empty russian label")

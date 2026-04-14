@@ -31,7 +31,9 @@ struct EditItemSheet: View {
 
                 Section("Важность") {
                     VStack(spacing: 8) {
-                        GlassSegmentedPicker(selection: $tier) { $0.icon }
+                        GlassSegmentedPicker(selection: $tier) { t in
+                            Image(systemName: t.symbolName)
+                        }
                         Text(tier.label)
                             .font(.caption)
                             .foregroundStyle(.secondary)

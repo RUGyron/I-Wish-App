@@ -114,7 +114,6 @@ struct HomeView: View {
 
     private func wishlistRow(_ wishlist: Wishlist) -> some View {
         let activeItems = wishlist.items.filter { !$0.isArchived }
-        let tierCounts = tierBadgeLine(for: activeItems)
 
         return HStack(spacing: 12) {
             DefaultCoverView(
@@ -128,11 +127,9 @@ struct HomeView: View {
                 Text(wishlist.name)
                     .font(.headline)
 
-                HStack(spacing: 0) {
+                HStack(spacing: 4) {
                     Text("\(activeItems.count) желаний")
-                    if !tierCounts.isEmpty {
-                        Text(" \u{00B7} \(tierCounts)")
-                    }
+                    tierBadgeRow(for: activeItems)
                 }
                 .font(.caption)
                 .foregroundStyle(.secondary)
@@ -141,13 +138,18 @@ struct HomeView: View {
         .padding(.vertical, 4)
     }
 
-    private func tierBadgeLine(for items: [Item]) -> String {
+    @ViewBuilder
+    private func tierBadgeRow(for items: [Item]) -> some View {
         let counts = Dictionary(grouping: items, by: \.tier)
-        let parts: [String] = ItemTier.allCases.compactMap { tier in
-            guard let count = counts[tier]?.count, count > 0 else { return nil }
-            return "\(tier.icon) \(count)"
+        let activeTiers = ItemTier.allCases.filter { counts[$0]?.count ?? 0 > 0 }
+
+        ForEach(activeTiers) { tier in
+            if let count = counts[tier]?.count {
+                Text("\u{00B7}")
+                Image(systemName: tier.symbolName)
+                Text("\(count)")
+            }
         }
-        return parts.joined(separator: " \u{00B7} ")
     }
 
     // MARK: - FAB
