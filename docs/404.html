@@ -1,0 +1,36 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>I Wish</title>
+<style>
+  body { font-family: -apple-system, sans-serif; background: #1C1610; color: #F5E6D0; display: flex; align-items: center; justify-content: center; min-height: 100vh; margin: 0; }
+  .card { text-align: center; padding: 40px; }
+  h1 { font-size: 32px; margin-bottom: 8px; }
+  p { color: #A08060; font-size: 16px; margin-bottom: 24px; }
+  .btn { display: inline-block; background: #C2710C; color: white; text-decoration: none; padding: 14px 32px; border-radius: 14px; font-size: 17px; font-weight: 600; }
+</style>
+</head>
+<body>
+<div class="card">
+  <h1>I Wish</h1>
+  <p>Приватный список желаний</p>
+  <a class="btn" id="link" href="#">Открыть в приложении</a>
+</div>
+<script>
+  // Try to open app, fallback to App Store
+  var path = window.location.pathname + window.location.search;
+  var appLink = 'iwish:/' + path.replace('/iwish/', '/');
+  document.getElementById('link').href = appLink;
+
+  // Auto-redirect: try app scheme, then App Store after timeout
+  setTimeout(function() { window.location = appLink; }, 100);
+  setTimeout(function() {
+    // If still here after 2s, app not installed — go to App Store (placeholder)
+    // Replace with real App Store link when published
+    // window.location = 'https://apps.apple.com/app/iwish/id...';
+  }, 2000);
+</script>
+</body>
+</html>

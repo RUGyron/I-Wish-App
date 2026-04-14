@@ -25,7 +25,7 @@ final class ShareManager {
     private(set) var expiresAt: Date?
     private(set) var isLoading = false
 
-    private static let linkDomain = "https://rugyron.github.io/iwish"
+    private static let linkDomain = "https://rugyron.github.io/I-Wish-App"
 
     func generateShare(
         for wishlist: Wishlist,
