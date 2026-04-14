@@ -22,6 +22,7 @@ struct DefaultCoverView: View {
             }
         }
         .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
+        .titaniumBorder(cornerRadius: 12)
     }
 
     private var meshBackground: some View {

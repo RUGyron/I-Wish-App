@@ -300,6 +300,7 @@ struct WishlistDetailView: View {
                 .padding(.horizontal, 20)
                 .padding(.vertical, 12)
                 .background(.ultraThinMaterial, in: Capsule())
+                .overlay(Capsule().strokeBorder(Theme.titaniumGradient, lineWidth: 0.5))
         }
         .padding(.bottom, 16)
     }
