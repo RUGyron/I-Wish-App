@@ -20,7 +20,7 @@ final class AppSettings {
     var defaultInviteTTLRaw: String = "15m"
 
     // App icon
-    var selectedAppIconRaw: String = "auto"
+    var selectedAppIconRaw: String = "light"
 
     // MARK: - Computed bridges
 
@@ -35,7 +35,7 @@ final class AppSettings {
     }
 
     var selectedAppIcon: AppIconVariant {
-        get { AppIconVariant(rawValue: selectedAppIconRaw) ?? .auto }
+        get { AppIconVariant(rawValue: selectedAppIconRaw) ?? .light }
         set { selectedAppIconRaw = newValue.rawValue }
     }
 
@@ -53,7 +53,7 @@ final class AppSettings {
         defaultProbationDuration: Double = 30 * 86400,
         notifyOnProbationEnd: Bool = false,
         defaultInviteTTL: InviteTTL = .minutes15,
-        selectedAppIcon: AppIconVariant = .auto
+        selectedAppIcon: AppIconVariant = .light
     ) {
         self.id = UUID()
         self.themeModeRaw = themeMode.rawValue

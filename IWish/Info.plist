@@ -6,6 +6,17 @@
 	<string>Чтобы сфотографировать обложку для желания</string>
 	<key>NSPhotoLibraryUsageDescription</key>
 	<string>Чтобы выбрать фото для обложки желания</string>
+	<key>CFBundleURLTypes</key>
+	<array>
+		<dict>
+			<key>CFBundleURLSchemes</key>
+			<array>
+				<string>iwish</string>
+			</array>
+			<key>CFBundleURLName</key>
+			<string>com.rugyron.iwish</string>
+		</dict>
+	</array>
 	<key>UIBackgroundModes</key>
 	<array>
 		<string>fetch</string>

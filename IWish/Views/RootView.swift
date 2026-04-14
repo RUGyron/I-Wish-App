@@ -3,12 +3,14 @@ import SwiftData
 
 struct RootView: View {
     @Environment(\.modelContext) private var context
+    @Environment(\.colorScheme) private var detectedSystemScheme
     @Query private var settingsList: [AppSettings]
 
     var body: some View {
         NavigationStack {
             HomeView()
         }
+        .environment(\.systemColorScheme, detectedSystemScheme)
         .preferredColorScheme(activeSettings.themeMode.colorScheme)
         .onAppear {
             // Гарантируем что AppSettings существует в БД.

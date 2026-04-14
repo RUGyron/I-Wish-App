@@ -6,6 +6,8 @@ struct HomeView: View {
     @Query(sort: \Wishlist.createdAt, order: .reverse) private var wishlists: [Wishlist]
     @State private var showingAddSheet = false
     @State private var showingSettings = false
+    @State private var showingJoin = false
+    @State private var userProfile = UserProfileService()
 
     private var totalItems: Int {
         wishlists.reduce(0) { $0 + $1.items.filter { !$0.isArchived }.count }
@@ -22,6 +24,13 @@ struct HomeView: View {
         .navigationTitle("Желания")
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {
+            ToolbarItem(placement: .topBarLeading) {
+                Button {
+                    showingJoin = true
+                } label: {
+                    Image(systemName: "person.badge.plus")
+                }
+            }
             ToolbarItem(placement: .topBarTrailing) {
                 Button {
                     showingSettings = true
@@ -37,6 +46,15 @@ struct HomeView: View {
         .sheet(isPresented: $showingSettings) {
             NavigationStack { SettingsView() }
                 .applyTheme()
+        }
+        .sheet(isPresented: $showingJoin) {
+            JoinWishlistSheet()
+        }
+        .onAppear {
+            userProfile.fetchProfile()
+        }
+        .onReceive(NotificationCenter.default.publisher(for: .didReceiveShareLink)) { _ in
+            showingJoin = true
         }
         .overlay(alignment: .bottom) {
             addButton
@@ -76,10 +94,17 @@ struct HomeView: View {
                 }
                 .onDelete(perform: deleteWishlists)
             } header: {
-                Text("\(wishlists.count) списков \u{00B7} \(totalItems) желаний")
-                    .font(.subheadline)
-                    .foregroundStyle(.secondary)
-                    .textCase(nil)
+                VStack(alignment: .leading, spacing: 4) {
+                    if let name = userProfile.userName {
+                        Text("Привет, \(name)!")
+                            .font(.subheadline)
+                            .foregroundStyle(.secondary)
+                    }
+                    Text("\(wishlists.count) списков \u{00B7} \(totalItems) желаний")
+                        .font(.subheadline)
+                        .foregroundStyle(.secondary)
+                }
+                .textCase(nil)
             }
         }
         .contentMargins(.bottom, 80)

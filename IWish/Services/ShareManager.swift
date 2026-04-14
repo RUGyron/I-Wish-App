@@ -1,12 +1,11 @@
 import CloudKit
-import SwiftData
 import SwiftUI
 
 // MARK: - Share Role
 
 enum ShareRole: String, CaseIterable, Identifiable {
-    case editor = "editor"
-    case viewer = "viewer"
+    case editor
+    case viewer
 
     var id: String { rawValue }
 
@@ -16,51 +15,38 @@ enum ShareRole: String, CaseIterable, Identifiable {
         case .viewer: return "Только просмотр"
         }
     }
-
-    var icon: String {
-        switch self {
-        case .editor: return "pencil"
-        case .viewer: return "eye"
-        }
-    }
 }
 
 // MARK: - Share Manager
 
 @Observable
 final class ShareManager {
-    var activeShare: CKShare?
-    var shareURL: URL?
-    var expiresAt: Date?
-    var isLoading = false
-    var error: String?
+    private(set) var shareURL: URL?
+    private(set) var expiresAt: Date?
+    private(set) var isLoading = false
 
-    /// Creates or recreates a CKShare for the wishlist.
-    /// Placeholder implementation — generates a local URL until CloudKit entitlements are configured.
-    func createShare(
+    /// Generates (or regenerates) a share link for the wishlist.
+    /// Placeholder — real CKShare when CloudKit is configured.
+    func generateShare(
         for wishlist: Wishlist,
         role: ShareRole,
         ttl: InviteTTL
     ) {
-        isLoading = true
-        error = nil
-
-        // Placeholder: generate a URL like iwish://share/{wishlist.id}
-        // Real implementation will use CKContainer.shared().privateCloudDatabase
-        let url = URL(string: "iwish://share/\(wishlist.id.uuidString)")!
+        let url = URL(string: "iwish://join/\(wishlist.id.uuidString)")!
         self.shareURL = url
         self.expiresAt = ttl.duration.map { Date.now.addingTimeInterval($0) }
-        self.isLoading = false
     }
 
-    func revokeShare() {
+    /// Revokes all active invitations.
+    func revokeAll() {
         shareURL = nil
         expiresAt = nil
-        activeShare = nil
-        error = nil
     }
 
-    var hasActiveShare: Bool {
-        shareURL != nil
+    var hasActiveShare: Bool { shareURL != nil }
+
+    /// Invitation text for sharing (includes wishlist name and link).
+    func invitationText(wishlistName: String) -> String {
+        "Присоединяйся к списку желаний «\(wishlistName)» в I Wish!\n\(shareURL?.absoluteString ?? "")"
     }
 }

@@ -12,23 +12,33 @@ struct ShareWishlistSheet: View {
     @State private var selectedRole: ShareRole = .editor
     @State private var selectedTTL: InviteTTL = .minutes15
     @State private var showingShareSheet = false
-
-    private var settings: AppSettings? { settingsList.first }
+    @State private var copied = false
 
     var body: some View {
         NavigationStack {
             ScrollView {
                 VStack(spacing: 24) {
-                    if shareManager.isLoading {
-                        loadingState
-                    } else if let url = shareManager.shareURL {
-                        activeShareContent(url: url)
-                    } else {
-                        configureShareContent
+                    // QR Code
+                    qrSection
+
+                    // Expiry
+                    expiryLabel
+
+                    // Pickers
+                    VStack(spacing: 16) {
+                        rolePicker
+                        ttlPicker
                     }
+                    .padding(.horizontal)
+
+                    // Action buttons
+                    actionButtons
+                        .padding(.horizontal)
+
+                    // Revoke
+                    revokeButton
                 }
-                .padding(.horizontal, 20)
-                .padding(.top, 8)
+                .padding(.top, 16)
                 .padding(.bottom, 32)
             }
             .navigationTitle("Поделиться")
@@ -39,216 +49,147 @@ struct ShareWishlistSheet: View {
                 }
             }
             .onAppear {
-                if let settings {
+                if let settings = settingsList.first {
                     selectedTTL = settings.defaultInviteTTL
                 }
+                shareManager.generateShare(for: wishlist, role: selectedRole, ttl: selectedTTL)
+            }
+            .onChange(of: selectedRole) { _, _ in
+                shareManager.generateShare(for: wishlist, role: selectedRole, ttl: selectedTTL)
+            }
+            .onChange(of: selectedTTL) { _, _ in
+                shareManager.generateShare(for: wishlist, role: selectedRole, ttl: selectedTTL)
             }
         }
+        .applyTheme()
     }
 
-    // MARK: - Loading
+    // MARK: - QR
 
-    private var loadingState: some View {
-        VStack(spacing: 16) {
-            ProgressView()
-                .controlSize(.large)
-            Text("Создание ссылки...")
-                .font(.subheadline)
-                .foregroundStyle(.secondary)
-        }
-        .frame(maxWidth: .infinity)
-        .padding(.vertical, 60)
-    }
-
-    // MARK: - Configure (before share created)
-
-    private var configureShareContent: some View {
-        VStack(spacing: 20) {
-            // QR placeholder
-            VStack(spacing: 12) {
-                RoundedRectangle(cornerRadius: 20, style: .continuous)
+    private var qrSection: some View {
+        Group {
+            if let url = shareManager.shareURL,
+               let qrImage = generateQRCode(from: url.absoluteString) {
+                Image(uiImage: qrImage)
+                    .interpolation(.none)
+                    .resizable()
+                    .scaledToFit()
+                    .frame(width: 240, height: 240)
+                    .clipShape(RoundedRectangle(cornerRadius: 16))
+                    .shadow(color: .black.opacity(0.06), radius: 12, y: 6)
+            } else {
+                RoundedRectangle(cornerRadius: 16)
                     .fill(.quaternary)
-                    .frame(width: 200, height: 200)
+                    .frame(width: 240, height: 240)
                     .overlay {
-                        VStack(spacing: 8) {
-                            Image(systemName: "qrcode")
-                                .font(.system(size: 48))
-                                .foregroundStyle(.tertiary)
-                            Text("QR-код появится после создания")
-                                .font(.caption)
-                                .foregroundStyle(.tertiary)
-                                .multilineTextAlignment(.center)
-                        }
-                        .padding()
+                        ProgressView()
                     }
             }
-
-            rolePicker
-
-            ttlPicker
-
-            Button {
-                shareManager.createShare(
-                    for: wishlist,
-                    role: selectedRole,
-                    ttl: selectedTTL
-                )
-            } label: {
-                Label("Создать ссылку", systemImage: "link.badge.plus")
-                    .font(.headline)
-                    .frame(maxWidth: .infinity)
-                    .padding(.vertical, 4)
-            }
-            .buttonStyle(.borderedProminent)
-            .controlSize(.large)
         }
     }
 
-    // MARK: - Active Share (QR + actions)
-
-    private func activeShareContent(url: URL) -> some View {
-        VStack(spacing: 20) {
-            // QR Code
-            qrCodeView(for: url.absoluteString)
-
-            // Expiry label
+    private var expiryLabel: some View {
+        Group {
             if let expiresAt = shareManager.expiresAt {
                 Label(
                     "Действует до \(expiresAt.formatted(.dateTime.hour().minute()))",
                     systemImage: "clock"
                 )
-                .font(.subheadline)
-                .foregroundStyle(.secondary)
             } else {
                 Label("Без ограничения по времени", systemImage: "infinity")
-                    .font(.subheadline)
-                    .foregroundStyle(.secondary)
-            }
-
-            rolePicker
-
-            ttlPicker
-
-            // Recreate share if settings changed
-            Button {
-                shareManager.createShare(
-                    for: wishlist,
-                    role: selectedRole,
-                    ttl: selectedTTL
-                )
-            } label: {
-                Label("Обновить ссылку", systemImage: "arrow.clockwise")
-                    .font(.subheadline)
-                    .frame(maxWidth: .infinity)
-                    .padding(.vertical, 2)
-            }
-            .buttonStyle(.bordered)
-
-            // Share button
-            Button {
-                showingShareSheet = true
-            } label: {
-                Label("Поделиться...", systemImage: "square.and.arrow.up")
-                    .font(.headline)
-                    .frame(maxWidth: .infinity)
-                    .padding(.vertical, 4)
-            }
-            .buttonStyle(.borderedProminent)
-            .controlSize(.large)
-
-            // Revoke
-            Button(role: .destructive) {
-                shareManager.revokeShare()
-            } label: {
-                Label("Отменить приглашение", systemImage: "xmark.circle")
-                    .font(.subheadline)
-                    .frame(maxWidth: .infinity)
-                    .padding(.vertical, 2)
-            }
-            .buttonStyle(.bordered)
-            .tint(.red)
-        }
-        .sheet(isPresented: $showingShareSheet) {
-            if let qrImage = generateQRCode(from: url.absoluteString) {
-                ShareSheet(items: [qrImage, url])
             }
         }
+        .font(.subheadline)
+        .foregroundStyle(.secondary)
     }
 
-    // MARK: - Role Picker
+    // MARK: - Pickers
 
     private var rolePicker: some View {
-        VStack(alignment: .leading, spacing: 8) {
+        VStack(alignment: .leading, spacing: 6) {
             Text("Роль")
                 .font(.subheadline)
                 .foregroundStyle(.secondary)
-
             Picker("Роль", selection: $selectedRole) {
                 ForEach(ShareRole.allCases) { role in
-                    Label(role.label, systemImage: role.icon).tag(role)
+                    Text(role.label).tag(role)
                 }
             }
             .pickerStyle(.segmented)
         }
     }
 
-    // MARK: - TTL Picker
-
     private var ttlPicker: some View {
-        VStack(alignment: .leading, spacing: 8) {
+        VStack(alignment: .leading, spacing: 6) {
             Text("Срок действия")
                 .font(.subheadline)
                 .foregroundStyle(.secondary)
-
-            ScrollView(.horizontal, showsIndicators: false) {
-                HStack(spacing: 8) {
-                    ForEach(InviteTTL.allCases) { ttl in
-                        Button {
-                            selectedTTL = ttl
-                        } label: {
-                            Text(ttl.label)
-                                .font(.subheadline.weight(.medium))
-                                .padding(.horizontal, 14)
-                                .padding(.vertical, 8)
-                                .background(
-                                    selectedTTL == ttl
-                                        ? AnyShapeStyle(Color.accentColor)
-                                        : AnyShapeStyle(.quaternary)
-                                )
-                                .foregroundStyle(selectedTTL == ttl ? .white : .primary)
-                                .clipShape(Capsule())
-                        }
-                        .buttonStyle(.plain)
-                    }
+            Picker("TTL", selection: $selectedTTL) {
+                ForEach(InviteTTL.allCases) { ttl in
+                    Text(ttl.label).tag(ttl)
                 }
             }
+            .pickerStyle(.segmented)
         }
     }
 
-    // MARK: - QR Code
+    // MARK: - Actions
 
-    private func qrCodeView(for string: String) -> some View {
-        Group {
-            if let image = generateQRCode(from: string) {
-                Image(uiImage: image)
-                    .interpolation(.none)
-                    .resizable()
-                    .scaledToFit()
-                    .frame(width: 200, height: 200)
-                    .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
-                    .shadow(color: .black.opacity(0.08), radius: 8, y: 4)
-            } else {
-                RoundedRectangle(cornerRadius: 20, style: .continuous)
-                    .fill(.quaternary)
-                    .frame(width: 200, height: 200)
-                    .overlay {
-                        Image(systemName: "exclamationmark.triangle")
-                            .font(.largeTitle)
-                            .foregroundStyle(.secondary)
+    private var actionButtons: some View {
+        VStack(spacing: 12) {
+            // Share button
+            Button {
+                showingShareSheet = true
+            } label: {
+                Label("Поделиться", systemImage: "square.and.arrow.up")
+                    .frame(maxWidth: .infinity)
+            }
+            .buttonStyle(.bordered)
+            .controlSize(.large)
+
+            // Copy URL button
+            Button {
+                if let url = shareManager.shareURL {
+                    UIPasteboard.general.string = url.absoluteString
+                    withAnimation { copied = true }
+                    DispatchQueue.main.asyncAfter(deadline: .now() + 2) {
+                        withAnimation { copied = false }
                     }
+                }
+            } label: {
+                Label(
+                    copied ? "Скопировано" : "Скопировать ссылку",
+                    systemImage: copied ? "checkmark" : "doc.on.doc"
+                )
+                .frame(maxWidth: .infinity)
+            }
+            .buttonStyle(.bordered)
+            .controlSize(.large)
+        }
+        .sheet(isPresented: $showingShareSheet) {
+            if let url = shareManager.shareURL {
+                let text = shareManager.invitationText(wishlistName: wishlist.name)
+                let qrImage = generateQRCode(from: url.absoluteString)
+                let items: [Any] = [text, qrImage as Any, url].compactMap {
+                    $0 is NSNull ? nil : $0
+                }
+                ShareSheetView(items: items.isEmpty ? [text] : items)
             }
         }
     }
+
+    private var revokeButton: some View {
+        Button(role: .destructive) {
+            shareManager.revokeAll()
+            dismiss()
+        } label: {
+            Text("Отозвать все приглашения")
+                .font(.subheadline)
+        }
+        .padding(.top, 8)
+    }
+
+    // MARK: - QR Generation
 
     private func generateQRCode(from string: String) -> UIImage? {
         let context = CIContext()
@@ -257,8 +198,7 @@ struct ShareWishlistSheet: View {
         filter.correctionLevel = "M"
 
         guard let outputImage = filter.outputImage else { return nil }
-        let scale: CGFloat = 10
-        let transform = CGAffineTransform(scaleX: scale, y: scale)
+        let transform = CGAffineTransform(scaleX: 10, y: 10)
         let scaledImage = outputImage.transformed(by: transform)
 
         guard let cgImage = context.createCGImage(scaledImage, from: scaledImage.extent) else { return nil }
@@ -266,9 +206,9 @@ struct ShareWishlistSheet: View {
     }
 }
 
-// MARK: - iOS Share Sheet wrapper
+// MARK: - Share Sheet
 
-private struct ShareSheet: UIViewControllerRepresentable {
+private struct ShareSheetView: UIViewControllerRepresentable {
     let items: [Any]
 
     func makeUIViewController(context: Context) -> UIActivityViewController {
