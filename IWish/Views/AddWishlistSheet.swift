@@ -4,7 +4,12 @@ import SwiftData
 struct AddWishlistSheet: View {
     @Environment(\.modelContext) private var context
     @Environment(\.dismiss) private var dismiss
+    @Query private var wishlists: [Wishlist]
+
     @State private var name: String = ""
+    @State private var coverImageData: Data?
+    @State private var coverEmoji: String?
+    @State private var previewID = UUID()
 
     var body: some View {
         NavigationStack {
@@ -13,6 +18,12 @@ struct AddWishlistSheet: View {
                     TextField("Например: На день рождения", text: $name)
                         .textInputAutocapitalization(.sentences)
                 }
+
+                CoverPickerSection(
+                    imageData: $coverImageData,
+                    emoji: $coverEmoji,
+                    previewID: previewID
+                )
             }
             .navigationTitle("Новый список")
             .navigationBarTitleDisplayMode(.inline)
@@ -21,17 +32,24 @@ struct AddWishlistSheet: View {
                     Button("Отмена") { dismiss() }
                 }
                 ToolbarItem(placement: .confirmationAction) {
-                    Button("Готово") {
-                        save()
-                    }
-                    .disabled(name.trimmingCharacters(in: .whitespaces).isEmpty)
+                    Button("Готово") { save() }
                 }
             }
         }
+        .applyTheme()
     }
 
     private func save() {
-        let wishlist = Wishlist(name: name.trimmingCharacters(in: .whitespaces))
+        let trimmed = name.trimmingCharacters(in: .whitespaces)
+        let finalName = trimmed.isEmpty
+            ? "Список \(wishlists.count + 1)"
+            : trimmed
+
+        let wishlist = Wishlist(
+            name: finalName,
+            coverImageData: coverImageData,
+            coverEmoji: coverEmoji
+        )
         context.insert(wishlist)
         try? context.save()
         dismiss()
