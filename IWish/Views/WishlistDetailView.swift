@@ -42,6 +42,8 @@ struct WishlistDetailView: View {
                 .foregroundStyle(.secondary)
         }
         .padding()
+        .padding(.bottom, 60)
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
 
     private var itemList: some View {

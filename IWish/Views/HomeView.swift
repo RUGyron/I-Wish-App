@@ -49,6 +49,8 @@ struct HomeView: View {
                 .multilineTextAlignment(.center)
         }
         .padding()
+        .padding(.bottom, 60)
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
 
     private var wishlistList: some View {
