@@ -201,7 +201,7 @@ struct ShareWishlistSheet: View {
     private func generateQRCode(from string: String) -> UIImage? {
         let filter = CIFilter.qrCodeGenerator()
         filter.message = Data(string.utf8)
-        filter.correctionLevel = "M"
+        filter.correctionLevel = "L"
 
         guard let ciImage = filter.outputImage else { return nil }
 
@@ -256,23 +256,28 @@ struct ShareWishlistSheet: View {
                         continue
                     }
 
-                    let cx = CGFloat(col) * mod + mod / 2
-                    let cy = CGFloat(row) * mod + mod / 2
-                    let dotR = mod * 0.48
+                    let x = CGFloat(col) * mod
+                    let y = CGFloat(row) * mod
+                    let cr = mod * 0.30
 
-                    let hasRight = col + 1 < n && matrix[row][col + 1] && !isFinderZone(row: row, col: col + 1, n: n)
-                    let hasBottom = row + 1 < n && matrix[row + 1][col] && !isFinderZone(row: row + 1, col: col, n: n)
+                    let right = col + 1 < n && matrix[row][col + 1] && !isFinderZone(row: row, col: col + 1, n: n)
+                    let bottom = row + 1 < n && matrix[row + 1][col] && !isFinderZone(row: row + 1, col: col, n: n)
+                    let left = col - 1 >= 0 && matrix[row][col - 1] && !isFinderZone(row: row, col: col - 1, n: n)
+                    let top = row - 1 >= 0 && matrix[row - 1][col] && !isFinderZone(row: row - 1, col: col, n: n)
 
-                    if hasRight {
-                        let rect = CGRect(x: cx - dotR, y: cy - dotR, width: mod + dotR, height: dotR * 2)
-                        UIBezierPath(roundedRect: rect, cornerRadius: dotR * 0.6).fill()
-                    } else if hasBottom {
-                        let rect = CGRect(x: cx - dotR, y: cy - dotR, width: dotR * 2, height: mod + dotR)
-                        UIBezierPath(roundedRect: rect, cornerRadius: dotR * 0.6).fill()
-                    } else {
-                        let dotRect = CGRect(x: cx - dotR, y: cy - dotR, width: dotR * 2, height: dotR * 2)
-                        UIBezierPath(roundedRect: dotRect, cornerRadius: dotR * 0.6).fill()
-                    }
+                    let rect = CGRect(x: x, y: y, width: mod, height: mod)
+                    let corners: UIRectCorner = [
+                        (!top && !left) ? .topLeft : [],
+                        (!top && !right) ? .topRight : [],
+                        (!bottom && !left) ? .bottomLeft : [],
+                        (!bottom && !right) ? .bottomRight : [],
+                    ].reduce([]) { $0.union($1) }
+
+                    UIBezierPath(
+                        roundedRect: rect,
+                        byRoundingCorners: corners,
+                        cornerRadii: CGSize(width: cr, height: cr)
+                    ).fill()
                 }
             }
 

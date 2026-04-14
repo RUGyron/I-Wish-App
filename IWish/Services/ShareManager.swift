@@ -32,7 +32,8 @@ final class ShareManager {
         role: ShareRole,
         ttl: InviteTTL
     ) {
-        let url = URL(string: "iwish://join/\(wishlist.id.uuidString)?role=\(role.rawValue)&ttl=\(ttl.rawValue)")!
+        let shortID = wishlist.id.uuidString.replacingOccurrences(of: "-", with: "").prefix(16).lowercased()
+        let url = URL(string: "iwish://j/\(shortID)")!
         self.shareURL = url
         self.expiresAt = ttl.duration.map { Date.now.addingTimeInterval($0) }
     }
