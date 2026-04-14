@@ -48,8 +48,7 @@ final class UserProfileService {
                 if !stripped.isEmpty { return stripped }
             }
         }
-        // "iPhone" alone or generic → skip
-        if lower == "iphone" || lower == "ipad" { return nil }
+        // "iPhone" alone → return as-is (better than nil)
         return name
     }
 }
