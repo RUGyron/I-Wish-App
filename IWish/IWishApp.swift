@@ -10,25 +10,16 @@ import SwiftData
 
 @main
 struct IWishApp: App {
-    var sharedModelContainer: ModelContainer = {
-        let schema = Schema([
-            Wishlist.self,
-            Item.self,
-            AppSettings.self,
-        ])
-        let modelConfiguration = ModelConfiguration(schema: schema, isStoredInMemoryOnly: false)
+    let container: ModelContainer
 
-        do {
-            return try ModelContainer(for: schema, configurations: [modelConfiguration])
-        } catch {
-            fatalError("Could not create ModelContainer: \(error)")
-        }
-    }()
+    init() {
+        self.container = ModelContainerFactory.makeProductionContainer()
+    }
 
     var body: some Scene {
         WindowGroup {
-            ContentView()
+            RootView()
         }
-        .modelContainer(sharedModelContainer)
+        .modelContainer(container)
     }
 }
