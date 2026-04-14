@@ -2,22 +2,34 @@ import Foundation
 import SwiftData
 
 enum ModelContainerFactory {
-    /// Production-контейнер. Phase 1 — без CloudKit, локально.
-    /// В Phase 2 здесь добавится `cloudKitDatabase: .private(...)` и `@Attribute(.encrypt)`.
+    static let cloudKitContainerID = "iCloud.com.rugyron.iwish"
+
     static func makeProductionContainer() -> ModelContainer {
-        let schema = Schema([
+        let fullSchema = Schema([
             Wishlist.self,
             Item.self,
             AppSettings.self,
         ])
-        let config = ModelConfiguration(
-            schema: schema,
-            isStoredInMemoryOnly: false,
-            allowsSave: true,
+
+        // Wishlists + Items → CloudKit private database (syncs across user's devices)
+        let cloudConfig = ModelConfiguration(
+            "CloudStore",
+            schema: Schema([Wishlist.self, Item.self]),
+            cloudKitDatabase: .private(cloudKitContainerID)
+        )
+
+        // AppSettings → local only (no sync)
+        let localConfig = ModelConfiguration(
+            "LocalStore",
+            schema: Schema([AppSettings.self]),
             cloudKitDatabase: .none
         )
+
         do {
-            return try ModelContainer(for: schema, configurations: [config])
+            return try ModelContainer(
+                for: fullSchema,
+                configurations: [cloudConfig, localConfig]
+            )
         } catch {
             fatalError("Failed to create ModelContainer: \(error)")
         }
