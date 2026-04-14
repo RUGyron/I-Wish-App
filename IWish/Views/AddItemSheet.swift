@@ -133,12 +133,7 @@ struct AddItemSheet: View {
     private var tierSection: some View {
         Section("Важность") {
             VStack(spacing: 8) {
-                Picker("Важность", selection: $tier) {
-                    ForEach(ItemTier.allCases) { tier in
-                        Text(tier.icon).tag(tier)
-                    }
-                }
-                .pickerStyle(.segmented)
+                GlassSegmentedPicker(selection: $tier) { $0.icon }
 
                 Text(tier.label)
                     .font(.caption)

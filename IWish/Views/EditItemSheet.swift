@@ -31,12 +31,7 @@ struct EditItemSheet: View {
 
                 Section("Важность") {
                     VStack(spacing: 8) {
-                        Picker("Важность", selection: $tier) {
-                            ForEach(ItemTier.allCases) { t in
-                                Text(t.icon).tag(t)
-                            }
-                        }
-                        .pickerStyle(.segmented)
+                        GlassSegmentedPicker(selection: $tier) { $0.icon }
                         Text(tier.label)
                             .font(.caption)
                             .foregroundStyle(.secondary)
