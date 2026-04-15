@@ -60,7 +60,16 @@ struct HomeView: View {
             showingJoin = true
         }
         .overlay(alignment: .bottom) {
-            addButton
+            VStack(spacing: 8) {
+                if syncStatus.state != .idle {
+                    SyncStatusBadge(state: syncStatus.state) {
+                        syncStatus.retry(context: context)
+                    }
+                    .transition(.move(edge: .bottom).combined(with: .opacity))
+                }
+                addButton
+            }
+            .animation(.easeInOut(duration: 0.25), value: syncStatus.state != .idle)
         }
     }
 
@@ -70,8 +79,6 @@ struct HomeView: View {
         VStack(spacing: 12) {
             Text(userProfile.userName.map { "Привет, \($0)!" } ?? "Привет!")
                 .font(.title2.weight(.semibold))
-
-            SyncStatusBadge(state: syncStatus.state)
 
             Spacer().frame(height: 20)
 
@@ -110,13 +117,9 @@ struct HomeView: View {
                         .font(.subheadline)
                         .foregroundStyle(.secondary)
 
-                    HStack {
-                        Text("\(wishlists.count) списков \u{00B7} \(totalItems) желаний")
-                            .font(.subheadline)
-                            .foregroundStyle(.secondary)
-                        Spacer()
-                        SyncStatusBadge(state: syncStatus.state)
-                    }
+                    Text("\(wishlists.count) списков \u{00B7} \(totalItems) желаний")
+                        .font(.subheadline)
+                        .foregroundStyle(.secondary)
                 }
                 .textCase(nil)
             }

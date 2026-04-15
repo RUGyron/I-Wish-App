@@ -1,4 +1,5 @@
 import SwiftUI
+import SwiftData
 import CoreData
 import CloudKit
 
@@ -13,10 +14,26 @@ final class SyncStatusService {
     }
 
     var state: State = .idle
+    var hasEverSynced: Bool = false
+
+    private var retryTimer: Timer?
 
     init() {
         startListening()
     }
+
+    deinit {
+        retryTimer?.invalidate()
+    }
+
+    /// Force a save on the context to nudge CloudKit into re-syncing.
+    func retry(context: ModelContext) {
+        guard state != .syncing else { return }
+        state = .syncing
+        try? context.save()
+    }
+
+    // MARK: - Listening
 
     private func startListening() {
         NotificationCenter.default.addObserver(
@@ -35,6 +52,7 @@ final class SyncStatusService {
         if event.endDate == nil {
             // Event started
             state = .syncing
+            stopRetryTimer()
         } else if let error = event.error {
             // Event failed
             let ckError = error as NSError
@@ -45,9 +63,41 @@ final class SyncStatusService {
             } else {
                 state = .error(error.localizedDescription)
             }
+            startRetryTimer()
         } else {
             // Event succeeded
             state = .synced(event.endDate ?? .now)
+            hasEverSynced = true
+            stopRetryTimer()
         }
     }
+
+    // MARK: - Auto-retry timer (5 s interval for error/offline)
+
+    private func startRetryTimer() {
+        guard retryTimer == nil else { return }
+        retryTimer = Timer.scheduledTimer(withTimeInterval: 5, repeats: true) { [weak self] _ in
+            guard let self else { return }
+            // Only keep retrying while in an error/offline state
+            switch self.state {
+            case .error, .offline:
+                self.state = .syncing
+                // Post a dummy save notification to nudge CK
+                NotificationCenter.default.post(name: .syncRetryRequested, object: nil)
+            default:
+                self.stopRetryTimer()
+            }
+        }
+    }
+
+    private func stopRetryTimer() {
+        retryTimer?.invalidate()
+        retryTimer = nil
+    }
+}
+
+// MARK: - Notification name for retry
+
+extension Notification.Name {
+    static let syncRetryRequested = Notification.Name("SyncRetryRequested")
 }

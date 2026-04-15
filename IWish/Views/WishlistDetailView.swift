@@ -43,6 +43,7 @@ struct WishlistDetailView: View {
     @State private var showingParticipants = false
     @State private var showingDeleteConfirmation = false
     @State private var editingItem: Item?
+    @State private var syncStatus = SyncStatusService()
 
     private var activeItems: [Item] {
         (wishlist.items ?? []).filter { !$0.isArchived }
@@ -144,7 +145,54 @@ struct WishlistDetailView: View {
             }
         }
         .overlay(alignment: .bottom) {
-            addButton
+            VStack(spacing: 8) {
+                if syncStatus.state != .idle {
+                    SyncStatusBadge(state: syncStatus.state) {
+                        syncStatus.retry(context: context)
+                    }
+                    .transition(.move(edge: .bottom).combined(with: .opacity))
+                }
+                addButton
+            }
+            .animation(.easeInOut(duration: 0.25), value: syncStatus.state != .idle)
+        }
+        .overlay {
+            if wishlist.isShared && !syncStatus.hasEverSynced {
+                sharedSyncGate
+            }
+        }
+    }
+
+    // MARK: - Shared Sync Gate
+
+    private var sharedSyncGate: some View {
+        ZStack {
+            Rectangle()
+                .fill(.ultraThinMaterial)
+                .ignoresSafeArea()
+            VStack(spacing: 16) {
+                ProgressView()
+                    .scaleEffect(1.5)
+                Text("Загрузка данных...")
+                    .font(.headline)
+                Text("Синхронизируемся с iCloud, чтобы показать актуальный список.")
+                    .font(.subheadline)
+                    .foregroundStyle(.secondary)
+                    .multilineTextAlignment(.center)
+                    .padding(.horizontal, 32)
+
+                if case .error = syncStatus.state {
+                    Button("Попробовать снова") {
+                        syncStatus.retry(context: context)
+                    }
+                    .buttonStyle(.bordered)
+                }
+                if case .offline = syncStatus.state {
+                    Label("Нет подключения к сети", systemImage: "wifi.slash")
+                        .font(.caption)
+                        .foregroundStyle(.orange)
+                }
+            }
         }
     }
 
