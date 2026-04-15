@@ -83,7 +83,9 @@ struct HomeView: View {
                     Spacer()
                     if services.syncStatus.state != .idle {
                         SyncStatusBadge(state: services.syncStatus.state) {
-                            services.syncStatus.retry(context: context)
+                            if services.syncStatus.state != .syncing {
+                                services.syncStatus.retry(context: context)
+                            }
                         }
                         .transition(.move(edge: .bottom).combined(with: .opacity))
                         .animation(.easeInOut(duration: 0.25), value: services.syncStatus.state != .idle)

@@ -108,8 +108,8 @@ final class SyncStatusService {
             // Only keep retrying while in an error/offline state
             switch self.state {
             case .error, .offline:
+                // Only transition if currently not syncing
                 self.state = .syncing
-                // Post a dummy save notification to nudge CK
                 NotificationCenter.default.post(name: .syncRetryRequested, object: nil)
             default:
                 self.stopRetryTimer()
