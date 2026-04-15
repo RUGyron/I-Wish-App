@@ -9,6 +9,7 @@ struct AddWishlistSheet: View {
     @State private var name: String = ""
     @State private var coverImageData: Data?
     @State private var coverEmoji: String?
+    @State private var errorMessage: String?
 
     var body: some View {
         NavigationStack {
@@ -16,6 +17,9 @@ struct AddWishlistSheet: View {
                 Section("Название") {
                     TextField("Например: На день рождения", text: $name)
                         .textInputAutocapitalization(.sentences)
+                        .onChange(of: name) { _, newValue in
+                            name = InputLimits.truncate(newValue, to: InputLimits.wishlistName)
+                        }
                 }
 
                 CoverPickerSection(
@@ -45,6 +49,11 @@ struct AddWishlistSheet: View {
                 }
             }
         }
+        .alert("Не удалось создать", isPresented: .constant(errorMessage != nil)) {
+            Button("OK", role: .cancel) { errorMessage = nil }
+        } message: {
+            Text(errorMessage ?? "")
+        }
         .applyTheme()
     }
 
@@ -73,6 +82,12 @@ struct AddWishlistSheet: View {
     }
 
     private func save() {
+        let emptyCount = wishlists.filter { ($0.items ?? []).isEmpty }.count
+        guard emptyCount < InputLimits.maxEmptyWishlists else {
+            errorMessage = "У вас слишком много пустых списков. Сначала удалите или заполните их."
+            return
+        }
+
         let trimmed = name.trimmingCharacters(in: .whitespaces)
         let finalName = trimmed.isEmpty
             ? generateName()

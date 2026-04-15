@@ -93,6 +93,15 @@ struct EditItemSheet: View {
                 }
             }
             .onAppear { prefill() }
+            .onChange(of: name) { _, newValue in
+                name = InputLimits.truncate(newValue, to: InputLimits.itemName)
+            }
+            .onChange(of: descriptionText) { _, newValue in
+                descriptionText = InputLimits.truncate(newValue, to: InputLimits.itemDescription)
+            }
+            .onChange(of: urlString) { _, newValue in
+                urlString = InputLimits.truncate(newValue, to: InputLimits.itemURL)
+            }
         }
         .applyTheme()
     }

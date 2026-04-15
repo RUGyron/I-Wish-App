@@ -24,6 +24,7 @@ struct AddItemSheet: View {
 
     @State private var urlStatus: URLPasteStatus = .idle
     @State private var isFetchingMetadata = false
+    @State private var errorMessage: String?
 
     // MARK: - Derived
 
@@ -69,6 +70,20 @@ struct AddItemSheet: View {
                 }
             }
             .onAppear { prefillFromSettings() }
+            .onChange(of: name) { _, newValue in
+                name = InputLimits.truncate(newValue, to: InputLimits.itemName)
+            }
+            .onChange(of: descriptionText) { _, newValue in
+                descriptionText = InputLimits.truncate(newValue, to: InputLimits.itemDescription)
+            }
+            .onChange(of: urlString) { _, newValue in
+                urlString = InputLimits.truncate(newValue, to: InputLimits.itemURL)
+            }
+        }
+        .alert("Не удалось добавить", isPresented: .constant(errorMessage != nil)) {
+            Button("OK", role: .cancel) { errorMessage = nil }
+        } message: {
+            Text(errorMessage ?? "")
         }
         .applyTheme()
     }
@@ -253,6 +268,12 @@ struct AddItemSheet: View {
     private func save() {
         let trimmedName = name.trimmingCharacters(in: .whitespaces)
         guard !trimmedName.isEmpty else { return }
+
+        let activeCount = (wishlist.items ?? []).filter { !$0.isArchived }.count
+        guard activeCount < InputLimits.maxItemsPerWishlist else {
+            errorMessage = "Достигнут лимит: \(InputLimits.maxItemsPerWishlist) желаний в одном списке."
+            return
+        }
 
         let trimmedURL = urlString.trimmingCharacters(in: .whitespaces)
         let nextSortIndex = nextSortIndexForTier(tier)
