@@ -32,7 +32,7 @@ struct HomeView: View {
                 wishlistList
             }
         }
-        .navigationTitle("Желания")
+        .navigationTitle("Виш-листы")
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {
             ToolbarItem(placement: .topBarLeading) {
@@ -76,18 +76,28 @@ struct HomeView: View {
         .onReceive(NotificationCenter.default.publisher(for: .didReceiveShareLink)) { _ in
             showingJoin = true
         }
-        .overlay(alignment: .bottomTrailing) {
-            addButton
-        }
         .overlay(alignment: .bottom) {
-            if services.syncStatus.state != .idle {
-                SyncStatusBadge(state: services.syncStatus.state) {
-                    services.syncStatus.retry(context: context)
+            ZStack {
+                // Sync badge centered
+                HStack {
+                    Spacer()
+                    if services.syncStatus.state != .idle {
+                        SyncStatusBadge(state: services.syncStatus.state) {
+                            services.syncStatus.retry(context: context)
+                        }
+                        .transition(.move(edge: .bottom).combined(with: .opacity))
+                        .animation(.easeInOut(duration: 0.25), value: services.syncStatus.state != .idle)
+                    }
+                    Spacer()
                 }
-                .transition(.move(edge: .bottom).combined(with: .opacity))
-                .padding(.bottom, 8)
-                .animation(.easeInOut(duration: 0.25), value: services.syncStatus.state != .idle)
+                // FAB trailing
+                HStack {
+                    Spacer()
+                    addButton
+                }
             }
+            .padding(.horizontal, 20)
+            .padding(.bottom, 24)
         }
     }
 
@@ -188,8 +198,6 @@ struct HomeView: View {
                 .background(Color.accentColor, in: Circle())
                 .shadow(color: .black.opacity(0.15), radius: 8, y: 4)
         }
-        .padding(.trailing, 20)
-        .padding(.bottom, 24)
     }
 
     // MARK: - Actions

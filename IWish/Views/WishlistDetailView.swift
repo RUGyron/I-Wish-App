@@ -134,18 +134,28 @@ struct WishlistDetailView: View {
                 dismiss()
             }
         }
-        .overlay(alignment: .bottomTrailing) {
-            addButton
-        }
         .overlay(alignment: .bottom) {
-            if services.syncStatus.state != .idle {
-                SyncStatusBadge(state: services.syncStatus.state) {
-                    services.syncStatus.retry(context: context)
+            ZStack {
+                // Sync badge centered
+                HStack {
+                    Spacer()
+                    if services.syncStatus.state != .idle {
+                        SyncStatusBadge(state: services.syncStatus.state) {
+                            services.syncStatus.retry(context: context)
+                        }
+                        .transition(.move(edge: .bottom).combined(with: .opacity))
+                        .animation(.easeInOut(duration: 0.25), value: services.syncStatus.state != .idle)
+                    }
+                    Spacer()
                 }
-                .transition(.move(edge: .bottom).combined(with: .opacity))
-                .padding(.bottom, 8)
-                .animation(.easeInOut(duration: 0.25), value: services.syncStatus.state != .idle)
+                // FAB trailing
+                HStack {
+                    Spacer()
+                    addButton
+                }
             }
+            .padding(.horizontal, 20)
+            .padding(.bottom, 24)
         }
         .overlay {
             if wishlist.isShared && !services.syncStatus.hasEverSynced {
@@ -210,6 +220,13 @@ struct WishlistDetailView: View {
 
     private var itemList: some View {
         List {
+            Section {
+                wishlistHeaderView
+                    .listRowBackground(Color.clear)
+                    .listRowInsets(EdgeInsets())
+                    .listRowSeparator(.hidden)
+            }
+
             if selectedSort == .importance {
                 groupedByTier
             } else {
@@ -218,6 +235,29 @@ struct WishlistDetailView: View {
         }
         .contentMargins(.bottom, 80)
         .warmBackground()
+    }
+
+    private var wishlistHeaderView: some View {
+        HStack(spacing: 16) {
+            DefaultCoverView(
+                id: wishlist.id,
+                imageData: wishlist.coverImageData,
+                emoji: wishlist.coverEmoji
+            )
+            .frame(width: 72, height: 72)
+
+            VStack(alignment: .leading, spacing: 4) {
+                Text(wishlist.name)
+                    .font(.title2.weight(.semibold))
+                    .lineLimit(2)
+                Text("\(activeItems.count) желаний")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
+            Spacer()
+        }
+        .padding(.vertical, 12)
+        .padding(.horizontal, 4)
     }
 
     // MARK: - Grouped by Tier
@@ -360,8 +400,6 @@ struct WishlistDetailView: View {
                 .background(Color.accentColor, in: Circle())
                 .shadow(color: .black.opacity(0.15), radius: 8, y: 4)
         }
-        .padding(.trailing, 20)
-        .padding(.bottom, 24)
     }
 
     // MARK: - Helpers
