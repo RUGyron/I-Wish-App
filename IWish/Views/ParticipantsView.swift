@@ -5,6 +5,7 @@ struct ParticipantsView: View {
     @Environment(\.dismiss) private var dismiss
     @Environment(\.appServices) private var services
     let wishlist: Wishlist
+    var onShareRequested: (() -> Void)? = nil
 
     var body: some View {
         NavigationStack {
@@ -59,7 +60,18 @@ struct ParticipantsView: View {
                     .frame(maxWidth: .infinity)
                     .padding(.vertical, 24)
                 } header: {
-                    Text("Участники")
+                    HStack {
+                        Text("Участники")
+                        Spacer()
+                        Button {
+                            dismiss()
+                            onShareRequested?()
+                        } label: {
+                            Label("Пригласить", systemImage: "plus")
+                                .font(.caption.weight(.semibold))
+                        }
+                    }
+                    .textCase(nil)
                 }
             }
             .warmBackground()
@@ -89,6 +101,6 @@ struct ParticipantsView: View {
     container.mainContext.insert(wishlist)
     try? container.mainContext.save()
 
-    return ParticipantsView(wishlist: wishlist)
+    return ParticipantsView(wishlist: wishlist, onShareRequested: {})
         .modelContainer(container)
 }

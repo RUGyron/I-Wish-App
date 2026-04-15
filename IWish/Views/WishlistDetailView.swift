@@ -44,6 +44,7 @@ struct WishlistDetailView: View {
     @State private var showingParticipants = false
     @State private var showingDeleteConfirmation = false
     @State private var editingItem: Item?
+    @State private var showingEditWishlist = false
 
     private var activeItems: [Item] {
         (wishlist.items ?? []).filter { !$0.isArchived }
@@ -62,10 +63,13 @@ struct WishlistDetailView: View {
         .toolbar {
             ToolbarItem(placement: .topBarTrailing) {
                 Menu {
-                    Picker("Сортировка", selection: $selectedSort) {
-                        ForEach(SortOption.allCases) { option in
-                            Label(option.label, systemImage: option.symbolName).tag(option)
+                    ForEach(SortOption.allCases) { option in
+                        Button {
+                            selectedSort = option
+                        } label: {
+                            Label(option.label, systemImage: option.symbolName)
                         }
+                        .tint(selectedSort == option ? .accentColor : .primary)
                     }
                 } label: {
                     Image(systemName: "arrow.up.arrow.down")
@@ -74,6 +78,14 @@ struct WishlistDetailView: View {
 
             ToolbarItem(placement: .topBarTrailing) {
                 Menu {
+                    Button {
+                        showingEditWishlist = true
+                    } label: {
+                        Label("Изменить список", systemImage: "pencil")
+                    }
+
+                    Divider()
+
                     let archivedCount = (wishlist.items ?? []).filter { $0.isArchived }.count
                     if archivedCount > 0 {
                         Button {
@@ -120,11 +132,19 @@ struct WishlistDetailView: View {
                 .applyTheme()
         }
         .sheet(isPresented: $showingParticipants) {
-            ParticipantsView(wishlist: wishlist)
-                .applyTheme()
+            ParticipantsView(wishlist: wishlist, onShareRequested: {
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
+                    showingShare = true
+                }
+            })
+            .applyTheme()
         }
         .sheet(item: $editingItem) { item in
             EditItemSheet(item: item)
+                .applyTheme()
+        }
+        .sheet(isPresented: $showingEditWishlist) {
+            EditWishlistSheet(wishlist: wishlist)
                 .applyTheme()
         }
         .confirmationDialog("Удалить «\(wishlist.name)»?", isPresented: $showingDeleteConfirmation, titleVisibility: .visible) {
