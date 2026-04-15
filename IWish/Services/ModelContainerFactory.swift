@@ -2,7 +2,7 @@ import Foundation
 import SwiftData
 
 enum ModelContainerFactory {
-    static let cloudKitContainerID = "iCloud.com.rugyron.iwish"
+    static let cloudKitContainerID = "iCloud.RUGyron.IWish"
 
     static func makeProductionContainer() -> ModelContainer {
         let schema = Schema([

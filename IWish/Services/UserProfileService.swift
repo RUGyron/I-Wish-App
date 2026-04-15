@@ -9,7 +9,7 @@ final class UserProfileService {
         guard userName == nil else { return }
         isLoading = true
 
-        let container = CKContainer(identifier: "iCloud.com.rugyron.iwish")
+        let container = CKContainer(identifier: "iCloud.RUGyron.IWish")
 
         // Check account status first
         container.accountStatus { [weak self] status, error in
