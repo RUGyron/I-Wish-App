@@ -45,6 +45,23 @@ struct WishlistDetailView: View {
     @State private var showingDeleteConfirmation = false
     @State private var editingItem: Item?
     @State private var showingEditWishlist = false
+    @State private var showingSortDialog = false
+    @State private var scrollOffset: CGFloat = 0
+    @AppStorage("collapsedTiers") private var collapsedTiersRaw: String = ""
+
+    private var collapsedTiers: Set<String> {
+        Set(collapsedTiersRaw.split(separator: ",").map(String.init))
+    }
+
+    private func toggleCollapse(_ tier: ItemTier) {
+        var set = collapsedTiers
+        if set.contains(tier.rawValue) {
+            set.remove(tier.rawValue)
+        } else {
+            set.insert(tier.rawValue)
+        }
+        collapsedTiersRaw = set.joined(separator: ",")
+    }
 
     private var activeItems: [Item] {
         (wishlist.items ?? []).filter { !$0.isArchived }
@@ -58,19 +75,12 @@ struct WishlistDetailView: View {
                 itemList
             }
         }
-        .navigationTitle(wishlist.name)
+        .navigationTitle("Желания")
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {
             ToolbarItem(placement: .topBarTrailing) {
-                Menu {
-                    ForEach(SortOption.allCases) { option in
-                        Button {
-                            selectedSort = option
-                        } label: {
-                            Label(option.label, systemImage: option.symbolName)
-                        }
-                        .tint(selectedSort == option ? .accentColor : .primary)
-                    }
+                Button {
+                    showingSortDialog = true
                 } label: {
                     Image(systemName: "arrow.up.arrow.down")
                 }
@@ -119,6 +129,22 @@ struct WishlistDetailView: View {
                 }
             }
         }
+        .confirmationDialog("Сортировка", isPresented: $showingSortDialog, titleVisibility: .visible) {
+            ForEach(SortOption.allCases) { option in
+                Button {
+                    withAnimation(.easeInOut(duration: 0.35)) {
+                        selectedSort = option
+                    }
+                } label: {
+                    if selectedSort == option {
+                        Text("\u{2713} \(option.label)")
+                    } else {
+                        Text(option.label)
+                    }
+                }
+            }
+            Button("Отмена", role: .cancel) { }
+        }
         .sheet(isPresented: $showingAddItem) {
             AddItemSheet(wishlist: wishlist)
                 .applyTheme()
@@ -155,29 +181,8 @@ struct WishlistDetailView: View {
             }
         }
         .overlay(alignment: .bottom) {
-            ZStack {
-                // Sync badge centered
-                HStack {
-                    Spacer()
-                    if services.syncStatus.state != .idle {
-                        SyncStatusBadge(state: services.syncStatus.state) {
-                            if services.syncStatus.state != .syncing {
-                                services.syncStatus.retry(context: context)
-                            }
-                        }
-                        .transition(.move(edge: .bottom).combined(with: .opacity))
-                        .animation(.easeInOut(duration: 0.25), value: services.syncStatus.state != .idle)
-                    }
-                    Spacer()
-                }
-                // FAB trailing
-                HStack {
-                    Spacer()
-                    addButton
-                }
-            }
-            .padding(.horizontal, 20)
-            .padding(.bottom, 24)
+            addButton
+                .padding(.bottom, 24)
         }
         .overlay {
             if wishlist.isShared && !services.syncStatus.hasEverSynced {
@@ -238,17 +243,44 @@ struct WishlistDetailView: View {
         .background(Theme.background)
     }
 
+    // MARK: - Collapsible Header
+
+    private var collapsibleHeader: some View {
+        let progress = min(1, max(0, scrollOffset / 100))
+
+        return HStack(spacing: 16) {
+            DefaultCoverView(
+                id: wishlist.id,
+                imageData: wishlist.coverImageData,
+                emoji: wishlist.coverEmoji
+            )
+            .frame(
+                width: 72 - progress * 36,
+                height: 72 - progress * 36
+            )
+
+            VStack(alignment: .leading, spacing: 4) {
+                Text(wishlist.name)
+                    .font(progress > 0.5 ? .headline : .title2.weight(.semibold))
+                    .lineLimit(2)
+                    .animation(.easeInOut, value: progress > 0.5)
+                Text(String(format: NSLocalizedString("%lld желаний", comment: ""), activeItems.count))
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                    .opacity(1 - progress)
+            }
+            Spacer()
+        }
+        .padding(.horizontal, 16)
+        .padding(.vertical, 8)
+        .background(.regularMaterial)
+        .animation(.easeInOut(duration: 0.2), value: progress)
+    }
+
     // MARK: - Item List
 
     private var itemList: some View {
         List {
-            Section {
-                wishlistHeaderView
-                    .listRowBackground(Color.clear)
-                    .listRowInsets(EdgeInsets())
-                    .listRowSeparator(.hidden)
-            }
-
             if selectedSort == .importance {
                 groupedByTier
             } else {
@@ -257,29 +289,26 @@ struct WishlistDetailView: View {
         }
         .contentMargins(.bottom, 80)
         .warmBackground()
-    }
-
-    private var wishlistHeaderView: some View {
-        HStack(spacing: 16) {
-            DefaultCoverView(
-                id: wishlist.id,
-                imageData: wishlist.coverImageData,
-                emoji: wishlist.coverEmoji
-            )
-            .frame(width: 72, height: 72)
-
-            VStack(alignment: .leading, spacing: 4) {
-                Text(wishlist.name)
-                    .font(.title2.weight(.semibold))
-                    .lineLimit(2)
-                Text("\(activeItems.count) желаний")
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
+        .safeAreaInset(edge: .top, spacing: 0) {
+            VStack(spacing: 0) {
+                SyncStatusPullHeader(
+                    state: services.syncStatus.state,
+                    scrollOffset: -scrollOffset,
+                    isDiscoverabilityDenied: services.userProfile.discoverabilityStatus == .denied
+                ) {
+                    if services.syncStatus.state != .syncing {
+                        services.syncStatus.retry(context: context)
+                    }
+                }
+                collapsibleHeader
             }
-            Spacer()
         }
-        .padding(.vertical, 12)
-        .padding(.horizontal, 4)
+        .onScrollGeometryChange(for: CGFloat.self) { geo in
+            geo.contentOffset.y
+        } action: { _, newValue in
+            scrollOffset = newValue
+        }
+        .animation(.easeInOut, value: activeItems.map(\.id))
     }
 
     // MARK: - Grouped by Tier
@@ -293,30 +322,62 @@ struct WishlistDetailView: View {
 
             if !tierItems.isEmpty {
                 Section {
-                    ForEach(tierItems) { item in
-                        itemRow(item)
-                            .itemContextMenu(item: item, context: context, editingItem: $editingItem)
-                            .itemSwipeActions(item: item, context: context)
+                    if !collapsedTiers.contains(tier.rawValue) {
+                        ForEach(tierItems) { item in
+                            itemRow(item)
+                                .itemContextMenu(item: item, context: context, editingItem: $editingItem)
+                                .itemSwipeActions(item: item, context: context)
+                        }
+                        .onMove { from, to in
+                            reorderItems(in: tier, from: from, to: to)
+                        }
                     }
                 } header: {
-                    tierHeader(tier: tier, items: tierItems)
+                    Button {
+                        withAnimation(.easeInOut(duration: 0.25)) {
+                            toggleCollapse(tier)
+                        }
+                    } label: {
+                        HStack(spacing: 4) {
+                            tierHeaderContent(tier: tier, items: tierItems)
+                            Spacer()
+                            Image(systemName: collapsedTiers.contains(tier.rawValue) ? "chevron.right" : "chevron.down")
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
+                        }
+                    }
+                    .buttonStyle(.plain)
                 }
             }
         }
     }
 
-    private func tierHeader(tier: ItemTier, items: [Item]) -> some View {
+    private func tierHeaderContent(tier: ItemTier, items: [Item]) -> some View {
         let total = items.compactMap(\.price).reduce(0.0, +)
         let currency = items.first?.currency ?? "RUB"
         let priceText = total > 0 ? " \u{00B7} \(formatPrice(total, currency: currency))" : ""
 
         return HStack(spacing: 4) {
-            Image(systemName: tier.symbolName)
+            Text(tier.emoji)
             Text("\(tier.label)\(priceText) \u{00B7} \(items.count)")
         }
         .font(.subheadline.weight(.medium))
         .foregroundStyle(.secondary)
         .textCase(nil)
+    }
+
+    private func reorderItems(in tier: ItemTier, from source: IndexSet, to destination: Int) {
+        var tierItems = activeItems
+            .filter { $0.tier == tier }
+            .sorted { $0.sortIndex < $1.sortIndex }
+
+        tierItems.move(fromOffsets: source, toOffset: destination)
+
+        for (i, item) in tierItems.enumerated() {
+            item.sortIndex = Double((i + 1) * 1000)
+            item.updatedAt = .now
+        }
+        try? context.save()
     }
 
     // MARK: - Flat Sorted
@@ -394,7 +455,7 @@ struct WishlistDetailView: View {
     @ViewBuilder
     private func itemMetadataRow(_ item: Item) -> some View {
         HStack(spacing: 4) {
-            Image(systemName: item.tier.symbolName)
+            Text(item.tier.emoji)
             Text(item.createdAt.formatted(.dateTime.day().month(.abbreviated)))
             if let domain = extractDomain(from: item.url) {
                 Text("\u{00B7}")
@@ -404,7 +465,7 @@ struct WishlistDetailView: View {
             if let days = probationDaysLeft(item) {
                 Text("\u{00B7}")
                 Image(systemName: "clock")
-                Text("\(days) дн.")
+                Text(String(format: NSLocalizedString("%lld дней", comment: ""), days))
             }
         }
     }
@@ -482,7 +543,7 @@ private extension View {
                                 Image(systemName: "checkmark")
                             }
                         } else {
-                            Label(tier.label, systemImage: tier.symbolName)
+                            Text("\(tier.emoji) \(tier.label)")
                         }
                     }
                 }

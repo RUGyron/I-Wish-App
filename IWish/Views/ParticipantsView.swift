@@ -67,8 +67,11 @@ struct ParticipantsView: View {
                             dismiss()
                             onShareRequested?()
                         } label: {
-                            Label("Пригласить", systemImage: "plus")
-                                .font(.caption.weight(.semibold))
+                            HStack(spacing: 3) {
+                                Image(systemName: "plus")
+                                Text("Пригласить")
+                            }
+                            .font(.caption.weight(.semibold))
                         }
                     }
                     .textCase(nil)

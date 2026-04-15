@@ -8,9 +8,14 @@ struct HomeView: View {
     @State private var showingAddSheet = false
     @State private var showingSettings = false
     @State private var showingJoin = false
+    @State private var scrollOffset: CGFloat = 0
+
+    private var activeWishlists: [Wishlist] {
+        wishlists.filter { !($0.isArchived) }
+    }
 
     private var totalItems: Int {
-        wishlists.reduce(0) { $0 + ($1.items ?? []).filter { !$0.isArchived }.count }
+        activeWishlists.reduce(0) { $0 + ($1.items ?? []).filter { !$0.isArchived }.count }
     }
 
     private var showDiscoverabilitySheet: Binding<Bool> {
@@ -26,13 +31,13 @@ struct HomeView: View {
 
     var body: some View {
         Group {
-            if wishlists.isEmpty {
+            if activeWishlists.isEmpty {
                 emptyState
             } else {
                 wishlistList
             }
         }
-        .navigationTitle("Виш-листы")
+        .navigationTitle("Вишлисты")
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {
             ToolbarItem(placement: .topBarLeading) {
@@ -77,29 +82,8 @@ struct HomeView: View {
             showingJoin = true
         }
         .overlay(alignment: .bottom) {
-            ZStack {
-                // Sync badge centered
-                HStack {
-                    Spacer()
-                    if services.syncStatus.state != .idle {
-                        SyncStatusBadge(state: services.syncStatus.state) {
-                            if services.syncStatus.state != .syncing {
-                                services.syncStatus.retry(context: context)
-                            }
-                        }
-                        .transition(.move(edge: .bottom).combined(with: .opacity))
-                        .animation(.easeInOut(duration: 0.25), value: services.syncStatus.state != .idle)
-                    }
-                    Spacer()
-                }
-                // FAB trailing
-                HStack {
-                    Spacer()
-                    addButton
-                }
-            }
-            .padding(.horizontal, 20)
-            .padding(.bottom, 24)
+            addButton
+                .padding(.bottom, 24)
         }
     }
 
@@ -128,16 +112,39 @@ struct HomeView: View {
     private var wishlistList: some View {
         List {
             Section {
-                ForEach(wishlists) { wishlist in
+                ForEach(activeWishlists) { wishlist in
                     NavigationLink {
                         WishlistDetailView(wishlist: wishlist)
                     } label: {
                         wishlistRow(wishlist)
                     }
+                    .swipeActions(edge: .trailing, allowsFullSwipe: false) {
+                        Button(role: .destructive) {
+                            context.delete(wishlist)
+                            try? context.save()
+                        } label: {
+                            Label("Удалить", systemImage: "trash")
+                        }
+
+                        Button {
+                            wishlist.isArchived = true
+                            wishlist.updatedAt = .now
+                            try? context.save()
+                        } label: {
+                            Label("Архив", systemImage: "archivebox")
+                        }
+                        .tint(.blue)
+
+                        Button {
+                            // Share action placeholder — ties into ShareWishlistSheet
+                        } label: {
+                            Label("Поделиться", systemImage: "square.and.arrow.up")
+                        }
+                        .tint(.green)
+                    }
                 }
-                .onDelete(perform: deleteWishlists)
             } header: {
-                Text("\(wishlists.count) списков \u{00B7} \(totalItems) желаний")
+                Text("\(String(format: NSLocalizedString("%lld списков", comment: ""), activeWishlists.count)) \u{00B7} \(String(format: NSLocalizedString("%lld желаний", comment: ""), totalItems))")
                     .font(.subheadline)
                     .foregroundStyle(.secondary)
                     .textCase(nil)
@@ -145,6 +152,22 @@ struct HomeView: View {
         }
         .contentMargins(.bottom, 80)
         .warmBackground()
+        .safeAreaInset(edge: .top, spacing: 0) {
+            SyncStatusPullHeader(
+                state: services.syncStatus.state,
+                scrollOffset: scrollOffset,
+                isDiscoverabilityDenied: services.userProfile.discoverabilityStatus == .denied
+            ) {
+                if services.syncStatus.state != .syncing {
+                    services.syncStatus.retry(context: context)
+                }
+            }
+        }
+        .onScrollGeometryChange(for: CGFloat.self) { geo in
+            geo.contentOffset.y
+        } action: { _, newValue in
+            scrollOffset = -newValue
+        }
     }
 
     private func wishlistRow(_ wishlist: Wishlist) -> some View {
@@ -163,7 +186,7 @@ struct HomeView: View {
                     .font(.headline)
 
                 HStack(spacing: 4) {
-                    Text("\(activeItems.count) желаний")
+                    Text(String(format: NSLocalizedString("%lld желаний", comment: ""), activeItems.count))
                     tierBadgeRow(for: activeItems)
                 }
                 .font(.caption)
@@ -181,7 +204,7 @@ struct HomeView: View {
         ForEach(activeTiers) { tier in
             if let count = counts[tier]?.count {
                 Text("\u{00B7}")
-                Image(systemName: tier.symbolName)
+                Text(tier.emoji)
                 Text("\(count)")
             }
         }
@@ -200,15 +223,6 @@ struct HomeView: View {
                 .background(Color.accentColor, in: Circle())
                 .shadow(color: .black.opacity(0.15), radius: 8, y: 4)
         }
-    }
-
-    // MARK: - Actions
-
-    private func deleteWishlists(offsets: IndexSet) {
-        for index in offsets {
-            context.delete(wishlists[index])
-        }
-        try? context.save()
     }
 }
 

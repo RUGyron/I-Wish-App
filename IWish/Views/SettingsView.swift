@@ -32,13 +32,6 @@ struct SettingsView: View {
         } message: {
             Text("Apple не позволяет приложениям менять это разрешение. Откройте Настройки iOS \u{2192} Apple ID \u{2192} iCloud \u{2192} Настройки приложений, чтобы отключить.")
         }
-        .safeAreaInset(edge: .bottom) {
-            Text("Версия \(appVersion)")
-                .font(.caption)
-                .foregroundStyle(.tertiary)
-                .frame(maxWidth: .infinity)
-                .padding(.bottom, 8)
-        }
         .navigationTitle("Настройки")
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {
@@ -111,7 +104,7 @@ struct SettingsView: View {
             if settings.probationEnabledByDefault {
                 Picker("Длительность", selection: probationDaysBinding) {
                     ForEach(1...365, id: \.self) { day in
-                        Text("\(day) \(daysDeclension(day))").tag(day)
+                        Text(String(format: NSLocalizedString("%lld дней", comment: ""), day)).tag(day)
                     }
                 }
                 .pickerStyle(.wheel)
@@ -167,7 +160,7 @@ struct SettingsView: View {
     }
 
     private var aboutSection: some View {
-        Section("О приложении") {
+        Section {
             NavigationLink {
                 PrivacyDisclosureView()
             } label: {
@@ -183,6 +176,14 @@ struct SettingsView: View {
             } label: {
                 Label("Пользовательское соглашение", systemImage: "doc.plaintext")
             }
+        } header: {
+            Text("О приложении")
+        } footer: {
+            Text("Версия \(appVersion)")
+                .font(.caption)
+                .foregroundStyle(.tertiary)
+                .frame(maxWidth: .infinity, alignment: .center)
+                .padding(.top, 8)
         }
     }
 
@@ -192,18 +193,6 @@ struct SettingsView: View {
         let version = Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "–"
         let build = Bundle.main.infoDictionary?["CFBundleVersion"] as? String ?? "–"
         return "\(version) (\(build))"
-    }
-
-    /// Russian declension for "день/дня/дней".
-    private func daysDeclension(_ n: Int) -> String {
-        let mod100 = n % 100
-        let mod10 = n % 10
-        if mod100 >= 11 && mod100 <= 19 { return "дней" }
-        switch mod10 {
-        case 1:    return "день"
-        case 2, 3, 4: return "дня"
-        default:   return "дней"
-        }
     }
 
     // MARK: - Bindings

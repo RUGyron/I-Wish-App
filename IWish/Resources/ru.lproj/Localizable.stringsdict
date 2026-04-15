@@ -1,0 +1,86 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <key>%lld списков</key>
+    <dict>
+        <key>NSStringLocalizedFormatKey</key>
+        <string>%#@count@</string>
+        <key>count</key>
+        <dict>
+            <key>NSStringFormatSpecTypeKey</key>
+            <string>NSStringPluralRuleType</string>
+            <key>NSStringFormatValueTypeKey</key>
+            <string>lld</string>
+            <key>one</key>
+            <string>%lld список</string>
+            <key>few</key>
+            <string>%lld списка</string>
+            <key>many</key>
+            <string>%lld списков</string>
+            <key>other</key>
+            <string>%lld списка</string>
+        </dict>
+    </dict>
+    <key>%lld желаний</key>
+    <dict>
+        <key>NSStringLocalizedFormatKey</key>
+        <string>%#@count@</string>
+        <key>count</key>
+        <dict>
+            <key>NSStringFormatSpecTypeKey</key>
+            <string>NSStringPluralRuleType</string>
+            <key>NSStringFormatValueTypeKey</key>
+            <string>lld</string>
+            <key>one</key>
+            <string>%lld желание</string>
+            <key>few</key>
+            <string>%lld желания</string>
+            <key>many</key>
+            <string>%lld желаний</string>
+            <key>other</key>
+            <string>%lld желания</string>
+        </dict>
+    </dict>
+    <key>%lld участников</key>
+    <dict>
+        <key>NSStringLocalizedFormatKey</key>
+        <string>%#@count@</string>
+        <key>count</key>
+        <dict>
+            <key>NSStringFormatSpecTypeKey</key>
+            <string>NSStringPluralRuleType</string>
+            <key>NSStringFormatValueTypeKey</key>
+            <string>lld</string>
+            <key>one</key>
+            <string>%lld участник</string>
+            <key>few</key>
+            <string>%lld участника</string>
+            <key>many</key>
+            <string>%lld участников</string>
+            <key>other</key>
+            <string>%lld участника</string>
+        </dict>
+    </dict>
+    <key>%lld дней</key>
+    <dict>
+        <key>NSStringLocalizedFormatKey</key>
+        <string>%#@count@</string>
+        <key>count</key>
+        <dict>
+            <key>NSStringFormatSpecTypeKey</key>
+            <string>NSStringPluralRuleType</string>
+            <key>NSStringFormatValueTypeKey</key>
+            <string>lld</string>
+            <key>one</key>
+            <string>%lld день</string>
+            <key>few</key>
+            <string>%lld дня</string>
+            <key>many</key>
+            <string>%lld дней</string>
+            <key>other</key>
+            <string>%lld дня</string>
+        </dict>
+    </dict>
+</dict>
+</plist>

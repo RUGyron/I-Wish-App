@@ -48,11 +48,21 @@ struct PrivacyDisclosureView: View {
                 }
                 .padding(.horizontal)
 
-                Text("Исходный код приложения открыт и проверяем: github.com/RUGyron/I-Wish-App")
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-                    .multilineTextAlignment(.center)
-                    .padding()
+                VStack(spacing: 8) {
+                    Image(systemName: "chevron.left.forwardslash.chevron.right")
+                        .font(.caption)
+                        .foregroundStyle(.tertiary)
+                    Text("Исходный код открыт и проверяем")
+                        .font(.caption.weight(.medium))
+                        .foregroundStyle(.secondary)
+                    Text("github.com/RUGyron/I-Wish-App")
+                        .font(.caption2)
+                        .foregroundStyle(.tertiary)
+                        .textSelection(.enabled)
+                }
+                .frame(maxWidth: .infinity)
+                .padding(.vertical, 24)
+                .padding(.horizontal, 16)
             }
         }
         .background(Theme.background)

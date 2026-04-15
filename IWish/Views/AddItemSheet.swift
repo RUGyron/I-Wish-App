@@ -195,7 +195,7 @@ struct AddItemSheet: View {
             if probationEnabled {
                 Picker("Длительность", selection: $probationDays) {
                     ForEach(1...365, id: \.self) { day in
-                        Text("\(day) \(daysDeclension(day))").tag(day)
+                        Text(String(format: NSLocalizedString("%lld дней", comment: ""), day)).tag(day)
                     }
                 }
                 .pickerStyle(.wheel)
@@ -314,17 +314,6 @@ struct AddItemSheet: View {
         return Double(trimmed)
     }
 
-    private func daysDeclension(_ n: Int) -> String {
-        let mod10 = n % 10
-        let mod100 = n % 100
-        if mod10 == 1 && mod100 != 11 {
-            return "день"
-        } else if (2...4).contains(mod10) && !(12...14).contains(mod100) {
-            return "дня"
-        } else {
-            return "дней"
-        }
-    }
 }
 
 // MARK: - URL paste status
