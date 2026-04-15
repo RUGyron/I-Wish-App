@@ -151,6 +151,9 @@ final class QRScannerViewController: UIViewController, AVCaptureMetadataOutputOb
     private let scanSize: CGFloat = 250
     private let scanOffsetY: CGFloat = -40
 
+    private var torchButton: UIButton?
+    private var isTorchOn = false
+
     override func viewDidLoad() {
         super.viewDidLoad()
         view.backgroundColor = .black
@@ -185,7 +188,7 @@ final class QRScannerViewController: UIViewController, AVCaptureMetadataOutputOb
 
         // Dark overlay with cutout
         let overlayPath = UIBezierPath(rect: view.bounds)
-        let cutoutPath = UIBezierPath(roundedRect: scanRect, cornerRadius: 12)
+        let cutoutPath = UIBezierPath(roundedRect: scanRect, cornerRadius: 24)
         overlayPath.append(cutoutPath)
         overlayPath.usesEvenOddFillRule = true
 
@@ -195,38 +198,13 @@ final class QRScannerViewController: UIViewController, AVCaptureMetadataOutputOb
         maskLayer.fillColor = UIColor.black.withAlphaComponent(0.5).cgColor
         view.layer.addSublayer(maskLayer)
 
-        // Corner brackets
-        let bracketLength: CGFloat = 30
-        let bracketWidth: CGFloat = 3
-        let bracketColor = UIColor.white
-
-        func addCorner(x: CGFloat, y: CGFloat, isLeft: Bool, isTop: Bool) {
-            let horizontal = UIView(frame: CGRect(
-                x: isLeft ? x : x - bracketLength,
-                y: isTop ? y : y - bracketWidth,
-                width: bracketLength,
-                height: bracketWidth
-            ))
-            horizontal.backgroundColor = bracketColor
-            horizontal.layer.cornerRadius = bracketWidth / 2
-
-            let vertical = UIView(frame: CGRect(
-                x: isLeft ? x : x - bracketWidth,
-                y: isTop ? y : y - bracketLength,
-                width: bracketWidth,
-                height: bracketLength
-            ))
-            vertical.backgroundColor = bracketColor
-            vertical.layer.cornerRadius = bracketWidth / 2
-
-            view.addSubview(horizontal)
-            view.addSubview(vertical)
-        }
-
-        addCorner(x: scanRect.minX, y: scanRect.minY, isLeft: true, isTop: true)
-        addCorner(x: scanRect.maxX, y: scanRect.minY, isLeft: false, isTop: true)
-        addCorner(x: scanRect.minX, y: scanRect.maxY, isLeft: true, isTop: false)
-        addCorner(x: scanRect.maxX, y: scanRect.maxY, isLeft: false, isTop: false)
+        // Smooth rounded rectangle border (Telegram style)
+        let borderLayer = CAShapeLayer()
+        borderLayer.path = UIBezierPath(roundedRect: scanRect, cornerRadius: 24).cgPath
+        borderLayer.strokeColor = UIColor.white.cgColor
+        borderLayer.fillColor = UIColor.clear.cgColor
+        borderLayer.lineWidth = 3
+        view.layer.addSublayer(borderLayer)
 
         // Title label above cutout
         let titleLabel = UILabel()
@@ -241,18 +219,38 @@ final class QRScannerViewController: UIViewController, AVCaptureMetadataOutputOb
             titleLabel.bottomAnchor.constraint(equalTo: view.topAnchor, constant: scanRect.minY - 30)
         ])
 
-        // Close button (top-left, text style)
+        // Close button (top-left, icon style)
         let closeButton = UIButton(type: .system)
-        closeButton.setTitle("Закрыть", for: .normal)
-        closeButton.titleLabel?.font = .systemFont(ofSize: 17)
+        closeButton.setImage(UIImage(systemName: "xmark"), for: .normal)
         closeButton.tintColor = .white
+        closeButton.backgroundColor = UIColor.white.withAlphaComponent(0.2)
+        closeButton.layer.cornerRadius = 20
         closeButton.addTarget(self, action: #selector(closeTapped), for: .touchUpInside)
         closeButton.translatesAutoresizingMaskIntoConstraints = false
         view.addSubview(closeButton)
         NSLayoutConstraint.activate([
             closeButton.topAnchor.constraint(equalTo: view.safeAreaLayoutGuide.topAnchor, constant: 16),
             closeButton.leadingAnchor.constraint(equalTo: view.leadingAnchor, constant: 16),
+            closeButton.widthAnchor.constraint(equalToConstant: 40),
+            closeButton.heightAnchor.constraint(equalToConstant: 40),
         ])
+
+        // Flashlight button below viewfinder
+        let torch = UIButton(type: .system)
+        torch.setImage(UIImage(systemName: "flashlight.off.fill"), for: .normal)
+        torch.tintColor = .white
+        torch.backgroundColor = UIColor.white.withAlphaComponent(0.2)
+        torch.layer.cornerRadius = 28
+        torch.addTarget(self, action: #selector(toggleTorch), for: .touchUpInside)
+        torch.translatesAutoresizingMaskIntoConstraints = false
+        view.addSubview(torch)
+        NSLayoutConstraint.activate([
+            torch.centerXAnchor.constraint(equalTo: view.centerXAnchor),
+            torch.topAnchor.constraint(equalTo: view.centerYAnchor, constant: scanSize / 2 + scanOffsetY + 40),
+            torch.widthAnchor.constraint(equalToConstant: 56),
+            torch.heightAnchor.constraint(equalToConstant: 56),
+        ])
+        torchButton = torch
 
         DispatchQueue.global(qos: .userInitiated).async { [weak self] in
             self?.captureSession.startRunning()
@@ -264,9 +262,34 @@ final class QRScannerViewController: UIViewController, AVCaptureMetadataOutputOb
         previewLayer?.frame = view.layer.bounds
     }
 
+    override func viewWillDisappear(_ animated: Bool) {
+        super.viewWillDisappear(animated)
+        if isTorchOn {
+            if let device = AVCaptureDevice.default(for: .video), device.hasTorch {
+                try? device.lockForConfiguration()
+                device.torchMode = .off
+                device.unlockForConfiguration()
+            }
+        }
+    }
+
     @objc private func closeTapped() {
         captureSession.stopRunning()
         onCancel?()
+    }
+
+    @objc private func toggleTorch() {
+        guard let device = AVCaptureDevice.default(for: .video), device.hasTorch else { return }
+        do {
+            try device.lockForConfiguration()
+            isTorchOn.toggle()
+            device.torchMode = isTorchOn ? .on : .off
+            device.unlockForConfiguration()
+            let iconName = isTorchOn ? "flashlight.on.fill" : "flashlight.off.fill"
+            torchButton?.setImage(UIImage(systemName: iconName), for: .normal)
+        } catch {
+            print("Torch error: \(error)")
+        }
     }
 
     nonisolated func metadataOutput(_ output: AVCaptureMetadataOutput,

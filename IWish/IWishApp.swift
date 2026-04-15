@@ -29,6 +29,7 @@ struct IWishApp: App {
     var body: some Scene {
         WindowGroup {
             RootView()
+                .environment(\.appServices, .shared)
                 .onOpenURL { url in
                     handleIncomingURL(url)
                 }
@@ -37,14 +38,15 @@ struct IWishApp: App {
     }
 
     private func preheatKeyboard() {
-        DispatchQueue.main.asyncAfter(deadline: .now() + 1.0) {
-            guard let scene = UIApplication.shared.connectedScenes.first as? UIWindowScene,
-                  let window = scene.windows.first else { return }
-            let tf = UITextField(frame: .zero)
-            tf.alpha = 0
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
+            guard let window = UIApplication.shared.connectedScenes
+                .compactMap({ $0 as? UIWindowScene })
+                .first?.windows.first else { return }
+            let tf = UITextField(frame: CGRect(x: -100, y: -100, width: 1, height: 1))
+            tf.isHidden = true
             window.addSubview(tf)
             tf.becomeFirstResponder()
-            DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
+            DispatchQueue.main.async {
                 tf.resignFirstResponder()
                 tf.removeFromSuperview()
             }
