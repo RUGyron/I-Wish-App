@@ -13,17 +13,44 @@ final class SyncStatusService {
         case error(String) // sync failed with message
     }
 
-    var state: State = .idle
+    var state: State = .idle {
+        didSet {
+            if case .syncing = state {
+                scheduleSyncTimeout()
+            } else {
+                cancelSyncTimeout()
+            }
+        }
+    }
     var hasEverSynced: Bool = false
 
     private var retryTimer: Timer?
+    private var syncTimeoutTimer: Timer?
 
     init() {
         startListening()
+        // Initial state: assume syncing until first event arrives
+        state = .syncing
     }
 
     deinit {
         retryTimer?.invalidate()
+        syncTimeoutTimer?.invalidate()
+    }
+
+    private func scheduleSyncTimeout() {
+        syncTimeoutTimer?.invalidate()
+        syncTimeoutTimer = Timer.scheduledTimer(withTimeInterval: 10, repeats: false) { [weak self] _ in
+            guard let self, case .syncing = self.state else { return }
+            // No event received in 10s — treat as error
+            self.state = .error("Нет ответа от iCloud")
+            self.startRetryTimer()
+        }
+    }
+
+    private func cancelSyncTimeout() {
+        syncTimeoutTimer?.invalidate()
+        syncTimeoutTimer = nil
     }
 
     /// Force a save on the context to nudge CloudKit into re-syncing.
