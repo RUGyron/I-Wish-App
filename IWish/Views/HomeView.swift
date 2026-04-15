@@ -8,6 +8,7 @@ struct HomeView: View {
     @State private var showingSettings = false
     @State private var showingJoin = false
     @State private var userProfile = UserProfileService()
+    @State private var syncStatus = SyncStatusService()
 
     private var totalItems: Int {
         wishlists.reduce(0) { $0 + ($1.items ?? []).filter { !$0.isArchived }.count }
@@ -69,7 +70,11 @@ struct HomeView: View {
         VStack(spacing: 12) {
             Text(userProfile.userName.map { "Привет, \($0)!" } ?? "Привет!")
                 .font(.title2.weight(.semibold))
-                .padding(.bottom, 8)
+
+            SyncStatusBadge(state: syncStatus.state)
+
+            Spacer().frame(height: 20)
+
             Image(systemName: "sparkles")
                 .font(.system(size: 48))
                 .foregroundStyle(.tint)
@@ -101,9 +106,17 @@ struct HomeView: View {
                 .onDelete(perform: deleteWishlists)
             } header: {
                 VStack(alignment: .leading, spacing: 4) {
-                    Text("\(wishlists.count) списков \u{00B7} \(totalItems) желаний")
+                    Text(userProfile.userName.map { "Привет, \($0)!" } ?? "Привет!")
                         .font(.subheadline)
                         .foregroundStyle(.secondary)
+
+                    HStack {
+                        Text("\(wishlists.count) списков \u{00B7} \(totalItems) желаний")
+                            .font(.subheadline)
+                            .foregroundStyle(.secondary)
+                        Spacer()
+                        SyncStatusBadge(state: syncStatus.state)
+                    }
                 }
                 .textCase(nil)
             }
