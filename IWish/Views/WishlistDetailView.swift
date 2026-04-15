@@ -62,19 +62,9 @@ struct WishlistDetailView: View {
         .toolbar {
             ToolbarItem(placement: .topBarTrailing) {
                 Menu {
-                    ForEach(SortOption.allCases) { option in
-                        Button {
-                            selectedSort = option
-                        } label: {
-                            if selectedSort == option {
-                                Label {
-                                    Text(option.label)
-                                } icon: {
-                                    Image(systemName: "checkmark")
-                                }
-                            } else {
-                                Label(option.label, systemImage: option.symbolName)
-                            }
+                    Picker("Сортировка", selection: $selectedSort) {
+                        ForEach(SortOption.allCases) { option in
+                            Label(option.label, systemImage: option.symbolName).tag(option)
                         }
                     }
                 } label: {

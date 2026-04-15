@@ -18,6 +18,20 @@ struct ShareWishlistSheet: View {
         NavigationStack {
             ScrollView {
                 VStack(spacing: 24) {
+                    // Wishlist name hero
+                    VStack(spacing: 4) {
+                        if let emoji = wishlist.coverEmoji, !emoji.isEmpty {
+                            Text(emoji).font(.system(size: 44))
+                        }
+                        Text(wishlist.name)
+                            .font(.title3.weight(.semibold))
+                            .multilineTextAlignment(.center)
+                        Text("Приглашение в список")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                    }
+                    .padding(.top, 8)
+
                     // QR Code
                     qrSection
 

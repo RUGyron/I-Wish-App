@@ -3,6 +3,7 @@ import SwiftData
 
 struct ParticipantsView: View {
     @Environment(\.dismiss) private var dismiss
+    @Environment(\.appServices) private var services
     let wishlist: Wishlist
 
     var body: some View {
@@ -20,7 +21,7 @@ struct ParticipantsView: View {
 
                         VStack(alignment: .leading, spacing: 2) {
                             HStack(spacing: 4) {
-                                Text("Вы")
+                                Text(services.userProfile.userName ?? "Вы")
                                     .font(.body.weight(.medium))
                                 Text("(владелец)")
                                     .font(.caption)
@@ -41,14 +42,19 @@ struct ParticipantsView: View {
                 // Placeholder for future participants
                 Section {
                     VStack(spacing: 12) {
-                        Image(systemName: "person.2.slash")
+                        Image(systemName: "person.2")
                             .font(.system(size: 32))
                             .foregroundStyle(.tertiary)
 
-                        Text("Участники появятся после настройки iCloud")
-                            .font(.subheadline)
-                            .foregroundStyle(.secondary)
-                            .multilineTextAlignment(.center)
+                        VStack(spacing: 4) {
+                            Text("Пока никто не приглашён")
+                                .font(.subheadline)
+                                .foregroundStyle(.secondary)
+                            Text("Поделитесь списком по QR-коду или ссылке")
+                                .font(.caption)
+                                .foregroundStyle(.tertiary)
+                        }
+                        .multilineTextAlignment(.center)
                     }
                     .frame(maxWidth: .infinity)
                     .padding(.vertical, 24)

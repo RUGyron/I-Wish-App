@@ -5,7 +5,9 @@ import UserNotifications
 struct SettingsView: View {
     @Environment(\.modelContext) private var context
     @Environment(\.dismiss) private var dismiss
+    @Environment(\.appServices) private var services
     @Query private var settingsList: [AppSettings]
+    @State private var showingRevokeAlert = false
 
     private var settings: AppSettings {
         settingsList.first ?? AppSettings.loadOrCreate(in: context)
@@ -16,9 +18,20 @@ struct SettingsView: View {
             appearanceSection
             wishesSection
             invitesSection
+            privacySection
             aboutSection
         }
         .warmBackground()
+        .alert("Отключить отображение имени?", isPresented: $showingRevokeAlert) {
+            Button("Отмена", role: .cancel) { }
+            Button("Открыть Настройки iOS") {
+                if let url = URL(string: UIApplication.openSettingsURLString) {
+                    UIApplication.shared.open(url)
+                }
+            }
+        } message: {
+            Text("Apple не позволяет приложениям менять это разрешение. Откройте Настройки iOS \u{2192} Apple ID \u{2192} iCloud \u{2192} Настройки приложений, чтобы отключить.")
+        }
         .safeAreaInset(edge: .bottom) {
             Text("Версия \(appVersion)")
                 .font(.caption)
@@ -119,10 +132,57 @@ struct SettingsView: View {
         }
     }
 
+    private var privacySection: some View {
+        Section("Приватность") {
+            Toggle(isOn: discoverabilityBinding) {
+                VStack(alignment: .leading, spacing: 2) {
+                    Text("Показывать моё имя")
+                    Text(discoverabilitySubtitle)
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
+            }
+        }
+    }
+
+    private var discoverabilityBinding: Binding<Bool> {
+        Binding(
+            get: { services.userProfile.discoverabilityStatus == .granted },
+            set: { newValue in
+                if newValue {
+                    services.userProfile.requestDiscoverability()
+                } else {
+                    showingRevokeAlert = true
+                }
+            }
+        )
+    }
+
+    private var discoverabilitySubtitle: String {
+        switch services.userProfile.discoverabilityStatus {
+        case .granted: return "Участники общих списков видят ваше имя"
+        case .denied: return "Отключено — участники видят \"Вы\""
+        default: return "Нужно для отображения имени участникам"
+        }
+    }
+
     private var aboutSection: some View {
-        Section {
-            Text("Политика приватности")
-                .foregroundStyle(.secondary)
+        Section("О приложении") {
+            NavigationLink {
+                PrivacyDisclosureView()
+            } label: {
+                Label("Как мы храним данные", systemImage: "lock.shield")
+            }
+            NavigationLink {
+                MarkdownDocView(title: "Политика приватности", resourceName: "privacy")
+            } label: {
+                Label("Политика приватности", systemImage: "doc.text")
+            }
+            NavigationLink {
+                MarkdownDocView(title: "Пользовательское соглашение", resourceName: "terms")
+            } label: {
+                Label("Пользовательское соглашение", systemImage: "doc.plaintext")
+            }
         }
     }
 
