@@ -216,12 +216,12 @@ struct HomeView: View {
         Button {
             showingAddSheet = true
         } label: {
-            Image(systemName: "plus")
-                .font(.title2.weight(.semibold))
-                .foregroundStyle(.white)
-                .frame(width: 56, height: 56)
-                .background(Color.accentColor, in: Circle())
-                .shadow(color: .black.opacity(0.15), radius: 8, y: 4)
+            Label("Новый список", systemImage: "plus")
+                .font(.headline)
+                .padding(.horizontal, 20)
+                .padding(.vertical, 12)
+                .background(.ultraThinMaterial, in: Capsule())
+                .overlay(Capsule().strokeBorder(Theme.titaniumGradient, lineWidth: 0.5))
         }
     }
 }

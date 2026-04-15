@@ -40,7 +40,7 @@ final class SyncStatusService {
 
     private func scheduleSyncTimeout() {
         syncTimeoutTimer?.invalidate()
-        syncTimeoutTimer = Timer.scheduledTimer(withTimeInterval: 10, repeats: false) { [weak self] _ in
+        syncTimeoutTimer = Timer.scheduledTimer(withTimeInterval: 20, repeats: false) { [weak self] _ in
             guard let self, case .syncing = self.state else { return }
             // No event received in 10s — treat as error
             self.state = .error("Нет ответа от iCloud")
@@ -54,8 +54,13 @@ final class SyncStatusService {
     }
 
     /// Force a save on the context to nudge CloudKit into re-syncing.
+    /// Only triggers if currently in error/offline state — otherwise no-op.
     func retry(context: ModelContext) {
-        guard state != .syncing else { return }
+        // No retry if already syncing or already synced successfully
+        switch state {
+        case .syncing, .synced, .idle: return
+        case .error, .offline: break
+        }
         state = .syncing
         try? context.save()
     }

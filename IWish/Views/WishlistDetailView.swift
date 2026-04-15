@@ -45,8 +45,8 @@ struct WishlistDetailView: View {
     @State private var showingDeleteConfirmation = false
     @State private var editingItem: Item?
     @State private var showingEditWishlist = false
-    @State private var showingSortDialog = false
     @State private var scrollOffset: CGFloat = 0
+    @State private var editMode: EditMode = .inactive
     @AppStorage("collapsedTiers") private var collapsedTiersRaw: String = ""
 
     private var collapsedTiers: Set<String> {
@@ -79,8 +79,20 @@ struct WishlistDetailView: View {
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {
             ToolbarItem(placement: .topBarTrailing) {
-                Button {
-                    showingSortDialog = true
+                Menu {
+                    ForEach(SortOption.allCases) { option in
+                        Button {
+                            withAnimation(.easeInOut(duration: 0.35)) {
+                                selectedSort = option
+                            }
+                        } label: {
+                            if selectedSort == option {
+                                Label(option.label, systemImage: "checkmark")
+                            } else {
+                                Label(option.label, systemImage: option.symbolName)
+                            }
+                        }
+                    }
                 } label: {
                     Image(systemName: "arrow.up.arrow.down")
                 }
@@ -92,6 +104,16 @@ struct WishlistDetailView: View {
                         showingEditWishlist = true
                     } label: {
                         Label("Изменить список", systemImage: "pencil")
+                    }
+
+                    if selectedSort == .importance {
+                        Button {
+                            withAnimation {
+                                editMode = editMode.isEditing ? .inactive : .active
+                            }
+                        } label: {
+                            Label(editMode.isEditing ? "Готово" : "Переместить", systemImage: "arrow.up.arrow.down")
+                        }
                     }
 
                     Divider()
@@ -128,22 +150,6 @@ struct WishlistDetailView: View {
                     Image(systemName: "ellipsis.circle")
                 }
             }
-        }
-        .confirmationDialog("Сортировка", isPresented: $showingSortDialog, titleVisibility: .visible) {
-            ForEach(SortOption.allCases) { option in
-                Button {
-                    withAnimation(.easeInOut(duration: 0.35)) {
-                        selectedSort = option
-                    }
-                } label: {
-                    if selectedSort == option {
-                        Text("\u{2713} \(option.label)")
-                    } else {
-                        Text(option.label)
-                    }
-                }
-            }
-            Button("Отмена", role: .cancel) { }
         }
         .sheet(isPresented: $showingAddItem) {
             AddItemSheet(wishlist: wishlist)
@@ -287,6 +293,7 @@ struct WishlistDetailView: View {
                 flatSorted
             }
         }
+        .environment(\.editMode, $editMode)
         .contentMargins(.bottom, 80)
         .warmBackground()
         .safeAreaInset(edge: .top, spacing: 0) {
@@ -476,12 +483,12 @@ struct WishlistDetailView: View {
         Button {
             showingAddItem = true
         } label: {
-            Image(systemName: "plus")
-                .font(.title2.weight(.semibold))
-                .foregroundStyle(.white)
-                .frame(width: 56, height: 56)
-                .background(Color.accentColor, in: Circle())
-                .shadow(color: .black.opacity(0.15), radius: 8, y: 4)
+            Label("Новое желание", systemImage: "plus")
+                .font(.headline)
+                .padding(.horizontal, 20)
+                .padding(.vertical, 12)
+                .background(.ultraThinMaterial, in: Capsule())
+                .overlay(Capsule().strokeBorder(Theme.titaniumGradient, lineWidth: 0.5))
         }
     }
 
