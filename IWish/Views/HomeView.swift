@@ -3,15 +3,25 @@ import SwiftData
 
 struct HomeView: View {
     @Environment(\.modelContext) private var context
+    @Environment(\.appServices) private var services
     @Query(sort: \Wishlist.createdAt, order: .reverse) private var wishlists: [Wishlist]
     @State private var showingAddSheet = false
     @State private var showingSettings = false
     @State private var showingJoin = false
-    @State private var userProfile = UserProfileService()
-    @State private var syncStatus = SyncStatusService()
 
     private var totalItems: Int {
         wishlists.reduce(0) { $0 + ($1.items ?? []).filter { !$0.isArchived }.count }
+    }
+
+    private var showDiscoverabilitySheet: Binding<Bool> {
+        Binding(
+            get: { services.userProfile.discoverabilityStatus == .askingCustom },
+            set: { newValue in
+                if !newValue && services.userProfile.discoverabilityStatus == .askingCustom {
+                    services.userProfile.declineCustomDialog()
+                }
+            }
+        )
     }
 
     var body: some View {
@@ -53,23 +63,31 @@ struct HomeView: View {
             JoinWishlistSheet()
                 .applyTheme()
         }
+        .sheet(isPresented: showDiscoverabilitySheet) {
+            DiscoverabilitySheet(
+                onAllow: { services.userProfile.confirmCustomDialog() },
+                onDeny: { services.userProfile.declineCustomDialog() }
+            )
+            .applyTheme()
+        }
         .onAppear {
-            userProfile.fetchProfile()
+            services.userProfile.requestDiscoverability()
         }
         .onReceive(NotificationCenter.default.publisher(for: .didReceiveShareLink)) { _ in
             showingJoin = true
         }
+        .overlay(alignment: .bottomTrailing) {
+            addButton
+        }
         .overlay(alignment: .bottom) {
-            VStack(spacing: 8) {
-                if syncStatus.state != .idle {
-                    SyncStatusBadge(state: syncStatus.state) {
-                        syncStatus.retry(context: context)
-                    }
-                    .transition(.move(edge: .bottom).combined(with: .opacity))
+            if services.syncStatus.state != .idle {
+                SyncStatusBadge(state: services.syncStatus.state) {
+                    services.syncStatus.retry(context: context)
                 }
-                addButton
+                .transition(.move(edge: .bottom).combined(with: .opacity))
+                .padding(.bottom, 8)
+                .animation(.easeInOut(duration: 0.25), value: services.syncStatus.state != .idle)
             }
-            .animation(.easeInOut(duration: 0.25), value: syncStatus.state != .idle)
         }
     }
 
@@ -77,11 +95,6 @@ struct HomeView: View {
 
     private var emptyState: some View {
         VStack(spacing: 12) {
-            Text(userProfile.userName.map { "Привет, \($0)!" } ?? "Привет!")
-                .font(.title2.weight(.semibold))
-
-            Spacer().frame(height: 20)
-
             Image(systemName: "sparkles")
                 .font(.system(size: 48))
                 .foregroundStyle(.tint)
@@ -112,16 +125,10 @@ struct HomeView: View {
                 }
                 .onDelete(perform: deleteWishlists)
             } header: {
-                VStack(alignment: .leading, spacing: 4) {
-                    Text(userProfile.userName.map { "Привет, \($0)!" } ?? "Привет!")
-                        .font(.subheadline)
-                        .foregroundStyle(.secondary)
-
-                    Text("\(wishlists.count) списков \u{00B7} \(totalItems) желаний")
-                        .font(.subheadline)
-                        .foregroundStyle(.secondary)
-                }
-                .textCase(nil)
+                Text("\(wishlists.count) списков \u{00B7} \(totalItems) желаний")
+                    .font(.subheadline)
+                    .foregroundStyle(.secondary)
+                    .textCase(nil)
             }
         }
         .contentMargins(.bottom, 80)
@@ -174,14 +181,15 @@ struct HomeView: View {
         Button {
             showingAddSheet = true
         } label: {
-            Label("Новый список", systemImage: "plus")
-                .font(.headline)
-                .padding(.horizontal, 20)
-                .padding(.vertical, 12)
-                .background(.ultraThinMaterial, in: Capsule())
-                .overlay(Capsule().strokeBorder(Theme.titaniumGradient, lineWidth: 0.5))
+            Image(systemName: "plus")
+                .font(.title2.weight(.semibold))
+                .foregroundStyle(.white)
+                .frame(width: 56, height: 56)
+                .background(Color.accentColor, in: Circle())
+                .shadow(color: .black.opacity(0.15), radius: 8, y: 4)
         }
-        .padding(.bottom, 16)
+        .padding(.trailing, 20)
+        .padding(.bottom, 24)
     }
 
     // MARK: - Actions
@@ -201,7 +209,7 @@ struct HomeView: View {
         configurations: config
     )
 
-    let wl1 = Wishlist(name: "День рождения", coverEmoji: "🎂")
+    let wl1 = Wishlist(name: "День рождения", coverEmoji: "\u{1F382}")
     let wl2 = Wishlist(name: "Техника")
     container.mainContext.insert(wl1)
     container.mainContext.insert(wl2)

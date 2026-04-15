@@ -35,6 +35,7 @@ private enum SortOption: String, CaseIterable, Identifiable {
 struct WishlistDetailView: View {
     @Environment(\.modelContext) private var context
     @Environment(\.dismiss) private var dismiss
+    @Environment(\.appServices) private var services
     let wishlist: Wishlist
     @State private var showingAddItem = false
     @State private var selectedSort: SortOption = .importance
@@ -43,7 +44,6 @@ struct WishlistDetailView: View {
     @State private var showingParticipants = false
     @State private var showingDeleteConfirmation = false
     @State private var editingItem: Item?
-    @State private var syncStatus = SyncStatusService()
 
     private var activeItems: [Item] {
         (wishlist.items ?? []).filter { !$0.isArchived }
@@ -144,20 +144,21 @@ struct WishlistDetailView: View {
                 dismiss()
             }
         }
+        .overlay(alignment: .bottomTrailing) {
+            addButton
+        }
         .overlay(alignment: .bottom) {
-            VStack(spacing: 8) {
-                if syncStatus.state != .idle {
-                    SyncStatusBadge(state: syncStatus.state) {
-                        syncStatus.retry(context: context)
-                    }
-                    .transition(.move(edge: .bottom).combined(with: .opacity))
+            if services.syncStatus.state != .idle {
+                SyncStatusBadge(state: services.syncStatus.state) {
+                    services.syncStatus.retry(context: context)
                 }
-                addButton
+                .transition(.move(edge: .bottom).combined(with: .opacity))
+                .padding(.bottom, 8)
+                .animation(.easeInOut(duration: 0.25), value: services.syncStatus.state != .idle)
             }
-            .animation(.easeInOut(duration: 0.25), value: syncStatus.state != .idle)
         }
         .overlay {
-            if wishlist.isShared && !syncStatus.hasEverSynced {
+            if wishlist.isShared && !services.syncStatus.hasEverSynced {
                 sharedSyncGate
             }
         }
@@ -181,13 +182,13 @@ struct WishlistDetailView: View {
                     .multilineTextAlignment(.center)
                     .padding(.horizontal, 32)
 
-                if case .error = syncStatus.state {
+                if case .error = services.syncStatus.state {
                     Button("Попробовать снова") {
-                        syncStatus.retry(context: context)
+                        services.syncStatus.retry(context: context)
                     }
                     .buttonStyle(.bordered)
                 }
-                if case .offline = syncStatus.state {
+                if case .offline = services.syncStatus.state {
                     Label("Нет подключения к сети", systemImage: "wifi.slash")
                         .font(.caption)
                         .foregroundStyle(.orange)
@@ -362,14 +363,15 @@ struct WishlistDetailView: View {
         Button {
             showingAddItem = true
         } label: {
-            Label("Новое желание", systemImage: "plus")
-                .font(.headline)
-                .padding(.horizontal, 20)
-                .padding(.vertical, 12)
-                .background(.ultraThinMaterial, in: Capsule())
-                .overlay(Capsule().strokeBorder(Theme.titaniumGradient, lineWidth: 0.5))
+            Image(systemName: "plus")
+                .font(.title2.weight(.semibold))
+                .foregroundStyle(.white)
+                .frame(width: 56, height: 56)
+                .background(Color.accentColor, in: Circle())
+                .shadow(color: .black.opacity(0.15), radius: 8, y: 4)
         }
-        .padding(.bottom, 16)
+        .padding(.trailing, 20)
+        .padding(.bottom, 24)
     }
 
     // MARK: - Helpers
