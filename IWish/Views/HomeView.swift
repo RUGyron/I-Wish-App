@@ -10,8 +10,18 @@ struct HomeView: View {
     @State private var showingJoin = false
     @State private var sharingWishlist: Wishlist?
 
+    // MARK: - Debug
+
+    #if DEBUG
+    @State private var debugListMode = 0 // 0=real, 1=empty, 2=full
+    @State private var debugInserted: [Wishlist] = []
+    #endif
+
     private var activeWishlists: [Wishlist] {
-        wishlists.filter { !($0.isArchived) }
+        #if DEBUG
+        if debugListMode == 1 { return [] }
+        #endif
+        return wishlists.filter { !($0.isArchived) }
     }
 
     private var syncShouldForceShow: Bool {
@@ -49,8 +59,7 @@ struct HomeView: View {
         .toolbar {
             ToolbarItem(placement: .principal) {
                 VStack(spacing: 2) {
-                    Text("Вишлисты")
-                        .font(.headline)
+                    homeNavTitle
                     if syncShouldForceShow || services.syncStatus.hasEverSynced {
                         syncSubtitle
                     }
@@ -106,6 +115,84 @@ struct HomeView: View {
                 .padding(.bottom, 24)
         }
     }
+
+    // MARK: - Debug
+
+    @ViewBuilder
+    private var homeNavTitle: some View {
+        #if DEBUG
+        Text("Вишлисты")
+            .font(.headline)
+            .foregroundStyle(debugListMode == 0 ? Color.primary : debugListMode == 1 ? Color.red : Color.green)
+            .onTapGesture { cycleDebugListMode() }
+        #else
+        Text("Вишлисты").font(.headline)
+        #endif
+    }
+
+    // MARK: - Debug Helpers
+
+    #if DEBUG
+    private func cycleDebugListMode() {
+        switch debugListMode {
+        case 0:
+            debugListMode = 1
+        case 1:
+            insertDebugWishlists()
+            debugListMode = 2
+        default:
+            cleanupDebugWishlists()
+            debugListMode = 0
+        }
+    }
+
+    private func insertDebugWishlists() {
+        let data: [(String, String?, [(String, ItemTier, Double?)])] = [
+            ("🎂 День рождения", "🎂", [
+                ("Наушники Sony WH-1000XM5", .must, 29990),
+                ("Книга «Мастер и Маргарита»", .maybe, 1200),
+                ("Стикеры с котиками", .idea, nil),
+            ]),
+            ("Техника", nil, [
+                ("MacBook Air M4", .must, 89990),
+                ("iPad Pro 13\"", .must, 119990),
+                ("AirPods Pro 2", .maybe, 24990),
+                ("Apple Watch Ultra 2", .idea, 89990),
+            ]),
+            ("Путешествия ✈️", "✈️", [
+                ("Чемодан Samsonite", .must, 25000),
+                ("Адаптер для розеток", .idea, 800),
+            ]),
+            ("Книги", nil, [
+                ("«Дюна» Герберт", .must, 1500),
+                ("«Игра престолов»", .maybe, 2200),
+                ("«Атлант расправил плечи»", .idea, 1800),
+            ]),
+        ]
+        var inserted: [Wishlist] = []
+        for (name, emoji, items) in data {
+            let wl = Wishlist(name: name, coverEmoji: emoji)
+            context.insert(wl)
+            for (idx, (iName, tier, price)) in items.enumerated() {
+                let item = Item(name: iName, tier: tier, price: price)
+                item.wishlist = wl
+                item.sortIndex = Double((idx + 1) * 1000)
+                context.insert(item)
+            }
+            inserted.append(wl)
+        }
+        debugInserted = inserted
+        try? context.save()
+    }
+
+    private func cleanupDebugWishlists() {
+        for wl in debugInserted {
+            context.delete(wl)
+        }
+        debugInserted = []
+        try? context.save()
+    }
+    #endif
 
     // MARK: - Empty State
 

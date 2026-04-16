@@ -70,8 +70,50 @@ struct WishlistDetailView: View {
         }
     }
 
+    // MARK: - Debug
+
+    @ViewBuilder
+    private var detailNavTitle: some View {
+        #if DEBUG
+        Text("Желания")
+            .font(.headline)
+            .foregroundStyle(debugItemMode == 0 ? Color.primary : debugItemMode == 1 ? Color.red : Color.green)
+            .onTapGesture { debugItemMode = (debugItemMode + 1) % 3 }
+        #else
+        Text("Желания").font(.headline)
+        #endif
+    }
+
+    #if DEBUG
+    @State private var debugItemMode = 0 // 0=real, 1=empty, 2=full
+
+    private var debugMockItems: [Item] {
+        let items: [(String, ItemTier, Double?, String?)] = [
+            ("Наушники Sony WH-1000XM5", .must, 29990, "https://wildberries.ru"),
+            ("MacBook Air M4", .must, 89990, nil),
+            ("Кроссовки Nike Air Max 2024", .must, 15990, "https://nike.com"),
+            ("Книга «Дюна» Фрэнк Герберт", .maybe, 1500, "https://ozon.ru"),
+            ("Настольная игра «Каркассон»", .maybe, 3500, nil),
+            ("Стикеры с котиками", .idea, nil, nil),
+            ("Подписка Apple Arcade", .idea, 219, nil),
+        ]
+        return items.enumerated().map { idx, tuple in
+            let item = Item(name: tuple.0, tier: tuple.1, price: tuple.2, url: tuple.3)
+            item.sortIndex = Double((idx + 1) * 1000)
+            return item
+        }
+    }
+    #endif
+
     private var activeItems: [Item] {
-        (wishlist.items ?? []).filter { !$0.isArchived }
+        #if DEBUG
+        switch debugItemMode {
+        case 1: return []
+        case 2: return debugMockItems
+        default: break
+        }
+        #endif
+        return (wishlist.items ?? []).filter { !$0.isArchived }
     }
 
     var body: some View {
@@ -87,8 +129,7 @@ struct WishlistDetailView: View {
         .toolbar {
             ToolbarItem(placement: .principal) {
                 VStack(spacing: 2) {
-                    Text("Желания")
-                        .font(.headline)
+                    detailNavTitle
                     if syncShouldForceShow || services.syncStatus.hasEverSynced {
                         syncSubtitle
                     }
@@ -269,35 +310,55 @@ struct WishlistDetailView: View {
     // MARK: - Collapsible Header
 
     private var collapsibleHeader: some View {
-        let progress = min(1, max(0, scrollOffset / 100))
+        let progress = min(1.0, max(0.0, scrollOffset / 72))
+        let coverSize: CGFloat = 60 - 28 * progress          // 60 → 32
+        let fontSize: CGFloat = 22 - 5 * progress            // 22 → 17
+        let vertPad: CGFloat = 10 - 4 * progress             // 10 → 6
+        let subtitleOpacity: Double = max(0, 1 - progress * 2.5)
 
-        return HStack(spacing: 16) {
+        return HStack(spacing: 12) {
             DefaultCoverView(
                 id: wishlist.id,
                 imageData: wishlist.coverImageData,
                 emoji: wishlist.coverEmoji
             )
-            .frame(
-                width: 72 - progress * 36,
-                height: 72 - progress * 36
-            )
+            .frame(width: coverSize, height: coverSize)
+            .clipShape(RoundedRectangle(cornerRadius: coverSize * 0.22, style: .continuous))
 
-            VStack(alignment: .leading, spacing: 4) {
+            VStack(alignment: .leading, spacing: 2) {
                 Text(wishlist.name)
-                    .font(progress > 0.5 ? .headline : .title2.weight(.semibold))
-                    .lineLimit(2)
-                    .animation(.easeInOut, value: progress > 0.5)
-                Text(String(format: NSLocalizedString("%lld желаний", comment: ""), activeItems.count))
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-                    .opacity(1 - progress)
+                    .font(.system(size: fontSize, weight: .semibold))
+                    .lineLimit(1)
+
+                if subtitleOpacity > 0 {
+                    Text(String(format: NSLocalizedString("%lld желаний", comment: ""), activeItems.count))
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                        .opacity(subtitleOpacity)
+                }
             }
+
             Spacer()
         }
         .padding(.horizontal, 16)
-        .padding(.vertical, 8)
-        .background(.regularMaterial)
-        .animation(.easeInOut(duration: 0.2), value: progress)
+        .padding(.vertical, vertPad)
+        .background {
+            ZStack {
+                Theme.background
+                    .opacity(1 - progress)
+                Rectangle()
+                    .fill(.ultraThinMaterial)
+                    .opacity(progress)
+            }
+            .ignoresSafeArea()
+        }
+        .overlay(alignment: .bottom) {
+            Rectangle()
+                .fill(.separator)
+                .frame(height: 0.5)
+                .opacity(progress)
+        }
+        .animation(.easeOut(duration: 0.15), value: progress)
     }
 
     // MARK: - Item List
