@@ -86,9 +86,8 @@ struct WishlistDetailView: View {
 
     #if DEBUG
     @State private var debugItemMode = 0 // 0=real, 1=empty, 2=full
-
-    private var debugMockItems: [Item] {
-        let items: [(String, ItemTier, Double?, String?)] = [
+    @State private var debugMockItems: [Item] = {
+        let data: [(String, ItemTier, Double?, String?)] = [
             ("Наушники Sony WH-1000XM5", .must, 29990, "https://wildberries.ru"),
             ("MacBook Air M4", .must, 89990, nil),
             ("Кроссовки Nike Air Max 2024", .must, 15990, "https://nike.com"),
@@ -97,12 +96,12 @@ struct WishlistDetailView: View {
             ("Стикеры с котиками", .idea, nil, nil),
             ("Подписка Apple Arcade", .idea, 219, nil),
         ]
-        return items.enumerated().map { idx, tuple in
+        return data.enumerated().map { idx, tuple in
             let item = Item(name: tuple.0, tier: tuple.1, price: tuple.2, url: tuple.3)
             item.sortIndex = Double((idx + 1) * 1000)
             return item
         }
-    }
+    }()
     #endif
 
     private var activeItems: [Item] {
