@@ -74,13 +74,18 @@ struct WishlistDetailView: View {
 
     @ViewBuilder
     private var detailNavTitle: some View {
+        let scrolledAway = scrollOffset > 64
+        let title = scrolledAway ? wishlist.name : "Желания"
         #if DEBUG
-        Text("Желания")
+        Text(title)
             .font(.headline)
             .foregroundStyle(debugItemMode == 0 ? Color.primary : debugItemMode == 1 ? Color.red : Color.green)
             .onTapGesture { debugItemMode = (debugItemMode + 1) % 3 }
+            .animation(.easeInOut(duration: 0.2), value: scrolledAway)
         #else
-        Text("Желания").font(.headline)
+        Text(title)
+            .font(.headline)
+            .animation(.easeInOut(duration: 0.2), value: scrolledAway)
         #endif
     }
 
@@ -309,55 +314,32 @@ struct WishlistDetailView: View {
     // MARK: - Collapsible Header
 
     private var collapsibleHeader: some View {
-        let progress = min(1.0, max(0.0, scrollOffset / 72))
-        let coverSize: CGFloat = 60 - 28 * progress          // 60 → 32
-        let fontSize: CGFloat = 22 - 5 * progress            // 22 → 17
-        let vertPad: CGFloat = 10 - 4 * progress             // 10 → 6
-        let subtitleOpacity: Double = max(0, 1 - progress * 2.5)
+        let opacity = max(0.0, 1.0 - scrollOffset / 72)
 
-        return HStack(spacing: 12) {
+        return HStack(spacing: 14) {
             DefaultCoverView(
                 id: wishlist.id,
                 imageData: wishlist.coverImageData,
                 emoji: wishlist.coverEmoji
             )
-            .frame(width: coverSize, height: coverSize)
-            .clipShape(RoundedRectangle(cornerRadius: coverSize * 0.22, style: .continuous))
+            .frame(width: 64, height: 64)
 
-            VStack(alignment: .leading, spacing: 2) {
+            VStack(alignment: .leading, spacing: 3) {
                 Text(wishlist.name)
-                    .font(.system(size: fontSize, weight: .semibold))
-                    .lineLimit(1)
-
-                if subtitleOpacity > 0 {
-                    Text(String(format: NSLocalizedString("%lld желаний", comment: ""), activeItems.count))
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                        .opacity(subtitleOpacity)
-                }
+                    .font(.title2.weight(.semibold))
+                    .lineLimit(2)
+                Text(String(format: NSLocalizedString("%lld желаний", comment: ""), activeItems.count))
+                    .font(.subheadline)
+                    .foregroundStyle(.secondary)
             }
-
             Spacer()
         }
         .padding(.horizontal, 16)
-        .padding(.vertical, vertPad)
-        .background {
-            ZStack {
-                Theme.background
-                    .opacity(1 - progress)
-                Rectangle()
-                    .fill(.ultraThinMaterial)
-                    .opacity(progress)
-            }
-            .ignoresSafeArea()
-        }
-        .overlay(alignment: .bottom) {
-            Rectangle()
-                .fill(.separator)
-                .frame(height: 0.5)
-                .opacity(progress)
-        }
-        .animation(.easeOut(duration: 0.15), value: progress)
+        .padding(.vertical, 12)
+        .background(Theme.background)
+        .opacity(opacity)
+        .frame(height: opacity < 0.01 ? 0 : nil)
+        .clipped()
     }
 
     // MARK: - Item List
