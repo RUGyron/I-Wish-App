@@ -111,7 +111,7 @@ struct WishlistDetailView: View {
             }
         }
         .navigationTitle(wishlist.name)
-        .navigationBarTitleDisplayMode(.large)
+        .navigationBarTitleDisplayMode(.inline)
         .toolbar {
             ToolbarItem(placement: .topBarTrailing) {
                 Menu {
@@ -297,33 +297,39 @@ struct WishlistDetailView: View {
             }
         }
         .environment(\.editMode, $editMode)
-        .defaultScrollAnchor(.top)
         .contentMargins(.bottom, 80)
         .warmBackground()
         .animation(.easeInOut, value: activeItems.map(\.id))
     }
 
     private var coverRow: some View {
-        HStack(spacing: 14) {
-            DefaultCoverView(
-                id: wishlist.id,
-                imageData: wishlist.coverImageData,
-                emoji: wishlist.coverEmoji
-            )
-            .frame(width: 64, height: 64)
-            #if DEBUG
-            .onTapGesture { debugItemMode = (debugItemMode + 1) % 3 }
-            .overlay(alignment: .topTrailing) {
-                if debugItemMode != 0 {
-                    Circle()
-                        .fill(debugItemMode == 1 ? Color.red : Color.green)
-                        .frame(width: 10, height: 10)
-                        .offset(x: 2, y: -2)
+        VStack(alignment: .leading, spacing: 10) {
+            HStack(alignment: .bottom, spacing: 14) {
+                DefaultCoverView(
+                    id: wishlist.id,
+                    imageData: wishlist.coverImageData,
+                    emoji: wishlist.coverEmoji
+                )
+                .frame(width: 72, height: 72)
+                #if DEBUG
+                .onTapGesture { debugItemMode = (debugItemMode + 1) % 3 }
+                .overlay(alignment: .topTrailing) {
+                    if debugItemMode != 0 {
+                        Circle()
+                            .fill(debugItemMode == 1 ? Color.red : Color.green)
+                            .frame(width: 10, height: 10)
+                            .offset(x: 2, y: -2)
+                    }
                 }
+                #endif
+                Spacer()
             }
-            #endif
 
-            VStack(alignment: .leading, spacing: 3) {
+            Text(wishlist.name)
+                .font(.largeTitle.weight(.bold))
+                .lineLimit(3)
+
+            HStack(spacing: 6) {
                 Text(String(format: NSLocalizedString("%lld желаний", comment: ""), activeItems.count))
                     .font(.subheadline)
                     .foregroundStyle(.secondary)
@@ -331,9 +337,8 @@ struct WishlistDetailView: View {
                     syncSubtitleInline
                 }
             }
-            Spacer()
         }
-        .padding(.vertical, 4)
+        .padding(.vertical, 8)
         .listRowBackground(Color.clear)
         .listRowSeparator(.hidden)
     }
