@@ -46,6 +46,15 @@ struct HomeView: View {
         .navigationTitle("Вишлисты")
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {
+            ToolbarItem(placement: .principal) {
+                VStack(spacing: 2) {
+                    Text("Вишлисты")
+                        .font(.headline)
+                    if syncShouldForceShow || services.syncStatus.hasEverSynced {
+                        syncSubtitle
+                    }
+                }
+            }
             ToolbarItem(placement: .topBarLeading) {
                 Button {
                     showingJoin = true
@@ -118,14 +127,6 @@ struct HomeView: View {
     private var wishlistList: some View {
         List {
             Section {
-                syncBadgeRow
-                    .listRowBackground(Color.clear)
-                    .listRowInsets(EdgeInsets())
-                    .listRowSeparator(.hidden)
-            }
-            .listSectionSeparator(.hidden)
-
-            Section {
                 ForEach(activeWishlists) { wishlist in
                     NavigationLink {
                         WishlistDetailView(wishlist: wishlist)
@@ -165,7 +166,6 @@ struct HomeView: View {
             }
         }
         .contentMargins(.bottom, 80)
-        .contentMargins(.top, -50)
         .warmBackground()
     }
 
@@ -206,6 +206,55 @@ struct HomeView: View {
                 Text(tier.emoji)
                 Text("\(count)")
             }
+        }
+    }
+
+    // MARK: - Sync Subtitle (in navbar)
+
+    @ViewBuilder
+    private var syncSubtitle: some View {
+        let state = services.syncStatus.state
+        let isError: Bool = {
+            switch state {
+            case .error, .offline: return true
+            default: return false
+            }
+        }()
+
+        HStack(spacing: 3) {
+            Image(systemName: syncIcon)
+                .font(.system(size: 9))
+            Text(syncLabel)
+                .font(.system(size: 10))
+        }
+        .foregroundStyle(isError ? .orange : .secondary)
+        .onTapGesture {
+            if isError {
+                services.syncStatus.retry(context: context)
+            }
+        }
+    }
+
+    private var syncIcon: String {
+        switch services.syncStatus.state {
+        case .idle: return "icloud"
+        case .syncing: return "arrow.triangle.2.circlepath"
+        case .synced: return "checkmark.icloud"
+        case .offline: return "icloud.slash"
+        case .error: return "exclamationmark.icloud"
+        }
+    }
+
+    private var syncLabel: String {
+        switch services.syncStatus.state {
+        case .idle: return "iCloud"
+        case .syncing: return "Синхронизация..."
+        case .synced(let date):
+            let fmt = RelativeDateTimeFormatter()
+            fmt.unitsStyle = .short
+            return fmt.localizedString(for: date, relativeTo: .now)
+        case .offline: return "Нет сети"
+        case .error: return "Ошибка"
         }
     }
 
