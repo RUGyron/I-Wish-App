@@ -365,13 +365,6 @@ struct WishlistDetailView: View {
 
     private var itemList: some View {
         List {
-            Section {
-                syncBadgeRow
-                    .listRowBackground(Color.clear)
-                    .listRowInsets(EdgeInsets())
-                    .listRowSeparator(.hidden)
-            }
-
             if selectedSort == .importance {
                 groupedByTier
             } else {
