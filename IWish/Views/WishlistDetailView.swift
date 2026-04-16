@@ -46,6 +46,7 @@ struct WishlistDetailView: View {
     @State private var editingItem: Item?
     @State private var showingEditWishlist = false
     @State private var editMode: EditMode = .inactive
+    @State private var listScrollPosition = ScrollPosition(edge: .top)
     @AppStorage("collapsedTiers") private var collapsedTiersRaw: String = ""
 
     private var collapsedTiers: Set<String> {
@@ -288,26 +289,19 @@ struct WishlistDetailView: View {
     // MARK: - Item List
 
     private var itemList: some View {
-        ScrollViewReader { proxy in
-            List {
-                coverRow
-                    .id("top")
-                if selectedSort == .importance {
-                    groupedByTier
-                } else {
-                    flatSorted
-                }
-            }
-            .environment(\.editMode, $editMode)
-            .contentMargins(.bottom, 80)
-            .warmBackground()
-            .animation(.easeInOut, value: activeItems.map(\.id))
-            .onAppear {
-                DispatchQueue.main.async {
-                    proxy.scrollTo("top", anchor: .top)
-                }
+        List {
+            coverRow
+            if selectedSort == .importance {
+                groupedByTier
+            } else {
+                flatSorted
             }
         }
+        .environment(\.editMode, $editMode)
+        .scrollPosition($listScrollPosition)
+        .contentMargins(.bottom, 80)
+        .warmBackground()
+        .animation(.easeInOut, value: activeItems.map(\.id))
     }
 
     private var coverRow: some View {
