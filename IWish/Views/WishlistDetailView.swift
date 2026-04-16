@@ -294,6 +294,13 @@ struct WishlistDetailView: View {
 
     private var itemList: some View {
         List {
+            Section {
+                syncBadgeRow
+                    .listRowBackground(Color.clear)
+                    .listRowInsets(EdgeInsets())
+                    .listRowSeparator(.hidden)
+            }
+
             if selectedSort == .importance {
                 groupedByTier
             } else {
@@ -304,16 +311,7 @@ struct WishlistDetailView: View {
         .contentMargins(.bottom, 80)
         .warmBackground()
         .safeAreaInset(edge: .top, spacing: 0) {
-            VStack(spacing: 0) {
-                SyncStatusPullHeader(
-                    state: services.syncStatus.state,
-                    pullOffset: max(0, -scrollOffset),
-                    isPermissionDenied: services.userProfile.discoverabilityStatus == .denied
-                ) {
-                    services.syncStatus.retry(context: context)
-                }
-                collapsibleHeader
-            }
+            collapsibleHeader
         }
         .onScrollGeometryChange(for: CGFloat.self) { geo in
             geo.contentOffset.y
@@ -480,6 +478,29 @@ struct WishlistDetailView: View {
                 Text(String(format: NSLocalizedString("%lld дней", comment: ""), days))
             }
         }
+    }
+
+    // MARK: - Sync Badge
+
+    @ViewBuilder
+    private var syncBadgeRow: some View {
+        let denied = services.userProfile.discoverabilityStatus == .denied
+        let isError: Bool = {
+            switch services.syncStatus.state {
+            case .error, .offline: return true
+            default: return false
+            }
+        }()
+
+        HStack {
+            Spacer()
+            SyncStatusBadge(
+                state: denied ? .idle : services.syncStatus.state,
+                onTap: isError ? { services.syncStatus.retry(context: context) } : nil
+            )
+            Spacer()
+        }
+        .padding(.vertical, 4)
     }
 
     // MARK: - FAB

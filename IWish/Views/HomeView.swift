@@ -8,7 +8,6 @@ struct HomeView: View {
     @State private var showingAddSheet = false
     @State private var showingSettings = false
     @State private var showingJoin = false
-    @State private var pullOffset: CGFloat = 0
 
     private var activeWishlists: [Wishlist] {
         wishlists.filter { !($0.isArchived) }
@@ -118,6 +117,14 @@ struct HomeView: View {
 
     private var wishlistList: some View {
         List {
+            // Sync badge — scrolls with list, hidden above nav bar
+            Section {
+                syncBadgeRow
+                    .listRowBackground(Color.clear)
+                    .listRowInsets(EdgeInsets())
+                    .listRowSeparator(.hidden)
+            }
+
             Section {
                 ForEach(activeWishlists) { wishlist in
                     NavigationLink {
@@ -159,20 +166,6 @@ struct HomeView: View {
         }
         .contentMargins(.bottom, 80)
         .warmBackground()
-        .safeAreaInset(edge: .top, spacing: 0) {
-            SyncStatusPullHeader(
-                state: services.syncStatus.state,
-                pullOffset: pullOffset,
-                isPermissionDenied: services.userProfile.discoverabilityStatus == .denied
-            ) {
-                services.syncStatus.retry(context: context)
-            }
-        }
-        .onScrollGeometryChange(for: CGFloat.self) { geo in
-            geo.contentOffset.y
-        } action: { _, newValue in
-            pullOffset = max(0, -newValue)
-        }
     }
 
     private func wishlistRow(_ wishlist: Wishlist) -> some View {
@@ -213,6 +206,29 @@ struct HomeView: View {
                 Text("\(count)")
             }
         }
+    }
+
+    // MARK: - Sync Badge (scrolls with list)
+
+    @ViewBuilder
+    private var syncBadgeRow: some View {
+        let denied = services.userProfile.discoverabilityStatus == .denied
+        let isError: Bool = {
+            switch services.syncStatus.state {
+            case .error, .offline: return true
+            default: return false
+            }
+        }()
+
+        HStack {
+            Spacer()
+            SyncStatusBadge(
+                state: denied ? .idle : services.syncStatus.state,
+                onTap: isError ? { services.syncStatus.retry(context: context) } : nil
+            )
+            Spacer()
+        }
+        .padding(.vertical, 4)
     }
 
     // MARK: - FAB
