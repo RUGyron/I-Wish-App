@@ -85,6 +85,16 @@ struct WishlistDetailView: View {
         .navigationTitle("Желания")
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {
+            ToolbarItem(placement: .principal) {
+                VStack(spacing: 2) {
+                    Text("Желания")
+                        .font(.headline)
+                    if syncShouldForceShow || services.syncStatus.hasEverSynced {
+                        syncSubtitle
+                    }
+                }
+            }
+
             ToolbarItem(placement: .topBarTrailing) {
                 Menu {
                     ForEach(SortOption.allCases) { option in
@@ -477,6 +487,58 @@ struct WishlistDetailView: View {
                 Image(systemName: "clock")
                 Text(String(format: NSLocalizedString("%lld дней", comment: ""), days))
             }
+        }
+    }
+
+    // MARK: - Sync Subtitle (navbar)
+
+    @ViewBuilder
+    private var syncSubtitle: some View {
+        let state = services.syncStatus.state
+        let isError: Bool = {
+            switch state {
+            case .error, .offline: return true
+            default: return false
+            }
+        }()
+
+        HStack(spacing: 3) {
+            Image(systemName: syncIcon)
+                .font(.system(size: 9))
+            Text(syncLabel)
+                .font(.system(size: 10))
+        }
+        .foregroundStyle(isError ? .orange : .secondary)
+        .onTapGesture {
+            if isError {
+                services.syncStatus.retry(context: context)
+            }
+        }
+    }
+
+    private var syncIcon: String {
+        switch services.syncStatus.state {
+        case .idle: return "icloud"
+        case .syncing: return "arrow.triangle.2.circlepath"
+        case .synced: return "checkmark.icloud"
+        case .offline: return "icloud.slash"
+        case .error: return "exclamationmark.icloud"
+        }
+    }
+
+    private var syncLabel: String {
+        switch services.syncStatus.state {
+        case .idle: return "iCloud"
+        case .syncing: return "Синхронизация..."
+        case .synced(let date):
+            if Date.now.timeIntervalSince(date) < 10 {
+                return "Только что"
+            }
+            let fmt = RelativeDateTimeFormatter()
+            fmt.unitsStyle = .short
+            return fmt.localizedString(for: date, relativeTo: .now)
+        case .offline: return "Нет сети"
+        case .error: return "Ошибка"
         }
     }
 
