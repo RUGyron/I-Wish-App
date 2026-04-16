@@ -8,7 +8,6 @@ struct HomeView: View {
     @State private var showingAddSheet = false
     @State private var showingSettings = false
     @State private var showingJoin = false
-    @State private var listTopY: CGFloat = 0
 
     private var activeWishlists: [Wishlist] {
         wishlists.filter { !($0.isArchived) }
@@ -119,17 +118,14 @@ struct HomeView: View {
     private var wishlistList: some View {
         List {
             Section {
-                // Invisible tracker for pull-down detection
-                GeometryReader { geo in
-                    Color.clear.preference(
-                        key: ListTopKey.self,
-                        value: geo.frame(in: .global).minY
-                    )
-                }
-                .frame(height: 0)
-                .listRowInsets(EdgeInsets())
-                .listRowSeparator(.hidden)
+                syncBadgeRow
+                    .listRowBackground(Color.clear)
+                    .listRowInsets(EdgeInsets())
+                    .listRowSeparator(.hidden)
+            }
+            .listSectionSeparator(.hidden)
 
+            Section {
                 ForEach(activeWishlists) { wishlist in
                     NavigationLink {
                         WishlistDetailView(wishlist: wishlist)
@@ -169,31 +165,8 @@ struct HomeView: View {
             }
         }
         .contentMargins(.bottom, 80)
+        .contentMargins(.top, -50)
         .warmBackground()
-        .overlay(alignment: .top) {
-            let isError: Bool = {
-                switch services.syncStatus.state {
-                case .error, .offline: return true
-                default: return false
-                }
-            }()
-            let pullAmount = max(0, listTopY - navBarBottomY)
-            let show = isError || pullAmount > 10
-
-            if show {
-                let scale = isError ? 1.0 : min(1.0, pullAmount / 50)
-                SyncStatusBadge(
-                    state: services.syncStatus.state,
-                    onTap: isError ? { services.syncStatus.retry(context: context) } : nil
-                )
-                .scaleEffect(scale)
-                .opacity(scale)
-                .padding(.top, 4)
-            }
-        }
-        .onPreferenceChange(ListTopKey.self) { value in
-            listTopY = value
-        }
     }
 
     private func wishlistRow(_ wishlist: Wishlist) -> some View {
@@ -235,9 +208,6 @@ struct HomeView: View {
             }
         }
     }
-
-    // Approximate Y of navbar bottom for pull detection
-    private let navBarBottomY: CGFloat = 100
 
     // MARK: - Sync Badge (scrolls with list)
 
@@ -313,11 +283,3 @@ struct HomeView: View {
     .modelContainer(container)
 }
 
-// MARK: - Preference Key for scroll tracking
-
-private struct ListTopKey: PreferenceKey {
-    static var defaultValue: CGFloat = 0
-    static func reduce(value: inout CGFloat, nextValue: () -> CGFloat) {
-        value = nextValue()
-    }
-}
