@@ -110,23 +110,9 @@ struct WishlistDetailView: View {
                 itemList
             }
         }
-        .navigationTitle(wishlist.name)
+        .navigationTitle("")
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {
-            #if DEBUG
-            ToolbarItem(placement: .principal) {
-                Button { debugItemMode = (debugItemMode + 1) % 3 } label: {
-                    Text(wishlist.name)
-                        .font(.headline)
-                        .foregroundStyle(
-                            debugItemMode == 0 ? Color.primary
-                            : debugItemMode == 1 ? Color.red
-                            : Color.green
-                        )
-                }
-            }
-            #endif
-
             ToolbarItem(placement: .topBarTrailing) {
                 Menu {
                     ForEach(SortOption.allCases) { option in
@@ -296,6 +282,9 @@ struct WishlistDetailView: View {
         .padding(.bottom, 60)
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .background(Theme.background)
+        .safeAreaInset(edge: .top, spacing: 0) {
+            wishlistHeader
+        }
     }
 
 
@@ -303,7 +292,6 @@ struct WishlistDetailView: View {
 
     private var itemList: some View {
         List {
-            coverRow
             if selectedSort == .importance {
                 groupedByTier
             } else {
@@ -313,48 +301,57 @@ struct WishlistDetailView: View {
         .environment(\.editMode, $editMode)
         .contentMargins(.bottom, 80)
         .warmBackground()
+        .safeAreaInset(edge: .top, spacing: 0) {
+            wishlistHeader
+        }
         .animation(.easeInOut, value: activeItems.map(\.id))
     }
 
-    private var coverRow: some View {
-        VStack(alignment: .leading, spacing: 10) {
-            HStack(alignment: .bottom, spacing: 14) {
-                DefaultCoverView(
-                    id: wishlist.id,
-                    imageData: wishlist.coverImageData,
-                    emoji: wishlist.coverEmoji
-                )
-                .frame(width: 72, height: 72)
-                #if DEBUG
-                .onTapGesture { debugItemMode = (debugItemMode + 1) % 3 }
-                .overlay(alignment: .topTrailing) {
-                    if debugItemMode != 0 {
-                        Circle()
-                            .fill(debugItemMode == 1 ? Color.red : Color.green)
-                            .frame(width: 10, height: 10)
-                            .offset(x: 2, y: -2)
+    // MARK: - Wishlist Header (static, attached to navbar)
+
+    private var wishlistHeader: some View {
+        HStack(spacing: 14) {
+            DefaultCoverView(
+                id: wishlist.id,
+                imageData: wishlist.coverImageData,
+                emoji: wishlist.coverEmoji
+            )
+            .frame(width: 56, height: 56)
+            #if DEBUG
+            .onTapGesture { debugItemMode = (debugItemMode + 1) % 3 }
+            .overlay(alignment: .topTrailing) {
+                if debugItemMode != 0 {
+                    Circle()
+                        .fill(debugItemMode == 1 ? Color.red : Color.green)
+                        .frame(width: 10, height: 10)
+                        .offset(x: 3, y: -3)
+                }
+            }
+            #endif
+
+            VStack(alignment: .leading, spacing: 2) {
+                Text(wishlist.name)
+                    .font(.title3.weight(.semibold))
+                    .lineLimit(2)
+                HStack(spacing: 6) {
+                    Text(String(format: NSLocalizedString("%lld желаний", comment: ""), activeItems.count))
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                    if syncShouldForceShow || services.syncStatus.hasEverSynced {
+                        syncSubtitleInline
                     }
                 }
-                #endif
-                Spacer()
             }
-
-            Text(wishlist.name)
-                .font(.largeTitle.weight(.bold))
-                .lineLimit(3)
-
-            HStack(spacing: 6) {
-                Text(String(format: NSLocalizedString("%lld желаний", comment: ""), activeItems.count))
-                    .font(.subheadline)
-                    .foregroundStyle(.secondary)
-                if syncShouldForceShow || services.syncStatus.hasEverSynced {
-                    syncSubtitleInline
-                }
-            }
+            Spacer()
         }
-        .padding(.vertical, 8)
-        .listRowBackground(Color.clear)
-        .listRowSeparator(.hidden)
+        .padding(.horizontal, 16)
+        .padding(.vertical, 10)
+        .background(.bar)                              // матчит стиль навбара
+        .overlay(alignment: .bottom) {
+            Rectangle()
+                .fill(.separator)
+                .frame(height: 0.5)
+        }
     }
 
     // MARK: - Grouped by Tier
