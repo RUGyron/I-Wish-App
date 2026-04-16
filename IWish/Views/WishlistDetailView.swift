@@ -297,6 +297,7 @@ struct WishlistDetailView: View {
             }
         }
         .environment(\.editMode, $editMode)
+        .defaultScrollAnchor(.top)
         .contentMargins(.bottom, 80)
         .warmBackground()
         .animation(.easeInOut, value: activeItems.map(\.id))
