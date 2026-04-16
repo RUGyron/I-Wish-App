@@ -45,8 +45,6 @@ struct WishlistDetailView: View {
     @State private var showingDeleteConfirmation = false
     @State private var editingItem: Item?
     @State private var showingEditWishlist = false
-    @State private var scrollOffset: CGFloat = 0
-    @State private var isHeaderCollapsed = false
     @State private var editMode: EditMode = .inactive
     @AppStorage("collapsedTiers") private var collapsedTiersRaw: String = ""
 
@@ -72,22 +70,6 @@ struct WishlistDetailView: View {
     }
 
     // MARK: - Debug
-
-    @ViewBuilder
-    private var detailNavTitle: some View {
-        let title = isHeaderCollapsed ? wishlist.name : "Желания"
-        #if DEBUG
-        Text(title)
-            .font(.headline)
-            .foregroundStyle(debugItemMode == 0 ? Color.primary : debugItemMode == 1 ? Color.red : Color.green)
-            .onTapGesture { debugItemMode = (debugItemMode + 1) % 3 }
-            .animation(.easeInOut(duration: 0.2), value: isHeaderCollapsed)
-        #else
-        Text(title)
-            .font(.headline)
-            .animation(.easeInOut(duration: 0.2), value: isHeaderCollapsed)
-        #endif
-    }
 
     #if DEBUG
     @State private var debugItemMode = 0 // 0=real, 1=empty, 2=full
@@ -128,18 +110,9 @@ struct WishlistDetailView: View {
                 itemList
             }
         }
-        .navigationTitle("Желания")
-        .navigationBarTitleDisplayMode(.inline)
+        .navigationTitle(wishlist.name)
+        .navigationBarTitleDisplayMode(.large)
         .toolbar {
-            ToolbarItem(placement: .principal) {
-                VStack(spacing: 2) {
-                    detailNavTitle
-                    if syncShouldForceShow || services.syncStatus.hasEverSynced {
-                        syncSubtitle
-                    }
-                }
-            }
-
             ToolbarItem(placement: .topBarTrailing) {
                 Menu {
                     ForEach(SortOption.allCases) { option in
@@ -311,38 +284,12 @@ struct WishlistDetailView: View {
         .background(Theme.background)
     }
 
-    // MARK: - Collapsible Header
-
-    private var collapsibleHeader: some View {
-        HStack(spacing: 14) {
-            DefaultCoverView(
-                id: wishlist.id,
-                imageData: wishlist.coverImageData,
-                emoji: wishlist.coverEmoji
-            )
-            .frame(width: 64, height: 64)
-
-            VStack(alignment: .leading, spacing: 3) {
-                Text(wishlist.name)
-                    .font(.title2.weight(.semibold))
-                    .lineLimit(2)
-                Text(String(format: NSLocalizedString("%lld желаний", comment: ""), activeItems.count))
-                    .font(.subheadline)
-                    .foregroundStyle(.secondary)
-            }
-            Spacer()
-        }
-        .padding(.horizontal, 16)
-        .padding(.vertical, 12)
-        .frame(height: isHeaderCollapsed ? 0 : 88)  // snap: только A или B
-        .clipped()
-        .background(Theme.background)
-    }
 
     // MARK: - Item List
 
     private var itemList: some View {
         List {
+            coverRow
             if selectedSort == .importance {
                 groupedByTier
             } else {
@@ -352,25 +299,42 @@ struct WishlistDetailView: View {
         .environment(\.editMode, $editMode)
         .contentMargins(.bottom, 80)
         .warmBackground()
-        .safeAreaInset(edge: .top, spacing: 0) {
-            collapsibleHeader
-        }
-        .onScrollGeometryChange(for: CGFloat.self) { geo in
-            geo.contentOffset.y
-        } action: { _, newValue in
-            scrollOffset = newValue
-            // Гистерезис: вниз → коллапс на 60, вверх → раскрытие на 30
-            if !isHeaderCollapsed && newValue > 60 {
-                withAnimation(.spring(response: 0.3, dampingFraction: 0.85)) {
-                    isHeaderCollapsed = true
-                }
-            } else if isHeaderCollapsed && newValue < 30 {
-                withAnimation(.spring(response: 0.3, dampingFraction: 0.85)) {
-                    isHeaderCollapsed = false
+        .animation(.easeInOut, value: activeItems.map(\.id))
+    }
+
+    private var coverRow: some View {
+        HStack(spacing: 14) {
+            DefaultCoverView(
+                id: wishlist.id,
+                imageData: wishlist.coverImageData,
+                emoji: wishlist.coverEmoji
+            )
+            .frame(width: 64, height: 64)
+            #if DEBUG
+            .onTapGesture { debugItemMode = (debugItemMode + 1) % 3 }
+            .overlay(alignment: .topTrailing) {
+                if debugItemMode != 0 {
+                    Circle()
+                        .fill(debugItemMode == 1 ? Color.red : Color.green)
+                        .frame(width: 10, height: 10)
+                        .offset(x: 2, y: -2)
                 }
             }
+            #endif
+
+            VStack(alignment: .leading, spacing: 3) {
+                Text(String(format: NSLocalizedString("%lld желаний", comment: ""), activeItems.count))
+                    .font(.subheadline)
+                    .foregroundStyle(.secondary)
+                if syncShouldForceShow || services.syncStatus.hasEverSynced {
+                    syncSubtitleInline
+                }
+            }
+            Spacer()
         }
-        .animation(.easeInOut, value: activeItems.map(\.id))
+        .padding(.vertical, 4)
+        .listRowBackground(Color.clear)
+        .listRowSeparator(.hidden)
     }
 
     // MARK: - Grouped by Tier
@@ -530,6 +494,24 @@ struct WishlistDetailView: View {
                 Text(String(format: NSLocalizedString("%lld дней", comment: ""), days))
             }
         }
+    }
+
+    // MARK: - Sync
+
+    @ViewBuilder
+    private var syncSubtitleInline: some View {
+        let state = services.syncStatus.state
+        let isError: Bool = {
+            switch state { case .error, .offline: return true; default: return false }
+        }()
+        HStack(spacing: 3) {
+            Image(systemName: syncIcon)
+                .font(.system(size: 9))
+            Text(syncLabel)
+                .font(.caption2)
+        }
+        .foregroundStyle(isError ? AnyShapeStyle(.orange) : AnyShapeStyle(.tertiary))
+        .onTapGesture { if isError { services.syncStatus.retry(context: context) } }
     }
 
     // MARK: - Sync Subtitle (navbar)
