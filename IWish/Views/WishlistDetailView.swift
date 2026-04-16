@@ -113,6 +113,20 @@ struct WishlistDetailView: View {
         .navigationTitle(wishlist.name)
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {
+            #if DEBUG
+            ToolbarItem(placement: .principal) {
+                Button { debugItemMode = (debugItemMode + 1) % 3 } label: {
+                    Text(wishlist.name)
+                        .font(.headline)
+                        .foregroundStyle(
+                            debugItemMode == 0 ? Color.primary
+                            : debugItemMode == 1 ? Color.red
+                            : Color.green
+                        )
+                }
+            }
+            #endif
+
             ToolbarItem(placement: .topBarTrailing) {
                 Menu {
                     ForEach(SortOption.allCases) { option in
