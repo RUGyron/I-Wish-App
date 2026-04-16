@@ -8,6 +8,7 @@ struct HomeView: View {
     @State private var showingAddSheet = false
     @State private var showingSettings = false
     @State private var showingJoin = false
+    @State private var pullOffset: CGFloat = 0
 
     private var activeWishlists: [Wishlist] {
         wishlists.filter { !($0.isArchived) }
@@ -158,20 +159,19 @@ struct HomeView: View {
         }
         .contentMargins(.bottom, 80)
         .warmBackground()
-        .refreshable {
-            // Show sync badge via pull gesture
-            services.syncStatus.retry(context: context)
-            try? await Task.sleep(for: .seconds(2))
-        }
-        .overlay(alignment: .top) {
-            if syncShouldForceShow {
-                SyncStatusBadge(state: services.syncStatus.state) {
-                    services.syncStatus.retry(context: context)
-                }
-                .padding(.top, 8)
-                .transition(.move(edge: .top).combined(with: .opacity))
-                .animation(.spring(response: 0.3), value: syncShouldForceShow)
+        .safeAreaInset(edge: .top, spacing: 0) {
+            SyncStatusPullHeader(
+                state: services.syncStatus.state,
+                pullOffset: pullOffset,
+                isPermissionDenied: services.userProfile.discoverabilityStatus == .denied
+            ) {
+                services.syncStatus.retry(context: context)
             }
+        }
+        .onScrollGeometryChange(for: CGFloat.self) { geo in
+            geo.contentOffset.y
+        } action: { _, newValue in
+            pullOffset = max(0, -newValue)
         }
     }
 

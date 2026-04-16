@@ -304,20 +304,15 @@ struct WishlistDetailView: View {
         .contentMargins(.bottom, 80)
         .warmBackground()
         .safeAreaInset(edge: .top, spacing: 0) {
-            collapsibleHeader
-        }
-        .refreshable {
-            services.syncStatus.retry(context: context)
-            try? await Task.sleep(for: .seconds(2))
-        }
-        .overlay(alignment: .top) {
-            if syncShouldForceShow {
-                SyncStatusBadge(state: services.syncStatus.state) {
+            VStack(spacing: 0) {
+                SyncStatusPullHeader(
+                    state: services.syncStatus.state,
+                    pullOffset: max(0, -scrollOffset),
+                    isPermissionDenied: services.userProfile.discoverabilityStatus == .denied
+                ) {
                     services.syncStatus.retry(context: context)
                 }
-                .padding(.top, 8)
-                .transition(.move(edge: .top).combined(with: .opacity))
-                .animation(.spring(response: 0.3), value: syncShouldForceShow)
+                collapsibleHeader
             }
         }
         .onScrollGeometryChange(for: CGFloat.self) { geo in

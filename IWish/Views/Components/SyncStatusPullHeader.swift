@@ -2,37 +2,40 @@ import SwiftUI
 
 struct SyncStatusPullHeader: View {
     let state: SyncStatusService.State
-    let scrollOffset: CGFloat
-    let isDiscoverabilityDenied: Bool
+    let pullOffset: CGFloat
+    let isPermissionDenied: Bool
     var onRetry: (() -> Void)? = nil
 
     var body: some View {
-        if isDiscoverabilityDenied {
+        if isPermissionDenied {
             EmptyView()
-        } else {
-            let forceVisible = isActiveOrError
-            let pullVisible = scrollOffset > 30
-            let visible = forceVisible || pullVisible
-            let scale = forceVisible ? 1.0 : min(1.0, max(0.0, (scrollOffset - 10) / 60))
-
-            VStack {
-                if visible {
-                    SyncStatusBadge(state: state, onTap: onRetry)
-                        .scaleEffect(scale)
-                        .opacity(scale)
-                        .transition(.scale.combined(with: .opacity))
-                }
+        } else if isError {
+            // Error/offline — always visible, tappable for retry
+            HStack {
+                Spacer()
+                SyncStatusBadge(state: state, onTap: onRetry)
+                Spacer()
             }
-            .frame(height: forceVisible ? 36 : 0)
+            .frame(height: 36)
+        } else {
+            // Synced/idle/syncing — hidden, revealed by pull
+            let progress = min(1.0, max(0.0, pullOffset / 60))
+            HStack {
+                Spacer()
+                SyncStatusBadge(state: state, onTap: nil)
+                    .scaleEffect(progress)
+                    .opacity(progress)
+                Spacer()
+            }
+            .frame(height: pullOffset > 5 ? 36 * progress : 0)
             .clipped()
-            .animation(.spring(response: 0.3), value: visible)
         }
     }
 
-    private var isActiveOrError: Bool {
+    private var isError: Bool {
         switch state {
-        case .syncing, .error, .offline: return true
-        case .idle, .synced: return false
+        case .error, .offline: return true
+        default: return false
         }
     }
 }
