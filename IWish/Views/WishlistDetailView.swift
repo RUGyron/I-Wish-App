@@ -110,8 +110,8 @@ struct WishlistDetailView: View {
                 itemList
             }
         }
-        .navigationTitle("")
-        .navigationBarTitleDisplayMode(.inline)
+        .navigationTitle(wishlist.name)
+        .navigationBarTitleDisplayMode(.large)
         .toolbar {
             ToolbarItem(placement: .topBarTrailing) {
                 Menu {
@@ -282,41 +282,42 @@ struct WishlistDetailView: View {
         .padding(.bottom, 60)
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .background(Theme.background)
-        .safeAreaInset(edge: .top, spacing: 0) {
-            wishlistHeader
-        }
     }
 
 
     // MARK: - Item List
 
     private var itemList: some View {
-        List {
-            if selectedSort == .importance {
-                groupedByTier
-            } else {
-                flatSorted
+        ScrollViewReader { proxy in
+            List {
+                coverRow
+                    .id("top")
+                if selectedSort == .importance {
+                    groupedByTier
+                } else {
+                    flatSorted
+                }
+            }
+            .environment(\.editMode, $editMode)
+            .contentMargins(.bottom, 80)
+            .warmBackground()
+            .animation(.easeInOut, value: activeItems.map(\.id))
+            .onAppear {
+                DispatchQueue.main.async {
+                    proxy.scrollTo("top", anchor: .top)
+                }
             }
         }
-        .environment(\.editMode, $editMode)
-        .contentMargins(.bottom, 80)
-        .warmBackground()
-        .safeAreaInset(edge: .top, spacing: 0) {
-            wishlistHeader
-        }
-        .animation(.easeInOut, value: activeItems.map(\.id))
     }
 
-    // MARK: - Wishlist Header (static, attached to navbar)
-
-    private var wishlistHeader: some View {
+    private var coverRow: some View {
         HStack(spacing: 14) {
             DefaultCoverView(
                 id: wishlist.id,
                 imageData: wishlist.coverImageData,
                 emoji: wishlist.coverEmoji
             )
-            .frame(width: 56, height: 56)
+            .frame(width: 60, height: 60)
             #if DEBUG
             .onTapGesture { debugItemMode = (debugItemMode + 1) % 3 }
             .overlay(alignment: .topTrailing) {
@@ -329,29 +330,19 @@ struct WishlistDetailView: View {
             }
             #endif
 
-            VStack(alignment: .leading, spacing: 2) {
-                Text(wishlist.name)
-                    .font(.title3.weight(.semibold))
-                    .lineLimit(2)
-                HStack(spacing: 6) {
-                    Text(String(format: NSLocalizedString("%lld желаний", comment: ""), activeItems.count))
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                    if syncShouldForceShow || services.syncStatus.hasEverSynced {
-                        syncSubtitleInline
-                    }
+            VStack(alignment: .leading, spacing: 3) {
+                Text(String(format: NSLocalizedString("%lld желаний", comment: ""), activeItems.count))
+                    .font(.subheadline)
+                    .foregroundStyle(.secondary)
+                if syncShouldForceShow || services.syncStatus.hasEverSynced {
+                    syncSubtitleInline
                 }
             }
             Spacer()
         }
-        .padding(.horizontal, 16)
-        .padding(.vertical, 10)
-        .background(.bar)                              // матчит стиль навбара
-        .overlay(alignment: .bottom) {
-            Rectangle()
-                .fill(.separator)
-                .frame(height: 0.5)
-        }
+        .padding(.vertical, 6)
+        .listRowBackground(Color.clear)
+        .listRowSeparator(.hidden)
     }
 
     // MARK: - Grouped by Tier
