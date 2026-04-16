@@ -46,7 +46,6 @@ struct WishlistDetailView: View {
     @State private var editingItem: Item?
     @State private var showingEditWishlist = false
     @State private var editMode: EditMode = .inactive
-    @State private var listScrollPosition = ScrollPosition(edge: .top)
     @AppStorage("collapsedTiers") private var collapsedTiersRaw: String = ""
 
     private var collapsedTiers: Set<String> {
@@ -112,7 +111,7 @@ struct WishlistDetailView: View {
             }
         }
         .navigationTitle(wishlist.name)
-        .navigationBarTitleDisplayMode(.large)
+        .navigationBarTitleDisplayMode(.inline)
         .toolbar {
             ToolbarItem(placement: .topBarTrailing) {
                 Menu {
@@ -290,7 +289,7 @@ struct WishlistDetailView: View {
 
     private var itemList: some View {
         List {
-            coverRow
+            wishlistHeaderRow
             if selectedSort == .importance {
                 groupedByTier
             } else {
@@ -298,20 +297,21 @@ struct WishlistDetailView: View {
             }
         }
         .environment(\.editMode, $editMode)
-        .scrollPosition($listScrollPosition)
         .contentMargins(.bottom, 80)
         .warmBackground()
         .animation(.easeInOut, value: activeItems.map(\.id))
     }
 
-    private var coverRow: some View {
-        HStack(spacing: 14) {
+    // Хедер — часть списка, но визуально читается как продолжение навбара:
+    // прозрачный фон, нет разделителей, крупный шрифт
+    private var wishlistHeaderRow: some View {
+        HStack(alignment: .center, spacing: 16) {
             DefaultCoverView(
                 id: wishlist.id,
                 imageData: wishlist.coverImageData,
                 emoji: wishlist.coverEmoji
             )
-            .frame(width: 60, height: 60)
+            .frame(width: 64, height: 64)
             #if DEBUG
             .onTapGesture { debugItemMode = (debugItemMode + 1) % 3 }
             .overlay(alignment: .topTrailing) {
@@ -324,19 +324,26 @@ struct WishlistDetailView: View {
             }
             #endif
 
-            VStack(alignment: .leading, spacing: 3) {
-                Text(String(format: NSLocalizedString("%lld желаний", comment: ""), activeItems.count))
-                    .font(.subheadline)
-                    .foregroundStyle(.secondary)
-                if syncShouldForceShow || services.syncStatus.hasEverSynced {
-                    syncSubtitleInline
+            VStack(alignment: .leading, spacing: 4) {
+                Text(wishlist.name)
+                    .font(.title2.weight(.bold))
+                    .lineLimit(2)
+
+                HStack(spacing: 4) {
+                    Text(String(format: NSLocalizedString("%lld желаний", comment: ""), activeItems.count))
+                        .foregroundStyle(.secondary)
+                    if syncShouldForceShow || services.syncStatus.hasEverSynced {
+                        syncSubtitleInline
+                    }
                 }
+                .font(.subheadline)
             }
-            Spacer()
+            Spacer(minLength: 0)
         }
-        .padding(.vertical, 6)
-        .listRowBackground(Color.clear)
-        .listRowSeparator(.hidden)
+        .padding(.vertical, 12)
+        .listRowBackground(Color.clear)      // прозрачно — читается как часть фона
+        .listRowSeparator(.hidden)           // нет разделителя — не как ячейка
+        .listRowInsets(EdgeInsets(top: 0, leading: 20, bottom: 0, trailing: 20))
     }
 
     // MARK: - Grouped by Tier
