@@ -313,8 +313,12 @@ struct WishlistDetailView: View {
 
     // MARK: - Collapsible Header
 
+    private static let headerExpandedHeight: CGFloat = 88
+
     private var collapsibleHeader: some View {
-        let opacity = max(0.0, 1.0 - scrollOffset / 72)
+        let progress = min(1.0, max(0.0, scrollOffset / 72))
+        let opacity = 1.0 - progress
+        let height = Self.headerExpandedHeight * opacity
 
         return HStack(spacing: 14) {
             DefaultCoverView(
@@ -336,10 +340,10 @@ struct WishlistDetailView: View {
         }
         .padding(.horizontal, 16)
         .padding(.vertical, 12)
-        .background(Theme.background)
-        .opacity(opacity)
-        .frame(height: opacity < 0.01 ? 0 : nil)
+        .opacity(opacity)                         // только контент фейдится
+        .frame(height: max(0, height))            // высота схлопывается
         .clipped()
+        .background(Theme.background)             // фон ПОСЛЕ opacity — всегда непрозрачный
     }
 
     // MARK: - Item List
