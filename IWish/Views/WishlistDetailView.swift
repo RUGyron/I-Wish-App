@@ -46,6 +46,7 @@ struct WishlistDetailView: View {
     @State private var editingItem: Item?
     @State private var showingEditWishlist = false
     @State private var scrollOffset: CGFloat = 0
+    @State private var isHeaderCollapsed = false
     @State private var editMode: EditMode = .inactive
     @AppStorage("collapsedTiers") private var collapsedTiersRaw: String = ""
 
@@ -74,18 +75,17 @@ struct WishlistDetailView: View {
 
     @ViewBuilder
     private var detailNavTitle: some View {
-        let scrolledAway = scrollOffset > 64
-        let title = scrolledAway ? wishlist.name : "Желания"
+        let title = isHeaderCollapsed ? wishlist.name : "Желания"
         #if DEBUG
         Text(title)
             .font(.headline)
             .foregroundStyle(debugItemMode == 0 ? Color.primary : debugItemMode == 1 ? Color.red : Color.green)
             .onTapGesture { debugItemMode = (debugItemMode + 1) % 3 }
-            .animation(.easeInOut(duration: 0.2), value: scrolledAway)
+            .animation(.easeInOut(duration: 0.2), value: isHeaderCollapsed)
         #else
         Text(title)
             .font(.headline)
-            .animation(.easeInOut(duration: 0.2), value: scrolledAway)
+            .animation(.easeInOut(duration: 0.2), value: isHeaderCollapsed)
         #endif
     }
 
@@ -313,14 +313,8 @@ struct WishlistDetailView: View {
 
     // MARK: - Collapsible Header
 
-    private static let headerExpandedHeight: CGFloat = 88
-
     private var collapsibleHeader: some View {
-        let progress = min(1.0, max(0.0, scrollOffset / 72))
-        let opacity = 1.0 - progress
-        let height = Self.headerExpandedHeight * opacity
-
-        return HStack(spacing: 14) {
+        HStack(spacing: 14) {
             DefaultCoverView(
                 id: wishlist.id,
                 imageData: wishlist.coverImageData,
@@ -340,10 +334,9 @@ struct WishlistDetailView: View {
         }
         .padding(.horizontal, 16)
         .padding(.vertical, 12)
-        .opacity(opacity)                         // только контент фейдится
-        .frame(height: max(0, height))            // высота схлопывается
+        .frame(height: isHeaderCollapsed ? 0 : 88)  // snap: только A или B
         .clipped()
-        .background(Theme.background)             // фон ПОСЛЕ opacity — всегда непрозрачный
+        .background(Theme.background)
     }
 
     // MARK: - Item List
@@ -366,6 +359,16 @@ struct WishlistDetailView: View {
             geo.contentOffset.y
         } action: { _, newValue in
             scrollOffset = newValue
+            // Гистерезис: вниз → коллапс на 60, вверх → раскрытие на 30
+            if !isHeaderCollapsed && newValue > 60 {
+                withAnimation(.spring(response: 0.3, dampingFraction: 0.85)) {
+                    isHeaderCollapsed = true
+                }
+            } else if isHeaderCollapsed && newValue < 30 {
+                withAnimation(.spring(response: 0.3, dampingFraction: 0.85)) {
+                    isHeaderCollapsed = false
+                }
+            }
         }
         .animation(.easeInOut, value: activeItems.map(\.id))
     }
