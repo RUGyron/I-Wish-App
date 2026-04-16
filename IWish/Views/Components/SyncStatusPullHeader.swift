@@ -2,38 +2,37 @@ import SwiftUI
 
 struct SyncStatusPullHeader: View {
     let state: SyncStatusService.State
-    let scrollOffset: CGFloat // positive when pulled down
+    let scrollOffset: CGFloat
     let isDiscoverabilityDenied: Bool
     var onRetry: (() -> Void)? = nil
 
     var body: some View {
         if isDiscoverabilityDenied {
-            // Never show sync badge when discoverability denied
             EmptyView()
         } else {
-            let shouldShow = shouldForceShow || scrollOffset > 20
-            let pullProgress = min(1.0, max(0.0, scrollOffset / 80))
+            let forceVisible = isActiveOrError
+            let pullVisible = scrollOffset > 30
+            let visible = forceVisible || pullVisible
+            let scale = forceVisible ? 1.0 : min(1.0, max(0.0, (scrollOffset - 10) / 60))
 
-            HStack {
-                Spacer()
-                if shouldShow {
+            VStack {
+                if visible {
                     SyncStatusBadge(state: state, onTap: onRetry)
-                        .scaleEffect(shouldForceShow ? 1.0 : pullProgress)
-                        .opacity(shouldForceShow ? 1.0 : pullProgress)
+                        .scaleEffect(scale)
+                        .opacity(scale)
                         .transition(.scale.combined(with: .opacity))
                 }
-                Spacer()
             }
-            .frame(height: shouldShow ? 40 : 0)
+            .frame(height: forceVisible ? 36 : 0)
             .clipped()
-            .animation(.spring(response: 0.3), value: shouldShow)
+            .animation(.spring(response: 0.3), value: visible)
         }
     }
 
-    private var shouldForceShow: Bool {
+    private var isActiveOrError: Bool {
         switch state {
         case .syncing, .error, .offline: return true
-        default: return false
+        case .idle, .synced: return false
         }
     }
 }
