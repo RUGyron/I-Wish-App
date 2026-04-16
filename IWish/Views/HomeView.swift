@@ -8,6 +8,7 @@ struct HomeView: View {
     @State private var showingAddSheet = false
     @State private var showingSettings = false
     @State private var showingJoin = false
+    @State private var sharingWishlist: Wishlist?
 
     private var activeWishlists: [Wishlist] {
         wishlists.filter { !($0.isArchived) }
@@ -83,6 +84,10 @@ struct HomeView: View {
             JoinWishlistSheet()
                 .applyTheme()
         }
+        .sheet(item: $sharingWishlist) { wishlist in
+            ShareWishlistSheet(wishlist: wishlist)
+                .applyTheme()
+        }
         .sheet(isPresented: showDiscoverabilitySheet) {
             DiscoverabilitySheet(
                 onAllow: { services.userProfile.confirmCustomDialog() },
@@ -151,7 +156,7 @@ struct HomeView: View {
                         .tint(.blue)
 
                         Button {
-                            // Share action placeholder — ties into ShareWishlistSheet
+                            sharingWishlist = wishlist
                         } label: {
                             Label("Поделиться", systemImage: "square.and.arrow.up")
                         }
@@ -250,6 +255,9 @@ struct HomeView: View {
         case .idle: return "iCloud"
         case .syncing: return "Синхронизация..."
         case .synced(let date):
+            if Date.now.timeIntervalSince(date) < 10 {
+                return "Только что"
+            }
             let fmt = RelativeDateTimeFormatter()
             fmt.unitsStyle = .short
             return fmt.localizedString(for: date, relativeTo: .now)

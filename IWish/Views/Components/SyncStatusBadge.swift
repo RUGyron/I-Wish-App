@@ -64,6 +64,9 @@ struct SyncStatusBadge: View {
         case .idle: return "iCloud"
         case .syncing: return "Синхронизация..."
         case .synced(let date):
+            if Date.now.timeIntervalSince(date) < 10 {
+                return "Только что"
+            }
             let fmt = RelativeDateTimeFormatter()
             fmt.unitsStyle = .short
             return fmt.localizedString(for: date, relativeTo: .now)
