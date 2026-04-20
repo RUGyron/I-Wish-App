@@ -1,3 +1,4 @@
+import CloudKit
 import SwiftUI
 import SwiftData
 
@@ -6,6 +7,9 @@ struct ParticipantsView: View {
     @Environment(\.appServices) private var services
     let wishlist: Wishlist
     var onShareRequested: (() -> Void)? = nil
+
+    @State private var participants: [CloudKitSharingService.ParticipantInfo] = []
+    @State private var isLoading = true
 
     var body: some View {
         NavigationStack {
@@ -40,25 +44,61 @@ struct ParticipantsView: View {
                     Text("Владелец")
                 }
 
-                // Placeholder for future participants
+                // Participants
                 Section {
-                    VStack(spacing: 12) {
-                        Image(systemName: "person.2")
-                            .font(.system(size: 32))
-                            .foregroundStyle(.tertiary)
-
-                        VStack(spacing: 4) {
-                            Text("Пока никто не приглашён")
-                                .font(.subheadline)
-                                .foregroundStyle(.secondary)
-                            Text("Поделитесь списком по QR-коду или ссылке")
-                                .font(.caption)
-                                .foregroundStyle(.tertiary)
+                    if isLoading {
+                        HStack {
+                            Spacer()
+                            ProgressView()
+                                .padding(.vertical, 24)
+                            Spacer()
                         }
-                        .multilineTextAlignment(.center)
+                    } else if participants.isEmpty {
+                        VStack(spacing: 12) {
+                            Image(systemName: "person.2")
+                                .font(.system(size: 32))
+                                .foregroundStyle(.tertiary)
+
+                            VStack(spacing: 4) {
+                                Text("Пока никто не приглашён")
+                                    .font(.subheadline)
+                                    .foregroundStyle(.secondary)
+                                Text("Поделитесь списком по QR-коду или ссылке")
+                                    .font(.caption)
+                                    .foregroundStyle(.tertiary)
+                            }
+                            .multilineTextAlignment(.center)
+                        }
+                        .frame(maxWidth: .infinity)
+                        .padding(.vertical, 24)
+                    } else {
+                        ForEach(Array(participants.enumerated()), id: \.offset) { _, participant in
+                            HStack(spacing: 12) {
+                                Image(systemName: participantIcon(for: participant.acceptance))
+                                    .font(.title3)
+                                    .foregroundStyle(participantColor(for: participant.acceptance))
+                                    .frame(width: 36, height: 36)
+                                    .background(participantColor(for: participant.acceptance).opacity(0.15))
+                                    .clipShape(Circle())
+
+                                VStack(alignment: .leading, spacing: 2) {
+                                    HStack(spacing: 4) {
+                                        Text(participant.name ?? "Участник")
+                                            .font(.body.weight(.medium))
+                                        Text(roleBadge(for: participant.role))
+                                            .font(.caption)
+                                            .foregroundStyle(.secondary)
+                                    }
+                                    Text(acceptanceLabel(for: participant.acceptance))
+                                        .font(.caption)
+                                        .foregroundStyle(.secondary)
+                                }
+
+                                Spacer()
+                            }
+                            .padding(.vertical, 4)
+                        }
                     }
-                    .frame(maxWidth: .infinity)
-                    .padding(.vertical, 24)
                 } header: {
                     HStack {
                         Text("Участники")
@@ -86,8 +126,49 @@ struct ParticipantsView: View {
                     Button("Готово") { dismiss() }
                 }
             }
+            .task {
+                participants = await services.sharing.fetchParticipants(for: wishlist.id)
+                isLoading = false
+            }
         }
         .applyTheme()
+    }
+
+    // MARK: - Helpers
+
+    private func roleBadge(for role: CKShare.ParticipantRole) -> String {
+        switch role {
+        case .readWrite: return "(редактор)"
+        case .readOnly: return "(зритель)"
+        default: return ""
+        }
+    }
+
+    private func acceptanceLabel(for status: CKShare.ParticipantAcceptanceStatus) -> String {
+        switch status {
+        case .accepted: return "Принял приглашение"
+        case .pending: return "Ожидает подтверждения"
+        case .removed: return "Удалён"
+        default: return "Неизвестно"
+        }
+    }
+
+    private func participantIcon(for status: CKShare.ParticipantAcceptanceStatus) -> String {
+        switch status {
+        case .accepted: return "person.fill.checkmark"
+        case .pending: return "person.fill.questionmark"
+        case .removed: return "person.fill.xmark"
+        default: return "person.fill"
+        }
+    }
+
+    private func participantColor(for status: CKShare.ParticipantAcceptanceStatus) -> Color {
+        switch status {
+        case .accepted: return .green
+        case .pending: return .orange
+        case .removed: return .red
+        default: return .gray
+        }
     }
 }
 
