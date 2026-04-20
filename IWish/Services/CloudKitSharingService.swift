@@ -308,15 +308,16 @@ final class CloudKitSharingService {
 
                 // Fallback: try discoverUserIdentity for the participant's userRecordID
                 if displayName == nil, let userRecordID = participant.userIdentity.userRecordID {
-                    if let identity = try? await container.discoverUserIdentity(
-                        withUserRecordID: userRecordID
-                    ) {
-                        if let nameComponents = identity.nameComponents {
-                            let formatter = PersonNameComponentsFormatter()
-                            let formatted = formatter.string(from: nameComponents)
-                            if !formatted.isEmpty {
-                                displayName = formatted
-                            }
+                    let identity: CKUserIdentity? = await withCheckedContinuation { cont in
+                        container.discoverUserIdentity(withUserRecordID: userRecordID) { identity, _ in
+                            cont.resume(returning: identity)
+                        }
+                    }
+                    if let nameComponents = identity?.nameComponents {
+                        let formatter = PersonNameComponentsFormatter()
+                        let formatted = formatter.string(from: nameComponents)
+                        if !formatted.isEmpty {
+                            displayName = formatted
                         }
                     }
                 }

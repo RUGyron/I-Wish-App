@@ -26,6 +26,9 @@ final class SyncStatusService {
 
     private var retryTimer: Timer?
     private var syncTimeoutTimer: Timer?
+    /// Debounce work item: delays .synced state so rapid successive syncs
+    /// don't cause flickering between "Синхронизация..." and "Только что".
+    private var syncedDebounce: DispatchWorkItem?
 
     init() {
         startListening()
@@ -36,6 +39,7 @@ final class SyncStatusService {
     deinit {
         retryTimer?.invalidate()
         syncTimeoutTimer?.invalidate()
+        syncedDebounce?.cancel()
     }
 
     private func scheduleSyncTimeout() {
@@ -82,11 +86,15 @@ final class SyncStatusService {
                 as? NSPersistentCloudKitContainer.Event else { return }
 
         if event.endDate == nil {
-            // Event started
+            // Event started — cancel any pending "synced" transition and show syncing
+            syncedDebounce?.cancel()
+            syncedDebounce = nil
             state = .syncing
             stopRetryTimer()
         } else if let error = event.error {
-            // Event failed
+            // Event failed — cancel debounce and show error immediately
+            syncedDebounce?.cancel()
+            syncedDebounce = nil
             let ckError = error as NSError
             if ckError.domain == NSURLErrorDomain || ckError.code == CKError.networkUnavailable.rawValue || ckError.code == CKError.networkFailure.rawValue {
                 state = .offline
@@ -97,10 +105,20 @@ final class SyncStatusService {
             }
             startRetryTimer()
         } else {
-            // Event succeeded
-            state = .synced(event.endDate ?? .now)
-            hasEverSynced = true
-            stopRetryTimer()
+            // Event succeeded — debounce 0.4s: if another sync starts before the
+            // deadline, the work item is cancelled and we stay in .syncing.
+            // This prevents rapid "Синхронизация... → Только что → Синхронизация..."
+            // flicker when CloudKit fires multiple sequential sync events.
+            let finishDate = event.endDate ?? .now
+            syncedDebounce?.cancel()
+            let work = DispatchWorkItem { [weak self] in
+                guard let self else { return }
+                self.state = .synced(finishDate)
+                self.hasEverSynced = true
+                self.stopRetryTimer()
+            }
+            syncedDebounce = work
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.4, execute: work)
         }
     }
 

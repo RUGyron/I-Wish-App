@@ -6,6 +6,10 @@
 	objectVersion = 77;
 	objects = {
 
+/* Begin PBXBuildFile section */
+		C90617942F9249AD005AC61C /* QRCode in Frameworks */ = {isa = PBXBuildFile; productRef = AA00CA022FA0000000000002 /* QRCode */; };
+/* End PBXBuildFile section */
+
 /* Begin PBXContainerItemProxy section */
 		C90616072F8D817C005AC61C /* PBXContainerItemProxy */ = {
 			isa = PBXContainerItemProxy;
@@ -52,6 +56,7 @@
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				C90617942F9249AD005AC61C /* QRCode in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -103,6 +108,7 @@
 			);
 			name = IWish;
 			packageProductDependencies = (
+				AA00CA022FA0000000000002 /* QRCode */,
 			);
 			productName = IWish;
 			productReference = C90615EF2F8D5AC1005AC61C /* IWish.app */;
@@ -160,6 +166,9 @@
 			);
 			mainGroup = C90615E62F8D5AC1005AC61C;
 			minimizedProjectReferenceProxies = 1;
+			packageReferences = (
+				AA00CA012FA0000000000001 /* XCRemoteSwiftPackageReference "QRCode" */,
+			);
 			preferredProjectObjectVersion = 77;
 			productRefGroup = C90615F02F8D5AC1005AC61C /* Products */;
 			projectDirPath = "";
@@ -482,6 +491,25 @@
 			defaultConfigurationName = Release;
 		};
 /* End XCConfigurationList section */
+
+/* Begin XCRemoteSwiftPackageReference section */
+		AA00CA012FA0000000000001 /* XCRemoteSwiftPackageReference "QRCode" */ = {
+			isa = XCRemoteSwiftPackageReference;
+			repositoryURL = "https://github.com/dagronf/QRCode.git";
+			requirement = {
+				kind = upToNextMajorVersion;
+				minimumVersion = 22.0.0;
+			};
+		};
+/* End XCRemoteSwiftPackageReference section */
+
+/* Begin XCSwiftPackageProductDependency section */
+		AA00CA022FA0000000000002 /* QRCode */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = AA00CA012FA0000000000001 /* XCRemoteSwiftPackageReference "QRCode" */;
+			productName = QRCode;
+		};
+/* End XCSwiftPackageProductDependency section */
 	};
 	rootObject = C90615E72F8D5AC1005AC61C /* Project object */;
 }

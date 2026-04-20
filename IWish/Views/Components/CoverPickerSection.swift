@@ -18,53 +18,50 @@ struct CoverPickerSection: View {
 
     var body: some View {
         Section {
-            HStack {
-                // Preview thumbnail (if any)
-                if let imageData, let image = UIImage(data: imageData) {
-                    Image(uiImage: image)
-                        .resizable()
-                        .scaledToFill()
-                        .frame(width: 36, height: 36)
-                        .clipShape(RoundedRectangle(cornerRadius: 8))
-                } else if let emoji, !emoji.isEmpty {
-                    Text(emoji)
-                        .font(.title2)
-                        .frame(width: 36, height: 36)
+            Menu {
+                if UIImagePickerController.isSourceTypeAvailable(.camera) {
+                    Button { showingCamera = true } label: {
+                        Label("Камера", systemImage: "camera")
+                    }
                 }
-
-                // Menu button
-                Menu {
-                    if UIImagePickerController.isSourceTypeAvailable(.camera) {
-                        Button { showingCamera = true } label: {
-                            Label("Камера", systemImage: "camera")
-                        }
-                    }
-                    Button { showingPhotoPicker = true } label: {
-                        Label("Галерея", systemImage: "photo.on.rectangle")
-                    }
-                    Button {
-                        emojiDraft = emoji ?? ""
-                        showingEmojiInput = true
-                    } label: {
-                        Label("Эмодзи", systemImage: "face.smiling")
-                    }
-                    if hasSelection {
-                        Divider()
-                        Button(role: .destructive) {
-                            imageData = nil
-                            emoji = nil
-                        } label: {
-                            Label("Убрать обложку", systemImage: "trash")
-                        }
-                    }
+                Button { showingPhotoPicker = true } label: {
+                    Label("Галерея", systemImage: "photo.on.rectangle")
+                }
+                Button {
+                    emojiDraft = emoji ?? ""
+                    showingEmojiInput = true
                 } label: {
-                    HStack {
-                        Label(hasSelection ? "Сменить обложку" : "Выбрать обложку",
-                              systemImage: "photo")
-                        Spacer()
-                    }
-                    .contentShape(Rectangle())
+                    Label("Эмодзи", systemImage: "face.smiling")
                 }
+                if hasSelection {
+                    Divider()
+                    Button(role: .destructive) {
+                        imageData = nil
+                        emoji = nil
+                    } label: {
+                        Label("Убрать обложку", systemImage: "trash")
+                    }
+                }
+            } label: {
+                HStack(spacing: 12) {
+                    // Preview thumbnail (if any)
+                    if let imageData, let image = UIImage(data: imageData) {
+                        Image(uiImage: image)
+                            .resizable()
+                            .scaledToFill()
+                            .frame(width: 36, height: 36)
+                            .clipShape(RoundedRectangle(cornerRadius: 8))
+                    } else if let emoji, !emoji.isEmpty {
+                        Text(emoji)
+                            .font(.title2)
+                            .frame(width: 36, height: 36)
+                    }
+
+                    Label(hasSelection ? "Сменить обложку" : "Выбрать обложку",
+                          systemImage: "photo")
+                    Spacer()
+                }
+                .contentShape(Rectangle())
             }
 
             // Inline emoji input (only when active)

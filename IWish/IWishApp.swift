@@ -11,6 +11,8 @@ import SwiftData
 @main
 struct IWishApp: App {
     let container: ModelContainer
+    @State private var pendingShareURL: String?
+    @State private var showingJoinFromLink = false
 
     init() {
         self.container = ModelContainerFactory.makeProductionContainer()
@@ -33,6 +35,9 @@ struct IWishApp: App {
                 .onOpenURL { url in
                     handleIncomingURL(url)
                 }
+                .sheet(isPresented: $showingJoinFromLink) {
+                    JoinWishlistSheet(initialURL: pendingShareURL)
+                }
         }
         .modelContainer(container)
     }
@@ -54,16 +59,21 @@ struct IWishApp: App {
     }
 
     private func handleIncomingURL(_ url: URL) {
-        guard url.scheme == "iwish",
-              url.host == "join",
-              let uuidString = url.pathComponents.dropFirst().first,
-              let _ = UUID(uuidString: uuidString) else { return }
+        // Universal Link: https://rugyron.github.io/I-Wish-App/j/{shortID}
+        if url.scheme == "https",
+           (url.host() ?? "").contains("rugyron.github.io"),
+           url.path().contains("/j/") {
+            pendingShareURL = url.absoluteString
+            showingJoinFromLink = true
+            return
+        }
 
-        NotificationCenter.default.post(
-            name: .didReceiveShareLink,
-            object: nil,
-            userInfo: ["url": url]
-        )
+        // Custom scheme: iwish://join/{shortID}
+        if url.scheme == "iwish", url.host() == "join" {
+            pendingShareURL = url.absoluteString
+            showingJoinFromLink = true
+            return
+        }
     }
 }
 

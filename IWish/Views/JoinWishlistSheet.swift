@@ -4,8 +4,14 @@ import AudioToolbox
 
 struct JoinWishlistSheet: View {
     @Environment(\.dismiss) private var dismiss
+    @Environment(\.appServices) private var services
+    @Environment(\.toast) private var toast
     @State private var showingScanner = false
     @State private var joinStatus: JoinStatus = .idle
+    @State private var resolvedInfo: CloudKitSharingService.ShareLinkInfo?
+    @State private var showingInvitePreview = false
+
+    var initialURL: String? = nil
 
     enum JoinStatus {
         case idle
@@ -73,6 +79,19 @@ struct JoinWishlistSheet: View {
             }
         }
         .applyTheme()
+        .onAppear {
+            if let url = initialURL {
+                joinByLink(url)
+            }
+        }
+        .sheet(isPresented: $showingInvitePreview) {
+            if let info = resolvedInfo {
+                InvitePreviewSheet(info: info) {
+                    acceptInvite()
+                }
+                .presentationDetents([.medium])
+            }
+        }
     }
 
     @ViewBuilder
@@ -83,40 +102,77 @@ struct JoinWishlistSheet: View {
         case .joining:
             ProgressView("Подключение...")
                 .padding()
-        case .success(let name):
-            Label("Присоединились к \u{00AB}\(name)\u{00BB}", systemImage: "checkmark.circle.fill")
-                .foregroundStyle(.green)
-                .padding()
-        case .error(let msg):
-            Label(msg, systemImage: "exclamationmark.triangle.fill")
-                .foregroundStyle(.red)
-                .font(.subheadline)
-                .padding()
+        case .success, .error:
+            EmptyView()
         }
     }
 
     private func pasteAndJoin() {
         guard let clipboard = UIPasteboard.general.string, !clipboard.isEmpty else {
-            joinStatus = .error("Буфер обмена пуст")
+            toast.error("Буфер обмена пуст")
             return
         }
         joinByLink(clipboard)
     }
 
     private func joinByLink(_ link: String) {
-        guard let url = URL(string: link),
-              url.scheme == "iwish",
-              url.host == "join" else {
-            joinStatus = .error("Неверная ссылка")
+        let trimmed = link.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard let url = URL(string: trimmed) else {
+            toast.error("Неверная ссылка")
+            return
+        }
+
+        let shortID: String?
+        let host = url.host() ?? ""
+        let path = url.path()
+
+        if url.scheme == "https",
+           host.contains("rugyron.github.io"),
+           let jRange = path.range(of: "/j/") {
+            let after = path[jRange.upperBound...]
+            let id = String(after.prefix(while: { $0 != "/" && $0 != "?" }))
+            shortID = id.isEmpty ? nil : id
+        } else if url.scheme == "iwish", host == "join" {
+            shortID = url.pathComponents.last.flatMap { $0.isEmpty ? nil : $0 }
+        } else {
+            shortID = nil
+        }
+
+        guard let id = shortID else {
+            toast.error("Неверная ссылка")
             return
         }
 
         joinStatus = .joining
-        // Placeholder -- real implementation will use CKShare accept
-        DispatchQueue.main.asyncAfter(deadline: .now() + 1.0) {
-            joinStatus = .success("Список")
-            DispatchQueue.main.asyncAfter(deadline: .now() + 1.5) {
+        Task {
+            do {
+                guard let info = try await services.sharing.resolveShareLink(shortID: id) else {
+                    joinStatus = .idle
+                    toast.error("Приглашение недействительно или истекло")
+                    return
+                }
+                resolvedInfo = info
+                joinStatus = .idle
+                showingInvitePreview = true
+            } catch {
+                joinStatus = .idle
+                toast.error("Не удалось загрузить приглашение")
+            }
+        }
+    }
+
+    private func acceptInvite() {
+        guard let info = resolvedInfo else { return }
+        Task {
+            do {
+                try await services.sharing.acceptShare(from: info.ckShareURL)
+                showingInvitePreview = false
+                toast.success("Присоединились к «\(info.wishlistName)»")
+                try? await Task.sleep(for: .seconds(1.0))
                 dismiss()
+            } catch {
+                showingInvitePreview = false
+                toast.error("Не удалось присоединиться")
             }
         }
     }
@@ -299,10 +355,11 @@ final class QRScannerViewController: UIViewController, AVCaptureMetadataOutputOb
               metadataObject.type == .qr,
               let stringValue = metadataObject.stringValue else { return }
 
-        MainActor.assumeIsolated {
-            captureSession.stopRunning()
+        DispatchQueue.main.async { [weak self] in
+            guard let self else { return }
+            self.captureSession.stopRunning()
             AudioServicesPlaySystemSound(SystemSoundID(kSystemSoundID_Vibrate))
-            onCodeScanned?(stringValue)
+            self.onCodeScanned?(stringValue)
         }
     }
 }

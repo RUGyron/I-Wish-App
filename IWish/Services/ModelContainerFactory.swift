@@ -14,7 +14,7 @@ enum ModelContainerFactory {
             schema: schema,
             isStoredInMemoryOnly: false,
             allowsSave: true,
-            cloudKitDatabase: .private(cloudKitContainerID)
+            cloudKitDatabase: .automatic
         )
         do {
             return try ModelContainer(for: schema, configurations: [config])

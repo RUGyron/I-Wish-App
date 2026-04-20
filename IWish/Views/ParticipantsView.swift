@@ -138,8 +138,8 @@ struct ParticipantsView: View {
 
     private func roleBadge(for role: CKShare.ParticipantRole) -> String {
         switch role {
-        case .readWrite: return "(редактор)"
-        case .readOnly: return "(зритель)"
+        case .privateUser: return "(редактор)"
+        case .publicUser: return "(зритель)"
         default: return ""
         }
     }

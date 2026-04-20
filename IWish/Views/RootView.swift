@@ -4,6 +4,7 @@ import SwiftData
 struct RootView: View {
     @Environment(\.modelContext) private var context
     @Environment(\.colorScheme) private var detectedSystemScheme
+    @Environment(\.appServices) private var services
     @Query private var settingsList: [AppSettings]
 
     var body: some View {
@@ -21,6 +22,10 @@ struct RootView: View {
                 _ = AppSettings.loadOrCreate(in: context)
             }
         }
+        .task {
+            await services.sharing.deleteExpiredShareLinks()
+        }
+        .toastOverlay()
     }
 
     private var activeSettings: AppSettings {

@@ -1,9 +1,12 @@
 import SwiftUI
 import SwiftData
-import CoreImage.CIFilterBuiltins
+import QRCode
 
 struct ShareWishlistSheet: View {
     @Environment(\.dismiss) private var dismiss
+    @Environment(\.appServices) private var services
+    @Environment(\.modelContext) private var modelContext
+    @Environment(\.toast) private var toast
     @Query private var settingsList: [AppSettings]
 
     let wishlist: Wishlist
@@ -38,6 +41,8 @@ struct ShareWishlistSheet: View {
                     // Expiry
                     expiryLabel
 
+                    // Error shown via toast
+
                     // Pickers
                     VStack(spacing: 16) {
                         rolePicker
@@ -68,13 +73,40 @@ struct ShareWishlistSheet: View {
                 if let settings = settingsList.first {
                     selectedTTL = settings.defaultInviteTTL
                 }
-                shareManager.generateShare(for: wishlist, role: selectedRole, ttl: selectedTTL)
+                Task {
+                    await shareManager.generateShare(
+                        for: wishlist,
+                        role: selectedRole,
+                        ttl: selectedTTL,
+                        ownerName: services.userProfile.userName,
+                        container: modelContext.container
+                    )
+                }
             }
             .onChange(of: selectedRole) { _, _ in
-                shareManager.generateShare(for: wishlist, role: selectedRole, ttl: selectedTTL)
+                Task {
+                    await shareManager.generateShare(
+                        for: wishlist,
+                        role: selectedRole,
+                        ttl: selectedTTL,
+                        ownerName: services.userProfile.userName,
+                        container: modelContext.container
+                    )
+                }
             }
             .onChange(of: selectedTTL) { _, _ in
-                shareManager.generateShare(for: wishlist, role: selectedRole, ttl: selectedTTL)
+                Task {
+                    await shareManager.generateShare(
+                        for: wishlist,
+                        role: selectedRole,
+                        ttl: selectedTTL,
+                        ownerName: services.userProfile.userName,
+                        container: modelContext.container
+                    )
+                }
+            }
+            .onChange(of: shareManager.error) { _, newError in
+                if let msg = newError { toast.error(msg) }
             }
         }
         .applyTheme()
@@ -199,8 +231,10 @@ struct ShareWishlistSheet: View {
 
     private var revokeButton: some View {
         Button(role: .destructive) {
-            shareManager.revokeAll()
-            dismiss()
+            Task {
+                await shareManager.revokeAll()
+                dismiss()
+            }
         } label: {
             Text("Отозвать все приглашения")
                 .font(.caption)
@@ -219,163 +253,36 @@ struct ShareWishlistSheet: View {
         return items
     }
 
-    // MARK: - Styled QR Generator
+    // MARK: - QR Generator
+
+    // MARK: - QR Generator (Telegram blob style)
 
     private func generateQRCode(from string: String) -> UIImage? {
-        let filter = CIFilter.qrCodeGenerator()
-        filter.message = Data(string.utf8)
-        filter.correctionLevel = "M"
-
-        guard let ciImage = filter.outputImage else { return nil }
-
-        let n = Int(ciImage.extent.width)
-        let matrix = qrMatrix(from: ciImage, size: n)
-
-        let canvasSize: CGFloat = 840
-        let padding: CGFloat = canvasSize * 0.03
-        let qrArea = canvasSize - padding * 2
-        let mod = qrArea / CGFloat(n)
-        let nf = CGFloat(n)
-
-        let colorTL = UIColor(red: 0.82, green: 0.48, blue: 0.14, alpha: 1)
-        let colorBR = UIColor(red: 0.58, green: 0.30, blue: 0.08, alpha: 1)
-
-        let renderer = UIGraphicsImageRenderer(size: CGSize(width: canvasSize, height: canvasSize))
-        return renderer.image { ctx in
-            let gc = ctx.cgContext
-
-            let bgRect = CGRect(origin: .zero, size: CGSize(width: canvasSize, height: canvasSize))
-            UIBezierPath(roundedRect: bgRect, cornerRadius: canvasSize * 0.06).addClip()
-            UIColor.white.setFill()
-            ctx.fill(bgRect)
-
-            gc.translateBy(x: padding, y: padding)
-
-            let half = nf / 2
-            let logoR = nf * 0.14
-            let cr = mod * 0.45
-            let dotInset = mod * 0.14
-            let bleed: CGFloat = 0.25
-
-            // Finder zone: 7x7 pattern + 1-module separator = rows/cols 0..7
-            func isFinder(_ r: Int, _ c: Int) -> Bool {
-                let inTL = r <= 7 && c <= 7
-                let inTR = r <= 7 && c >= n - 8
-                let inBL = r >= n - 8 && c <= 7
-                return inTL || inTR || inBL
-            }
-
-            func skip(_ r: Int, _ c: Int) -> Bool {
-                if r < 0 || r >= n || c < 0 || c >= n { return true }
-                if !matrix[r][c] { return true }
-                if isFinder(r, c) { return true }
-                let logoShift: CGFloat = 0.35
-                let dr = CGFloat(r) - (half + logoShift), dc = CGFloat(c) - (half + logoShift)
-                if dr > -logoR && dr < logoR && dc > -logoR && dc < logoR { return true }
-                return false
-            }
-
-            for row in 0..<n {
-                for col in 0..<n {
-                    if skip(row, col) { continue }
-
-                    let t = (CGFloat(row) + CGFloat(col)) / (2 * nf)
-                    colorTL.blend(with: colorBR, ratio: t).setFill()
-
-                    let R = !skip(row, col + 1)
-                    let L = !skip(row, col - 1)
-                    let B = !skip(row + 1, col)
-                    let T = !skip(row - 1, col)
-
-                    if !R && !L && !B && !T {
-                        let d = mod - dotInset * 2
-                        UIBezierPath(ovalIn: CGRect(
-                            x: CGFloat(col) * mod + dotInset,
-                            y: CGFloat(row) * mod + dotInset,
-                            width: d, height: d
-                        )).fill()
-                        continue
-                    }
-
-                    let x = CGFloat(col) * mod
-                    let y = CGFloat(row) * mod
-                    let w = mod + (R ? bleed : 0)
-                    let h = mod + (B ? bleed : 0)
-
-                    let corners: UIRectCorner = [
-                        (!T && !L) ? .topLeft : [],
-                        (!T && !R) ? .topRight : [],
-                        (!B && !L) ? .bottomLeft : [],
-                        (!B && !R) ? .bottomRight : [],
-                    ].reduce([]) { $0.union($1) }
-
-                    UIBezierPath(
-                        roundedRect: CGRect(x: x, y: y, width: w, height: h),
-                        byRoundingCorners: corners,
-                        cornerRadii: CGSize(width: cr, height: cr)
-                    ).fill()
-                }
-            }
-
-            // Finder patterns — drawn at 7*mod, positioned inside the 8-module zone
-            drawStyledFinder(gc: gc, x: 0, y: 0, mod: mod, color: colorTL)
-            drawStyledFinder(gc: gc, x: CGFloat(n - 7) * mod, y: 0, mod: mod, color: colorTL.blend(with: colorBR, ratio: 0.4))
-            drawStyledFinder(gc: gc, x: 0, y: CGFloat(n - 7) * mod, mod: mod, color: colorTL.blend(with: colorBR, ratio: 0.4))
-
-            gc.translateBy(x: -padding, y: -padding)
-
-            // Logo circle — shifted slightly down-right to match visual center of QR data
-            if let logo = UIImage(named: "IconPreviewLight") {
-                let circleD = canvasSize * 0.18
-                let visualShift = mod * 0.7
-                let circleRect = CGRect(
-                    x: (canvasSize - circleD) / 2 + visualShift / 2,
-                    y: (canvasSize - circleD) / 2 + visualShift / 2,
-                    width: circleD, height: circleD
-                )
-                gc.saveGState()
-                UIColor.white.setFill()
-                UIBezierPath(ovalIn: circleRect.insetBy(dx: -4, dy: -4)).fill()
-                UIBezierPath(ovalIn: circleRect).addClip()
-                logo.draw(in: circleRect)
-                gc.restoreGState()
-            }
+        guard let doc = try? QRCode.Document(utf8String: string, errorCorrection: .medium) else {
+            return nil
         }
-    }
 
-    private func qrMatrix(from ciImage: CIImage, size n: Int) -> [[Bool]] {
-        let context = CIContext()
-        guard let cgImage = context.createCGImage(ciImage, from: ciImage.extent),
-              let provider = cgImage.dataProvider,
-              let data = provider.data,
-              let ptr = CFDataGetBytePtr(data) else {
-            return Array(repeating: Array(repeating: false, count: n), count: n)
+        // Brand color
+        let brand = CGColor(srgbRed: 0.72, green: 0.38, blue: 0.06, alpha: 1)
+
+        // Shapes — Telegram style: rounded blobs for data, smooth rounded eyes
+        doc.design.shape.onPixels = QRCode.PixelShape.RoundedPath()
+        doc.design.shape.eye = QRCode.EyeShape.RoundedRect()
+        doc.design.shape.pupil = QRCode.PupilShape.RoundedRect()
+
+        // Colors
+        doc.design.style.onPixels = QRCode.FillStyle.Solid(brand)
+        doc.design.style.eye = QRCode.FillStyle.Solid(brand)
+        doc.design.style.pupil = QRCode.FillStyle.Solid(brand)
+        doc.design.style.background = QRCode.FillStyle.Solid(CGColor(srgbRed: 1, green: 1, blue: 1, alpha: 1))
+
+        // Logo in center (auto-masks QR pixels underneath)
+        if let logo = UIImage(named: "IconPreviewLight")?.cgImage {
+            doc.logoTemplate = QRCode.LogoTemplate.CircleCenter(image: logo, inset: 4)
         }
-        let bpr = cgImage.bytesPerRow
-        var matrix = Array(repeating: Array(repeating: false, count: n), count: n)
-        for row in 0..<n {
-            for col in 0..<n {
-                matrix[row][col] = ptr[row * bpr + col * 4] == 0
-            }
-        }
-        return matrix
-    }
 
-    private func drawStyledFinder(gc: CGContext, x: CGFloat, y: CGFloat, mod: CGFloat, color: UIColor) {
-        let s = 7 * mod
-        let outerRect = CGRect(x: x, y: y, width: s, height: s)
-        let outerR = mod * 2.0
-
-        color.setFill()
-        UIBezierPath(roundedRect: outerRect, cornerRadius: outerR).fill()
-
-        let gapInset = mod * 1.0
-        UIColor.white.setFill()
-        UIBezierPath(roundedRect: outerRect.insetBy(dx: gapInset, dy: gapInset), cornerRadius: outerR * 0.6).fill()
-
-        let centerInset = mod * 2.0
-        color.setFill()
-        UIBezierPath(roundedRect: outerRect.insetBy(dx: centerInset, dy: centerInset), cornerRadius: outerR * 0.35).fill()
+        // Render at 3x for crisp display
+        return try? doc.uiImage(dimension: 840)
     }
 }
 
@@ -391,22 +298,6 @@ private struct ShareSheetView: UIViewControllerRepresentable {
     func updateUIViewController(_ uiViewController: UIActivityViewController, context: Context) {}
 }
 
-// MARK: - UIColor Blend
-
-private extension UIColor {
-    func blend(with other: UIColor, ratio: CGFloat) -> UIColor {
-        var r1: CGFloat = 0, g1: CGFloat = 0, b1: CGFloat = 0, a1: CGFloat = 0
-        var r2: CGFloat = 0, g2: CGFloat = 0, b2: CGFloat = 0, a2: CGFloat = 0
-        getRed(&r1, green: &g1, blue: &b1, alpha: &a1)
-        other.getRed(&r2, green: &g2, blue: &b2, alpha: &a2)
-        return UIColor(
-            red: r1 + (r2 - r1) * ratio,
-            green: g1 + (g2 - g1) * ratio,
-            blue: b1 + (b2 - b1) * ratio,
-            alpha: 1
-        )
-    }
-}
 
 // MARK: - Preview
 

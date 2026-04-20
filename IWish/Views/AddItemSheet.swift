@@ -1,6 +1,5 @@
 import SwiftUI
 import SwiftData
-import LinkPresentation
 
 struct AddItemSheet: View {
     @Environment(\.modelContext) private var context
@@ -97,7 +96,9 @@ struct AddItemSheet: View {
                     pasteURL()
                 } label: {
                     Label("Вставить ссылку", systemImage: "doc.on.clipboard")
+                        .frame(maxWidth: .infinity, alignment: .leading)
                 }
+                .contentShape(Rectangle())
 
                 if case .noURL = urlStatus {
                     Text("Нет ссылки в буфере")
@@ -225,30 +226,15 @@ struct AddItemSheet: View {
 
     private func fetchMetadata(for url: URL) {
         isFetchingMetadata = true
-        let provider = LPMetadataProvider()
-
-        provider.startFetchingMetadata(for: url) { metadata, _ in
-            Task { @MainActor in
+        Task {
+            let meta = await URLMetadataService.fetch(from: url)
+            await MainActor.run {
                 isFetchingMetadata = false
-                guard let metadata else { return }
-
-                // Auto-fill name if empty
-                if name.trimmingCharacters(in: .whitespaces).isEmpty,
-                   let title = metadata.title {
+                if name.trimmingCharacters(in: .whitespaces).isEmpty, let title = meta.title {
                     name = title
                 }
-
-                // Auto-fill cover image if none selected
-                if let imageProvider = metadata.imageProvider {
-                    imageProvider.loadObject(ofClass: UIImage.self) { object, _ in
-                        if let image = object as? UIImage {
-                            Task { @MainActor in
-                                if coverImageData == nil {
-                                    coverImageData = ImageCompressor.compress(image)
-                                }
-                            }
-                        }
-                    }
+                if coverImageData == nil, let image = meta.image {
+                    coverImageData = ImageCompressor.compress(image)
                 }
             }
         }

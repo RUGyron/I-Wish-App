@@ -64,6 +64,7 @@ struct HomeView: View {
                         syncSubtitle
                     }
                 }
+                .animation(.easeInOut(duration: 0.25), value: services.syncStatus.state)
             }
             ToolbarItem(placement: .topBarLeading) {
                 Button {
@@ -217,88 +218,133 @@ struct HomeView: View {
     // MARK: - Wishlist List
 
     private var wishlistList: some View {
-        List {
-            Section {
-                ForEach(activeWishlists) { wishlist in
-                    NavigationLink {
-                        WishlistDetailView(wishlist: wishlist)
-                    } label: {
-                        wishlistRow(wishlist)
-                    }
-                    .swipeActions(edge: .trailing, allowsFullSwipe: false) {
-                        Button(role: .destructive) {
-                            context.delete(wishlist)
-                            try? context.save()
-                        } label: {
-                            Label("Удалить", systemImage: "trash")
-                        }
-
-                        Button {
-                            wishlist.isArchived = true
-                            wishlist.updatedAt = .now
-                            try? context.save()
-                        } label: {
-                            Label("Архив", systemImage: "archivebox")
-                        }
-                        .tint(.blue)
-
-                        Button {
-                            sharingWishlist = wishlist
-                        } label: {
-                            Label("Поделиться", systemImage: "square.and.arrow.up")
-                        }
-                        .tint(.green)
-                    }
-                }
-            } header: {
+        ScrollView {
+            VStack(alignment: .leading, spacing: 0) {
                 Text("\(String(format: NSLocalizedString("%lld списков", comment: ""), activeWishlists.count)) \u{00B7} \(String(format: NSLocalizedString("%lld желаний", comment: ""), totalItems))")
                     .font(.subheadline)
                     .foregroundStyle(.secondary)
-                    .textCase(nil)
+                    .padding(.horizontal, 16)
+                    .padding(.top, 8)
+                    .padding(.bottom, 12)
+
+                LazyVGrid(
+                    columns: [GridItem(.flexible(), spacing: 12), GridItem(.flexible(), spacing: 12)],
+                    spacing: 12
+                ) {
+                    ForEach(activeWishlists) { wishlist in
+                        NavigationLink {
+                            WishlistDetailView(wishlist: wishlist)
+                        } label: {
+                            wishlistTile(wishlist)
+                        }
+                        .buttonStyle(.plain)
+                        .contextMenu {
+                            Button {
+                                sharingWishlist = wishlist
+                            } label: {
+                                Label("Поделиться", systemImage: "square.and.arrow.up")
+                            }
+                            Button {
+                                wishlist.isArchived = true
+                                wishlist.updatedAt = .now
+                                try? context.save()
+                            } label: {
+                                Label("В архив", systemImage: "archivebox")
+                            }
+                            Divider()
+                            Button(role: .destructive) {
+                                context.delete(wishlist)
+                                try? context.save()
+                            } label: {
+                                Label("Удалить", systemImage: "trash")
+                            }
+                        }
+                    }
+                }
+                .padding(.horizontal, 16)
             }
+            .padding(.bottom, 80)
         }
-        .contentMargins(.bottom, 80)
         .warmBackground()
     }
 
-    private func wishlistRow(_ wishlist: Wishlist) -> some View {
+    private func wishlistTile(_ wishlist: Wishlist) -> some View {
         let activeItems = (wishlist.items ?? []).filter { !$0.isArchived }
+        let total = activeItems.compactMap(\.price).reduce(0, +)
 
-        return HStack(spacing: 12) {
-            DefaultCoverView(
-                id: wishlist.id,
-                imageData: wishlist.coverImageData,
-                emoji: wishlist.coverEmoji
-            )
-            .frame(width: 60, height: 60)
-
-            VStack(alignment: .leading, spacing: 4) {
-                Text(wishlist.name)
-                    .font(.headline)
-
-                HStack(spacing: 4) {
-                    Text(String(format: NSLocalizedString("%lld желаний", comment: ""), activeItems.count))
-                    tierBadgeRow(for: activeItems)
+        return ZStack(alignment: .bottomLeading) {
+            if let imageData = wishlist.coverImageData, let uiImage = UIImage(data: imageData) {
+                GeometryReader { geo in
+                    Image(uiImage: uiImage)
+                        .resizable()
+                        .scaledToFill()
+                        .frame(width: geo.size.width, height: geo.size.height)
+                        .clipped()
                 }
-                .font(.caption)
-                .foregroundStyle(.secondary)
+            } else {
+                let colors = DefaultCoverGenerator.colors(for: wishlist.id)
+                ZStack {
+                    MeshGradient(
+                        width: 3, height: 3,
+                        points: [
+                            .init(0, 0),   .init(0.5, 0),   .init(1, 0),
+                            .init(0, 0.5), .init(0.5, 0.5), .init(1, 0.5),
+                            .init(0, 1),   .init(0.5, 1),   .init(1, 1),
+                        ],
+                        colors: [
+                            colors[0], colors[1], colors[2],
+                            colors[1], colors[2], colors[0],
+                            colors[2], colors[0], colors[1],
+                        ]
+                    )
+                    if let emoji = wishlist.coverEmoji {
+                        Text(emoji).font(.system(size: 48))
+                    }
+                }
             }
+
+            LinearGradient(
+                colors: [.clear, .black.opacity(0.6)],
+                startPoint: .top,
+                endPoint: .bottom
+            )
+
+            VStack(alignment: .leading, spacing: 2) {
+                HStack(spacing: 4) {
+                    Text(wishlist.name)
+                        .font(.subheadline)
+                        .fontWeight(.semibold)
+                        .foregroundStyle(.white)
+                        .lineLimit(2)
+                    if wishlist.isShared {
+                        Image(systemName: "person.2.fill")
+                            .font(.caption2)
+                            .foregroundStyle(.white.opacity(0.8))
+                    }
+                }
+                if total > 0 {
+                    Text(formatPrice(total, currency: activeItems.first(where: { $0.price != nil })?.currency ?? "RUB"))
+                        .font(.caption2)
+                        .foregroundStyle(.white.opacity(0.8))
+                } else {
+                    Text(String(format: NSLocalizedString("%lld желаний", comment: ""), activeItems.count))
+                        .font(.caption2)
+                        .foregroundStyle(.white.opacity(0.8))
+                }
+            }
+            .padding(10)
         }
-        .padding(.vertical, 4)
+        .aspectRatio(1, contentMode: .fit)
+        .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
+        .titaniumBorder(cornerRadius: 16)
     }
 
-    @ViewBuilder
-    private func tierBadgeRow(for items: [Item]) -> some View {
-        let counts = Dictionary(grouping: items, by: \.tier)
-        let activeTiers = ItemTier.allCases.filter { counts[$0]?.count ?? 0 > 0 }
-
-        ForEach(activeTiers) { tier in
-            if let count = counts[tier]?.count {
-                Text("\u{00B7}")
-                Text(tier.emoji)
-                Text("\(count)")
-            }
-        }
+    private func formatPrice(_ price: Double, currency: String) -> String {
+        let formatter = NumberFormatter()
+        formatter.numberStyle = .currency
+        formatter.currencyCode = currency
+        formatter.maximumFractionDigits = 0
+        return formatter.string(from: NSNumber(value: price)) ?? "\(Int(price)) \(currency)"
     }
 
     // MARK: - Sync Subtitle (in navbar)
@@ -341,13 +387,7 @@ struct HomeView: View {
         switch services.syncStatus.state {
         case .idle: return "iCloud"
         case .syncing: return "Синхронизация..."
-        case .synced(let date):
-            if Date.now.timeIntervalSince(date) < 10 {
-                return "Только что"
-            }
-            let fmt = RelativeDateTimeFormatter()
-            fmt.unitsStyle = .short
-            return fmt.localizedString(for: date, relativeTo: .now)
+        case .synced: return "iCloud"
         case .offline: return "Нет сети"
         case .error: return "Ошибка"
         }

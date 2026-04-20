@@ -5,6 +5,7 @@ final class AppServices {
     static let shared = AppServices()
     let syncStatus = SyncStatusService()
     let userProfile = UserProfileService()
+    let sharing = CloudKitSharingService()
 }
 
 private struct AppServicesKey: EnvironmentKey {

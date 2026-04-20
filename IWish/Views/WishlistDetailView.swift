@@ -46,6 +46,7 @@ struct WishlistDetailView: View {
     @State private var editingItem: Item?
     @State private var showingEditWishlist = false
     @State private var editMode: EditMode = .inactive
+    @State private var sortSnapshot: [UUID: Double] = [:]
     @AppStorage("collapsedTiers") private var collapsedTiersRaw: String = ""
 
     private var collapsedTiers: Set<String> {
@@ -67,6 +68,10 @@ struct WishlistDetailView: View {
         case .syncing, .error, .offline: return true
         default: return false
         }
+    }
+
+    private var totalActivePrice: Double {
+        activeItems.compactMap(\.price).reduce(0, +)
     }
 
     // MARK: - Debug
@@ -110,79 +115,106 @@ struct WishlistDetailView: View {
                 itemList
             }
         }
-        .navigationTitle(wishlist.name)
+        .navigationTitle("Желания")
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {
+            ToolbarItem(placement: .principal) {
+                VStack(spacing: 2) {
+                    Text("Желания").font(.headline)
+                    if syncShouldForceShow || services.syncStatus.hasEverSynced {
+                        syncSubtitle
+                    }
+                }
+                .animation(.easeInOut(duration: 0.25), value: services.syncStatus.state)
+            }
+
             ToolbarItem(placement: .topBarTrailing) {
-                Menu {
-                    ForEach(SortOption.allCases) { option in
-                        Button {
-                            withAnimation(.easeInOut(duration: 0.35)) {
-                                selectedSort = option
-                            }
-                        } label: {
-                            if selectedSort == option {
-                                Label(option.label, systemImage: "checkmark")
-                            } else {
-                                Label(option.label, systemImage: option.symbolName)
+                if editMode.isEditing {
+                    Button {
+                        cancelReorder()
+                    } label: {
+                        Image(systemName: "xmark")
+                    }
+                } else {
+                    Menu {
+                        ForEach(SortOption.allCases) { option in
+                            Button {
+                                withAnimation(.easeInOut(duration: 0.35)) {
+                                    selectedSort = option
+                                }
+                            } label: {
+                                if selectedSort == option {
+                                    Label(option.label, systemImage: "checkmark")
+                                } else {
+                                    Label(option.label, systemImage: option.symbolName)
+                                }
                             }
                         }
+                    } label: {
+                        Image(systemName: "arrow.up.arrow.down")
                     }
-                } label: {
-                    Image(systemName: "arrow.up.arrow.down")
                 }
             }
 
             ToolbarItem(placement: .topBarTrailing) {
-                Menu {
+                if editMode.isEditing {
                     Button {
-                        showingEditWishlist = true
+                        sortSnapshot = [:]
+                        withAnimation { editMode = .inactive }
                     } label: {
-                        Label("Изменить список", systemImage: "pencil")
+                        Image(systemName: "checkmark")
+                            .fontWeight(.semibold)
                     }
-
-                    if selectedSort == .importance {
+                } else {
+                    Menu {
                         Button {
-                            withAnimation {
-                                editMode = editMode.isEditing ? .inactive : .active
+                            showingEditWishlist = true
+                        } label: {
+                            Label("Изменить список", systemImage: "pencil")
+                        }
+
+                        if selectedSort == .importance {
+                            Button {
+                                saveSortSnapshot()
+                                withAnimation { editMode = .active }
+                            } label: {
+                                Label("Переместить", systemImage: "arrow.up.arrow.down")
                             }
-                        } label: {
-                            Label(editMode.isEditing ? "Готово" : "Переместить", systemImage: "arrow.up.arrow.down")
                         }
-                    }
 
-                    Divider()
+                        Divider()
 
-                    let archivedCount = (wishlist.items ?? []).filter { $0.isArchived }.count
-                    if archivedCount > 0 {
+                        let archivedCount = (wishlist.items ?? []).filter { $0.isArchived }.count
+                        if archivedCount > 0 {
+                            Button {
+                                showingArchive = true
+                            } label: {
+                                Label("Архив (\(archivedCount))", systemImage: "archivebox")
+                            }
+                        }
+
                         Button {
-                            showingArchive = true
+                            showingShare = true
                         } label: {
-                            Label("Архив (\(archivedCount))", systemImage: "archivebox")
+                            Label("Поделиться", systemImage: "square.and.arrow.up")
                         }
-                    }
 
-                    Button {
-                        showingShare = true
+                        Button {
+                            showingParticipants = true
+                        } label: {
+                            Label("Участники", systemImage: "person.2")
+                        }
+
+                        Divider()
+
+                        Button(role: .destructive) {
+                            showingDeleteConfirmation = true
+                        } label: {
+                            Label("Удалить список", systemImage: "trash")
+                        }
                     } label: {
-                        Label("Поделиться", systemImage: "square.and.arrow.up")
+                        Image(systemName: "ellipsis.circle")
                     }
-
-                    Button {
-                        showingParticipants = true
-                    } label: {
-                        Label("Участники", systemImage: "person.2")
-                    }
-
-                    Divider()
-
-                    Button(role: .destructive) {
-                        showingDeleteConfirmation = true
-                    } label: {
-                        Label("Удалить список", systemImage: "trash")
-                    }
-                } label: {
-                    Image(systemName: "ellipsis.circle")
                 }
             }
         }
@@ -219,6 +251,11 @@ struct WishlistDetailView: View {
                 context.delete(wishlist)
                 try? context.save()
                 dismiss()
+            }
+        }
+        .onDisappear {
+            if editMode.isEditing {
+                cancelReorder()
             }
         }
         .overlay(alignment: .bottom) {
@@ -300,6 +337,7 @@ struct WishlistDetailView: View {
         .contentMargins(.bottom, 80)
         .warmBackground()
         .animation(.easeInOut, value: activeItems.map(\.id))
+        .animation(.easeInOut(duration: 0.25), value: collapsedTiersRaw)
     }
 
     // Хедер — часть списка, но визуально читается как продолжение навбара:
@@ -332,18 +370,19 @@ struct WishlistDetailView: View {
                 HStack(spacing: 4) {
                     Text(String(format: NSLocalizedString("%lld желаний", comment: ""), activeItems.count))
                         .foregroundStyle(.secondary)
-                    if syncShouldForceShow || services.syncStatus.hasEverSynced {
-                        syncSubtitleInline
+                    if totalActivePrice > 0 {
+                        Text("\u{00B7} \(formatPrice(totalActivePrice, currency: activeItems.first(where: { $0.price != nil })?.currency ?? "RUB"))")
+                            .foregroundStyle(.secondary)
                     }
                 }
                 .font(.subheadline)
             }
             Spacer(minLength: 0)
         }
-        .padding(.vertical, 12)
+        .padding(.vertical, 6)
         .listRowBackground(Color.clear)      // прозрачно — читается как часть фона
         .listRowSeparator(.hidden)           // нет разделителя — не как ячейка
-        .listRowInsets(EdgeInsets(top: 0, leading: 20, bottom: 0, trailing: 20))
+        .listRowInsets(EdgeInsets(top: 0, leading: 16, bottom: 0, trailing: 16))
     }
 
     // MARK: - Grouped by Tier
@@ -505,24 +544,6 @@ struct WishlistDetailView: View {
         }
     }
 
-    // MARK: - Sync
-
-    @ViewBuilder
-    private var syncSubtitleInline: some View {
-        let state = services.syncStatus.state
-        let isError: Bool = {
-            switch state { case .error, .offline: return true; default: return false }
-        }()
-        HStack(spacing: 3) {
-            Image(systemName: syncIcon)
-                .font(.system(size: 9))
-            Text(syncLabel)
-                .font(.caption2)
-        }
-        .foregroundStyle(isError ? AnyShapeStyle(.orange) : AnyShapeStyle(.tertiary))
-        .onTapGesture { if isError { services.syncStatus.retry(context: context) } }
-    }
-
     // MARK: - Sync Subtitle (navbar)
 
     @ViewBuilder
@@ -563,39 +584,32 @@ struct WishlistDetailView: View {
         switch services.syncStatus.state {
         case .idle: return "iCloud"
         case .syncing: return "Синхронизация..."
-        case .synced(let date):
-            if Date.now.timeIntervalSince(date) < 10 {
-                return "Только что"
-            }
-            let fmt = RelativeDateTimeFormatter()
-            fmt.unitsStyle = .short
-            return fmt.localizedString(for: date, relativeTo: .now)
+        case .synced: return "iCloud"
         case .offline: return "Нет сети"
         case .error: return "Ошибка"
         }
     }
 
-    // MARK: - Sync Badge
+    // MARK: - Reorder helpers
 
-    @ViewBuilder
-    private var syncBadgeRow: some View {
-        let denied = services.userProfile.discoverabilityStatus == .denied
-        let isError: Bool = {
-            switch services.syncStatus.state {
-            case .error, .offline: return true
-            default: return false
+    private func saveSortSnapshot() {
+        sortSnapshot = Dictionary(
+            uniqueKeysWithValues: activeItems.map { ($0.id, $0.sortIndex) }
+        )
+    }
+
+    private func cancelReorder() {
+        if !sortSnapshot.isEmpty {
+            for item in (wishlist.items ?? []) {
+                if let saved = sortSnapshot[item.id] {
+                    item.sortIndex = saved
+                    item.updatedAt = .now
+                }
             }
-        }()
-
-        HStack {
-            Spacer()
-            SyncStatusBadge(
-                state: denied ? .idle : services.syncStatus.state,
-                onTap: isError ? { services.syncStatus.retry(context: context) } : nil
-            )
-            Spacer()
+            try? context.save()
+            sortSnapshot = [:]
         }
-        .padding(.vertical, 4)
+        withAnimation { editMode = .inactive }
     }
 
     // MARK: - FAB

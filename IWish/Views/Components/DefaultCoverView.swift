@@ -8,21 +8,30 @@ struct DefaultCoverView: View {
     var emoji: String? = nil
 
     var body: some View {
-        ZStack {
-            if let imageData, let uiImage = UIImage(data: imageData) {
+        if let imageData, let uiImage = UIImage(data: imageData) {
+            // GeometryReader takes the proposed size (e.g. 60×60 from parent's .frame),
+            // passes exact dimensions to Image so scaledToFill fills correctly,
+            // then clipped() and clipShape prevent any rendering overflow.
+            GeometryReader { geo in
                 Image(uiImage: uiImage)
                     .resizable()
                     .scaledToFill()
-            } else {
+                    .frame(width: geo.size.width, height: geo.size.height)
+                    .clipped()
+            }
+            .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
+            .titaniumBorder(cornerRadius: 12)
+        } else {
+            ZStack {
                 meshBackground
                 if let emoji {
                     Text(emoji)
                         .font(.system(size: 40))
                 }
             }
+            .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
+            .titaniumBorder(cornerRadius: 12)
         }
-        .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
-        .titaniumBorder(cornerRadius: 12)
     }
 
     private var meshBackground: some View {
