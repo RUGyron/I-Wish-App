@@ -7,9 +7,42 @@
 
 import SwiftUI
 import SwiftData
+import CloudKit
+
+// MARK: - AppDelegate (Remote Notifications)
+
+class AppDelegate: NSObject, UIApplicationDelegate {
+    func application(
+        _ application: UIApplication,
+        didFinishLaunchingWithOptions launchOptions: [UIApplication.LaunchOptionsKey: Any]? = nil
+    ) -> Bool {
+        application.registerForRemoteNotifications()
+        return true
+    }
+
+    func application(
+        _ application: UIApplication,
+        didReceiveRemoteNotification userInfo: [AnyHashable: Any]
+    ) async -> UIBackgroundFetchResult {
+        let notification = CKNotification(fromRemoteNotificationDictionary: userInfo)
+        if let queryNotif = notification as? CKQueryNotification {
+            let recordType = queryNotif.subscriptionID ?? ""
+            let wishlistID = queryNotif.recordFields?["wishlistID"] as? String ?? ""
+            NotificationCenter.default.post(
+                name: .sharedWishlistDidChange,
+                object: nil,
+                userInfo: ["recordType": recordType, "wishlistID": wishlistID]
+            )
+        }
+        return .newData
+    }
+}
+
+// MARK: - App
 
 @main
 struct IWishApp: App {
+    @UIApplicationDelegateAdaptor(AppDelegate.self) var delegate
     let container: ModelContainer
     @State private var pendingShareURL: String?
     @State private var showingJoinFromLink = false
@@ -79,4 +112,5 @@ struct IWishApp: App {
 
 extension Notification.Name {
     static let didReceiveShareLink = Notification.Name("didReceiveShareLink")
+    static let sharedWishlistDidChange = Notification.Name("sharedWishlistDidChange")
 }

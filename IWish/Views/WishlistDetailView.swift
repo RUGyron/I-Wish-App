@@ -272,6 +272,13 @@ struct WishlistDetailView: View {
                 await services.sharedSync.pullChanges(for: wishlist, context: context)
             }
         }
+        .onReceive(NotificationCenter.default.publisher(for: .sharedWishlistDidChange)) { notif in
+            guard wishlist.sharedWishlistID != nil else { return }
+            if let wID = notif.userInfo?["wishlistID"] as? String,
+               wID == wishlist.sharedWishlistID {
+                Task { await services.sharedSync.pullChanges(for: wishlist, context: context) }
+            }
+        }
         .overlay {
             if wishlist.isShared && !services.syncStatus.hasEverSynced {
                 sharedSyncGate

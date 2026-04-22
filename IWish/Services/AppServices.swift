@@ -7,6 +7,13 @@ final class AppServices {
     let userProfile = UserProfileService()
     let sharing = CloudKitSharingService()
     let sharedSync = SharedWishlistSyncService()
+    let syncQueue = SyncQueue()
+
+    init() {
+        // Wire bidirectional dependencies
+        syncQueue.syncService = sharedSync
+        sharedSync.syncQueue = syncQueue
+    }
 }
 
 private struct AppServicesKey: EnvironmentKey {

@@ -7,7 +7,11 @@ import CloudKit
 final class SharedWishlistSyncService {
     private let sharing = CloudKitSharingService()
 
-    /// Push local changes to PublicDB for a shared wishlist
+    /// Set by AppServices after init to enable offline retry queue
+    var syncQueue: SyncQueue?
+
+    /// Push local changes to PublicDB for a shared wishlist.
+    /// On network failure, enqueues to SyncQueue for automatic retry.
     func pushChanges(for wishlist: Wishlist) async {
         guard let sharedID = wishlist.sharedWishlistID else { return }
         let items = (wishlist.items ?? []).map { item in
@@ -23,7 +27,39 @@ final class SharedWishlistSyncService {
                 isArchived: item.isArchived
             )
         }
-        try? await sharing.updateSharedItems(wishlistID: sharedID, items: items)
+
+        do {
+            try await sharing.updateSharedItems(wishlistID: sharedID, items: items)
+            // Success -- remove from queue if it was pending
+            syncQueue?.dequeue(wishlistID: sharedID)
+        } catch {
+            if Self.isNetworkError(error) {
+                syncQueue?.enqueue(wishlistID: sharedID)
+            }
+        }
+    }
+
+    /// Check whether an error is a network-related failure worth retrying.
+    private static func isNetworkError(_ error: Error) -> Bool {
+        if let ckError = error as? CKError {
+            switch ckError.code {
+            case .networkUnavailable, .networkFailure, .serviceUnavailable, .requestRateLimited:
+                return true
+            default:
+                break
+            }
+        }
+        // Also handle underlying NSURLError domain
+        let nsError = error as NSError
+        if nsError.domain == NSURLErrorDomain {
+            return true
+        }
+        // Check wrapped CKError.saveFailed containing network causes
+        if let ckError = error as? CloudKitSharingService.SharingError,
+           case .saveFailed(let underlying) = ckError {
+            return isNetworkError(underlying)
+        }
+        return false
     }
 
     /// Pull remote changes from PublicDB into local SwiftData

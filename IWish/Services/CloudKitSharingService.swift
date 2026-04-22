@@ -139,12 +139,12 @@ final class CloudKitSharingService {
             recordsToSave.append(itemRecord)
         }
 
-        // 3. Save all records
+        // 3. Save all records with changedKeys to avoid overwriting concurrent edits
         do {
             let (saveResults, _) = try await publicDB.modifyRecords(
                 saving: recordsToSave,
                 deleting: [],
-                savePolicy: .allKeys
+                savePolicy: .changedKeys
             )
             for (_, result) in saveResults {
                 _ = try result.get()
@@ -257,6 +257,7 @@ final class CloudKitSharingService {
     // MARK: - Update Shared Items
 
     /// Updates SharedItem records in PublicDB (creates new ones, updates existing).
+    /// Uses `.changedKeys` save policy with field-level merge on conflict.
     nonisolated func updateSharedItems(
         wishlistID: String,
         items: [SharedItemInfo]
@@ -273,6 +274,7 @@ final class CloudKitSharingService {
 
         // 2. Build set of new item IDs
         let newItemIDs = Set(items.map(\.itemID))
+        let itemsByID = Dictionary(uniqueKeysWithValues: items.map { ($0.itemID, $0) })
 
         // 3. Determine which existing records to delete (no longer in items list)
         let recordIDsToDelete = existingRecordIDs.filter { !newItemIDs.contains($0.recordName) }
@@ -302,18 +304,57 @@ final class CloudKitSharingService {
             recordsToSave.append(itemRecord)
         }
 
-        // 5. Save + delete in one batch
-        do {
-            let (saveResults, _) = try await publicDB.modifyRecords(
-                saving: recordsToSave,
-                deleting: recordIDsToDelete,
-                savePolicy: .allKeys
-            )
-            for (_, result) in saveResults {
-                _ = try result.get()
+        // 5. Save + delete with changedKeys policy and conflict retry
+        var currentRecords = recordsToSave
+        let maxRetries = 3
+
+        for attempt in 1...maxRetries {
+            do {
+                let (saveResults, _) = try await publicDB.modifyRecords(
+                    saving: currentRecords,
+                    deleting: recordIDsToDelete,
+                    savePolicy: .changedKeys
+                )
+                for (_, result) in saveResults {
+                    _ = try result.get()
+                }
+                return // Success
+            } catch let error as CKError where error.code == .partialFailure {
+                // Check for serverRecordChanged in partial errors
+                guard let partialErrors = error.userInfo[CKPartialErrorsByItemIDKey]
+                    as? [CKRecord.ID: CKError] else {
+                    throw SharingError.saveFailed(error)
+                }
+
+                var conflictResolved = false
+                var mergedRecords: [CKRecord] = []
+
+                for record in currentRecords {
+                    if let itemError = partialErrors[record.recordID],
+                       itemError.code == .serverRecordChanged,
+                       let serverRecord = itemError.userInfo[CKRecordChangedErrorServerRecordKey]
+                           as? CKRecord,
+                       let localItem = itemsByID[record.recordID.recordName] {
+                        // Field-level merge: apply local changes onto server record
+                        mergedRecords.append(mergeItemRecord(local: localItem, serverRecord: serverRecord))
+                        conflictResolved = true
+                    } else if partialErrors[record.recordID] == nil {
+                        // This record saved successfully, skip on retry
+                    } else {
+                        // Non-conflict error — keep record for retry
+                        mergedRecords.append(record)
+                    }
+                }
+
+                if conflictResolved && attempt < maxRetries {
+                    currentRecords = mergedRecords
+                    try await Task.sleep(for: .milliseconds(200 * attempt))
+                    continue
+                }
+                throw SharingError.saveFailed(error)
+            } catch {
+                throw SharingError.saveFailed(error)
             }
-        } catch {
-            throw SharingError.saveFailed(error)
         }
     }
 
@@ -529,7 +570,73 @@ final class CloudKitSharingService {
         }
     }
 
+    // MARK: - Push Subscriptions
+
+    /// Creates CKQuerySubscriptions for SharedItem and SharedMembership changes (silent push).
+    /// Subscription IDs are deterministic — duplicate saves are silently ignored.
+    nonisolated func setupSubscriptions() async {
+        // SharedItem changes — members see new/changed/deleted items immediately
+        let itemSub = CKQuerySubscription(
+            recordType: Self.sharedItemRecordType,
+            predicate: NSPredicate(value: true),
+            subscriptionID: "SharedItem-changes",
+            options: [.firesOnRecordCreation, .firesOnRecordUpdate, .firesOnRecordDeletion]
+        )
+        let itemNotif = CKSubscription.NotificationInfo()
+        itemNotif.shouldSendContentAvailable = true
+        itemNotif.desiredKeys = ["wishlistID", "itemID", "name"]
+        itemSub.notificationInfo = itemNotif
+
+        do {
+            _ = try await publicDB.save(itemSub)
+        } catch let error as CKError where error.code == .serverRecordChanged {
+            // Already exists — OK
+        } catch {
+            // Best-effort — silently ignore
+        }
+
+        // SharedMembership changes — owner sees new members
+        let memberSub = CKQuerySubscription(
+            recordType: Self.membershipRecordType,
+            predicate: NSPredicate(value: true),
+            subscriptionID: "SharedMembership-changes",
+            options: [.firesOnRecordCreation, .firesOnRecordUpdate, .firesOnRecordDeletion]
+        )
+        let memberNotif = CKSubscription.NotificationInfo()
+        memberNotif.shouldSendContentAvailable = true
+        memberNotif.desiredKeys = ["wishlistID", "userRecordID", "role"]
+        memberSub.notificationInfo = memberNotif
+
+        do {
+            _ = try await publicDB.save(memberSub)
+        } catch let error as CKError where error.code == .serverRecordChanged {
+            // Already exists — OK
+        } catch {
+            // Best-effort — silently ignore
+        }
+    }
+
     // MARK: - Private Helpers
+
+    /// Field-level merge: applies local item values onto the server record,
+    /// preserving the server's recordChangeTag for conflict-free retry.
+    private nonisolated func mergeItemRecord(
+        local: SharedItemInfo,
+        serverRecord: CKRecord
+    ) -> CKRecord {
+        serverRecord["name"] = local.name as CKRecordValue
+        serverRecord["tier"] = local.tier as CKRecordValue
+        if let price = local.price {
+            serverRecord["price"] = price as CKRecordValue
+        }
+        serverRecord["currency"] = local.currency as CKRecordValue
+        serverRecord["url"] = (local.url ?? "") as CKRecordValue
+        serverRecord["coverEmoji"] = (local.coverEmoji ?? "") as CKRecordValue
+        serverRecord["sortIndex"] = local.sortIndex as CKRecordValue
+        serverRecord["isArchived"] = (local.isArchived ? 1 : 0) as CKRecordValue
+        serverRecord["updatedAt"] = Date.now as CKRecordValue
+        return serverRecord
+    }
 
     private nonisolated func sharedItemInfo(from record: CKRecord) -> SharedItemInfo {
         let itemID = record["itemID"] as? String ?? record.recordID.recordName
