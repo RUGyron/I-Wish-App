@@ -348,44 +348,52 @@ final class DataService {
 
             // 5. Also fetch shared wishlists via memberships
             let memberships = try await firestore.fetchMyMemberships(userUID: currentUID)
+
+            // Build a set of sharedWishlistIDs already present locally to prevent duplicates
+            let allLocalRefreshed = (try? modelContext.fetch(FetchDescriptor<Wishlist>())) ?? []
+            let localBySharedID = Dictionary(uniqueKeysWithValues: allLocalRefreshed.compactMap { wl -> (String, Wishlist)? in
+                guard let sid = wl.sharedWishlistID else { return nil }
+                return (sid, wl)
+            })
+
             for membership in memberships {
                 if let info = try? await firestore.fetchSharedWishlist(wishlistID: membership.wishlistID) {
-                    // Check if we already have this locally
-                    if let uuid = UUID(uuidString: info.wishlistID) {
-                        if let local = localByID[info.wishlistID] {
-                            local.name = info.name
-                            local.coverEmoji = info.coverEmoji
-                            local.isShared = true
-                            local.sharedWishlistID = info.wishlistID
-                            local.updatedAt = .now
-                        } else {
-                            let newWL = Wishlist(
-                                name: info.name,
-                                coverEmoji: info.coverEmoji,
-                                isShared: true,
-                                sharedWishlistID: info.wishlistID
-                            )
-                            newWL.id = uuid
-                            modelContext.insert(newWL)
+                    // Check by sharedWishlistID first, then by primary ID
+                    if let local = localBySharedID[info.wishlistID] ?? localByID[info.wishlistID] {
+                        local.name = info.name
+                        local.coverEmoji = info.coverEmoji
+                        local.gradientSeed = info.gradientSeed
+                        local.isShared = true
+                        local.sharedWishlistID = info.wishlistID
+                        local.updatedAt = .now
+                    } else if let uuid = UUID(uuidString: info.wishlistID) {
+                        let newWL = Wishlist(
+                            name: info.name,
+                            coverEmoji: info.coverEmoji,
+                            isShared: true,
+                            sharedWishlistID: info.wishlistID,
+                            gradientSeed: info.gradientSeed
+                        )
+                        newWL.id = uuid
+                        modelContext.insert(newWL)
 
-                            // Also insert items
-                            for sharedItem in info.items {
-                                let item = Item(
-                                    name: sharedItem.name,
-                                    tier: ItemTier(rawValue: sharedItem.tier) ?? .maybe,
-                                    sortIndex: sharedItem.sortIndex,
-                                    currency: sharedItem.currency,
-                                    price: sharedItem.price,
-                                    url: sharedItem.url,
-                                    coverEmoji: sharedItem.coverEmoji
-                                )
-                                item.isArchived = sharedItem.isArchived
-                                item.wishlist = newWL
-                                if let itemUUID = UUID(uuidString: sharedItem.itemID) {
-                                    item.id = itemUUID
-                                }
-                                modelContext.insert(item)
+                        // Also insert items
+                        for sharedItem in info.items {
+                            let item = Item(
+                                name: sharedItem.name,
+                                tier: ItemTier(rawValue: sharedItem.tier) ?? .maybe,
+                                sortIndex: sharedItem.sortIndex,
+                                currency: sharedItem.currency,
+                                price: sharedItem.price,
+                                url: sharedItem.url,
+                                coverEmoji: sharedItem.coverEmoji
+                            )
+                            item.isArchived = sharedItem.isArchived
+                            item.wishlist = newWL
+                            if let itemUUID = UUID(uuidString: sharedItem.itemID) {
+                                item.id = itemUUID
                             }
+                            modelContext.insert(item)
                         }
                     }
                 }
@@ -543,6 +551,7 @@ final class DataService {
                 ownerName: ownerName,
                 role: role.rawValue,
                 itemCount: localItems.count,
+                gradientSeed: wishlist.gradientSeed,
                 expiresAt: expiry
             )
 
@@ -596,7 +605,8 @@ final class DataService {
                 name: sharedData.name,
                 coverEmoji: sharedData.coverEmoji,
                 isShared: true,
-                sharedWishlistID: info.wishlistID
+                sharedWishlistID: info.wishlistID,
+                gradientSeed: sharedData.gradientSeed
             )
             if let uuid = UUID(uuidString: info.wishlistID) {
                 wishlist.id = uuid

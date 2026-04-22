@@ -90,6 +90,7 @@ final class ShareManager {
                 ownerName: ownerName,
                 role: role.rawValue,
                 itemCount: itemCount,
+                gradientSeed: wishlist.gradientSeed,
                 expiresAt: expiry
             )
 

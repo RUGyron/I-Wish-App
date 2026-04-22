@@ -7,13 +7,15 @@ struct ParticipantsView: View {
     let wishlist: Wishlist
     var onShareRequested: (() -> Void)? = nil
 
-    @State private var members: [(userUID: String, role: String)] = []
+    @State private var members: [(userUID: String, role: String, name: String)] = []
     @State private var isLoading = true
+    @State private var ownerName: String?
+    @State private var ownerUID: String?
 
     var body: some View {
         NavigationStack {
             List {
-                // Owner (current user)
+                // Owner
                 Section {
                     HStack(spacing: 12) {
                         Image(systemName: "crown.fill")
@@ -25,11 +27,17 @@ struct ParticipantsView: View {
 
                         VStack(alignment: .leading, spacing: 2) {
                             HStack(spacing: 4) {
-                                Text(services.auth.userName ?? "Вы")
+                                Text(ownerName ?? "Владелец")
                                     .font(.body.weight(.medium))
-                                Text("(владелец)")
-                                    .font(.caption)
-                                    .foregroundStyle(.secondary)
+                                if ownerUID == services.auth.uid {
+                                    Text("(это вы)")
+                                        .font(.caption)
+                                        .foregroundStyle(.secondary)
+                                } else {
+                                    Text("(владелец)")
+                                        .font(.caption)
+                                        .foregroundStyle(.secondary)
+                                }
                             }
                             Text("Полный доступ")
                                 .font(.caption)
@@ -82,7 +90,7 @@ struct ParticipantsView: View {
 
                                 VStack(alignment: .leading, spacing: 2) {
                                     HStack(spacing: 4) {
-                                        Text("Участник")
+                                        Text(member.name)
                                             .font(.body.weight(.medium))
                                         Text(roleBadge(for: member.role))
                                             .font(.caption)
@@ -128,8 +136,25 @@ struct ParticipantsView: View {
                     let info = try await services.firestore.fetchSharedWishlist(
                         wishlistID: sharedID
                     )
+
+                    // Set owner info
+                    ownerUID = info.ownerUID
+                    if let name = info.ownerName {
+                        ownerName = name
+                    } else {
+                        ownerName = await services.firestore.fetchUserName(uid: info.ownerUID) ?? "Владелец"
+                    }
+
                     // Filter out the owner — they're shown in the owner section
-                    members = info.members.filter { $0.userUID != info.ownerUID }
+                    let nonOwnerMembers = info.members.filter { $0.userUID != info.ownerUID }
+
+                    // Fetch names for each member
+                    var resolved: [(userUID: String, role: String, name: String)] = []
+                    for member in nonOwnerMembers {
+                        let name = await services.firestore.fetchUserName(uid: member.userUID) ?? "Участник"
+                        resolved.append((userUID: member.userUID, role: member.role, name: name))
+                    }
+                    members = resolved
                 } catch {
                     members = []
                 }

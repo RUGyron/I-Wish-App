@@ -122,6 +122,21 @@ final class AuthService: NSObject {
                     .joined(separator: " ")
                 userName = name
                 UserDefaults.standard.set(name, forKey: "auth_userName")
+
+                // Save profile to Firestore via REST API
+                Task {
+                    let fields: [String: Any] = [
+                        "name": ["stringValue": name],
+                        "uid": ["stringValue": authResult.user.uid]
+                    ]
+                    let url = URL(string: "https://firestore.googleapis.com/v1/projects/rewardpierwebpush/databases/(default)/documents/users/\(authResult.user.uid)")!
+                    var req = URLRequest(url: url)
+                    req.httpMethod = "PATCH"
+                    req.setValue("Bearer \(self._idToken ?? "")", forHTTPHeaderField: "Authorization")
+                    req.setValue("application/json", forHTTPHeaderField: "Content-Type")
+                    req.httpBody = try? JSONSerialization.data(withJSONObject: ["fields": fields])
+                    _ = try? await URLSession.shared.data(for: req)
+                }
             }
 
         case .failure(let error):

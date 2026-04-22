@@ -40,7 +40,7 @@ struct InvitePreviewSheet: View {
                     Text(info.wishlistName)
                         .font(.title2.weight(.semibold))
                         .multilineTextAlignment(.center)
-                        .padding(.top, 20)
+                        .padding(.top, 28)
 
                     // Info card
                     VStack(alignment: .leading, spacing: 14) {
@@ -92,7 +92,7 @@ struct InvitePreviewSheet: View {
                                 Text("Принять приглашение")
                             }
                         }
-                        .frame(maxWidth: .infinity)
+                        .frame(maxWidth: .infinity, minHeight: 20)
                     }
                     .buttonStyle(.borderedProminent)
                     .controlSize(.large)
@@ -133,7 +133,7 @@ struct InvitePreviewSheet: View {
             Text(emoji)
                 .font(.system(size: 72))
         } else {
-            let seed = info.wishlistName.hashValue
+            let seed = info.gradientSeed
             let hue1 = Double(abs(seed) % 360) / 360.0
             let hue2 = Double(abs(seed &* 31) % 360) / 360.0
             let hue3 = Double(abs(seed &* 97) % 360) / 360.0

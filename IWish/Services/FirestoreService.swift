@@ -18,6 +18,7 @@ final class FirestoreService {
         let ownerName: String?
         let role: String
         let itemCount: Int
+        let gradientSeed: Int
     }
 
     struct SharedWishlistInfo {
@@ -26,6 +27,7 @@ final class FirestoreService {
         let coverEmoji: String?
         let ownerUID: String
         let ownerName: String?
+        let gradientSeed: Int
         let members: [(userUID: String, role: String)]
         let items: [SharedItemInfo]
     }
@@ -416,6 +418,7 @@ final class FirestoreService {
             coverEmoji: (data["coverEmoji"] as? String)?.isEmpty == true ? nil : data["coverEmoji"] as? String,
             ownerUID: data["ownerUID"] as? String ?? "",
             ownerName: (data["ownerName"] as? String)?.isEmpty == true ? nil : data["ownerName"] as? String,
+            gradientSeed: data["gradientSeed"] as? Int ?? 0,
             members: members,
             items: items
         )
@@ -530,6 +533,7 @@ final class FirestoreService {
         ownerName: String?,
         role: String,
         itemCount: Int,
+        gradientSeed: Int,
         expiresAt: Date?
     ) async throws {
         var data: [String: Any?] = [
@@ -539,6 +543,7 @@ final class FirestoreService {
             "ownerName": ownerName ?? "",
             "role": role,
             "itemCount": itemCount,
+            "gradientSeed": gradientSeed as Any,
             "createdAt": Date() as Any
         ]
         if let expiresAt {
@@ -575,7 +580,8 @@ final class FirestoreService {
             wishlistEmoji: (data["wishlistEmoji"] as? String)?.isEmpty == true ? nil : data["wishlistEmoji"] as? String,
             ownerName: (data["ownerName"] as? String)?.isEmpty == true ? nil : data["ownerName"] as? String,
             role: data["role"] as? String ?? "viewer",
-            itemCount: data["itemCount"] as? Int ?? 0
+            itemCount: data["itemCount"] as? Int ?? 0,
+            gradientSeed: data["gradientSeed"] as? Int ?? 0
         )
     }
 
@@ -659,6 +665,16 @@ final class FirestoreService {
         } while pageToken != nil
 
         return allDocs
+    }
+
+    // MARK: - User Profile
+
+    func fetchUserName(uid: String) async -> String? {
+        guard let doc = try? await request("GET", path: "users/\(uid)"),
+              let fields = doc["fields"] as? [String: Any] else { return nil }
+        let data = parseFields(fields)
+        let name = data["name"] as? String
+        return (name?.isEmpty == true) ? nil : name
     }
 
     /// Parse a Firestore REST document dict into SharedItemInfo.
