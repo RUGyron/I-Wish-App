@@ -1,6 +1,5 @@
 import SwiftUI
 import SwiftData
-import FirebaseFirestore
 
 // MARK: - Sort Option
 
@@ -48,7 +47,6 @@ struct WishlistDetailView: View {
     @State private var showingEditWishlist = false
     @State private var editMode: EditMode = .inactive
     @State private var sortSnapshot: [UUID: Double] = [:]
-    @State private var itemsListener: ListenerRegistration?
     @AppStorage("collapsedTiers") private var collapsedTiersRaw: String = ""
 
     private var collapsedTiers: Set<String> {
@@ -246,8 +244,6 @@ struct WishlistDetailView: View {
             if editMode.isEditing {
                 cancelReorder()
             }
-            itemsListener?.remove()
-            itemsListener = nil
         }
         .overlay(alignment: .bottom) {
             addButton
@@ -255,8 +251,20 @@ struct WishlistDetailView: View {
         }
         .task {
             guard let sharedID = wishlist.sharedWishlistID else { return }
-            itemsListener = services.firestore.listenToItems(wishlistID: sharedID) { remoteItems in
+            do {
+                let remoteItems = try await services.firestore.fetchItems(wishlistID: sharedID)
                 mergeRemoteItems(remoteItems)
+            } catch {
+                print("[FirestoreREST] fetchItems error: \(error)")
+            }
+        }
+        .refreshable {
+            guard let sharedID = wishlist.sharedWishlistID else { return }
+            do {
+                let remoteItems = try await services.firestore.fetchItems(wishlistID: sharedID)
+                mergeRemoteItems(remoteItems)
+            } catch {
+                print("[FirestoreREST] refreshItems error: \(error)")
             }
         }
     }

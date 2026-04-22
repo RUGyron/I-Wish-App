@@ -2,28 +2,8 @@
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0">
 <dict>
-	<key>NSCameraUsageDescription</key>
-	<string>Чтобы сфотографировать обложку для желания</string>
-	<key>NSPhotoLibraryUsageDescription</key>
-	<string>Чтобы выбрать фото для обложки желания</string>
-	<key>CFBundleURLTypes</key>
-	<array>
-		<dict>
-			<key>CFBundleURLSchemes</key>
-			<array>
-				<string>iwish</string>
-			</array>
-			<key>CFBundleURLName</key>
-			<string>com.rugyron.iwish</string>
-		</dict>
-	</array>
 	<key>CFBundleIcons</key>
 	<dict>
-		<key>CFBundlePrimaryIcon</key>
-		<dict>
-			<key>CFBundleIconFiles</key>
-			<array/>
-		</dict>
 		<key>CFBundleAlternateIcons</key>
 		<dict>
 			<key>DarkIcon</key>
@@ -34,11 +14,22 @@
 				</array>
 			</dict>
 		</dict>
+		<key>CFBundlePrimaryIcon</key>
+		<dict>
+			<key>CFBundleIconFiles</key>
+			<array/>
+		</dict>
 	</dict>
-	<key>UIBackgroundModes</key>
+	<key>CFBundleURLTypes</key>
 	<array>
-		<string>fetch</string>
-		<string>remote-notification</string>
+		<dict>
+			<key>CFBundleURLName</key>
+			<string>com.rugyron.iwish</string>
+			<key>CFBundleURLSchemes</key>
+			<array>
+				<string>iwish</string>
+			</array>
+		</dict>
 	</array>
 </dict>
 </plist>
