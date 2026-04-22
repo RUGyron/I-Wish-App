@@ -2,7 +2,6 @@ import SwiftUI
 import SwiftData
 import AVFoundation
 import AudioToolbox
-import CloudKit
 
 struct JoinWishlistSheet: View {
     @Environment(\.dismiss) private var dismiss
@@ -11,7 +10,7 @@ struct JoinWishlistSheet: View {
     @Environment(\.toast) private var toast
     @State private var showingScanner = false
     @State private var joinStatus: JoinStatus = .idle
-    @State private var resolvedInfo: CloudKitSharingService.ShareLinkInfo?
+    @State private var resolvedInfo: FirestoreService.ShareLinkInfo?
     @State private var showingInvitePreview = false
 
     var initialURL: String? = nil
@@ -149,7 +148,7 @@ struct JoinWishlistSheet: View {
         joinStatus = .joining
         Task {
             do {
-                guard let info = try await services.sharing.resolveShareLink(shortID: id) else {
+                guard let info = try await services.firestore.resolveInviteLink(shortID: id) else {
                     joinStatus = .idle
                     toast.error("Приглашение недействительно или истекло")
                     return
@@ -168,27 +167,22 @@ struct JoinWishlistSheet: View {
         guard let info = resolvedInfo else { return }
         Task {
             do {
-                let ckContainer = CKContainer(
-                    identifier: ModelContainerFactory.cloudKitContainerID
-                )
-
-                // 1. Get receiver's userRecordID
-                let userRecordID = try await withCheckedThrowingContinuation { (cont: CheckedContinuation<CKRecord.ID, Error>) in
-                    ckContainer.fetchUserRecordID { recordID, error in
-                        if let recordID { cont.resume(returning: recordID) }
-                        else { cont.resume(throwing: error ?? CKError(.internalError)) }
-                    }
+                // 1. Check auth — must be signed in (not anonymous)
+                guard let uid = services.auth.uid else {
+                    showingInvitePreview = false
+                    toast.error("Необходимо войти через Apple ID")
+                    return
                 }
 
-                // 2. Join: add our userRecordID to SharedWishlist.memberRecordIDs
-                try await services.sharing.joinWishlist(
+                // 2. Join: create membership in Firestore
+                try await services.firestore.joinWishlist(
                     wishlistID: info.wishlistID,
-                    userRecordID: userRecordID.recordName,
+                    userUID: uid,
                     role: info.role
                 )
 
-                // 3. Fetch SharedWishlist + SharedItems from PublicDB
-                let sharedData = try await services.sharing.fetchSharedWishlist(
+                // 3. Fetch shared wishlist + items from Firestore
+                let sharedData = try await services.firestore.fetchSharedWishlist(
                     wishlistID: info.wishlistID
                 )
 
@@ -196,7 +190,6 @@ struct JoinWishlistSheet: View {
                 let wishlist = Wishlist(
                     name: sharedData.name,
                     coverEmoji: sharedData.coverEmoji,
-                    ownerRecordID: sharedData.ownerRecordID,
                     isShared: true,
                     sharedWishlistID: info.wishlistID
                 )

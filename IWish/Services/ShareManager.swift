@@ -1,4 +1,3 @@
-import CloudKit
 import SwiftUI
 import SwiftData
 
@@ -29,30 +28,19 @@ final class ShareManager {
     private(set) var shortID: String?
 
     private static let linkDomain = "https://rugyron.github.io/I-Wish-App"
-    private let sharingService = CloudKitSharingService()
-
-    private let ckContainer = CKContainer(
-        identifier: ModelContainerFactory.cloudKitContainerID
-    )
+    private let firestore = FirestoreService()
 
     func generateShare(
         for wishlist: Wishlist,
         role: ShareRole,
         ttl: InviteTTL,
+        ownerUID: String,
         ownerName: String?
     ) async {
         isLoading = true
         error = nil
 
         do {
-            // 1. Get owner's userRecordID
-            let ownerRecordID = try await withCheckedThrowingContinuation { (cont: CheckedContinuation<CKRecord.ID, Error>) in
-                ckContainer.fetchUserRecordID { recordID, error in
-                    if let recordID { cont.resume(returning: recordID) }
-                    else { cont.resume(throwing: error ?? CKError(.internalError)) }
-                }
-            }
-
             let newShortID = String(
                 wishlist.id.uuidString
                     .replacingOccurrences(of: "-", with: "")
@@ -60,13 +48,13 @@ final class ShareManager {
                     .lowercased()
             )
 
-            // Always delete existing ShareLink before creating new one
-            try? await sharingService.deleteShareLink(shortID: newShortID)
+            // Always delete existing invite link before creating new one
+            try? await firestore.deleteInviteLink(shortID: newShortID)
 
-            // 2. Publish wishlist + items to PublicDB
+            // 1. Publish wishlist + items to Firestore
             let localItems = (wishlist.items ?? []).filter { !$0.isArchived }
             let sharedItems = localItems.map { item in
-                CloudKitSharingService.SharedItemInfo(
+                FirestoreService.SharedItemInfo(
                     itemID: item.id.uuidString,
                     name: item.name,
                     tier: item.tier.rawValue,
@@ -78,42 +66,40 @@ final class ShareManager {
                     isArchived: item.isArchived
                 )
             }
-            try await sharingService.publishWishlist(
+            try await firestore.publishWishlist(
                 id: wishlist.id.uuidString,
                 name: wishlist.name,
                 emoji: wishlist.coverEmoji,
-                ownerRecordID: ownerRecordID.recordName,
+                ownerUID: ownerUID,
                 ownerName: ownerName,
-                items: sharedItems,
-                role: role.rawValue
+                items: sharedItems
             )
 
             let itemCount = localItems.count
             let expiry = ttl.duration.map { Date.now.addingTimeInterval($0) }
-            let effectiveExpiry = expiry ?? Date.distantFuture
 
-            // 3. Create ShareLink in PublicDB for QR/link resolution
+            // 2. Create invite link in Firestore for QR/link resolution
             let userURL = URL(string: "\(Self.linkDomain)/j/\(newShortID)")!
 
-            try await sharingService.createShareLink(
+            try await firestore.createInviteLink(
                 shortID: newShortID,
                 wishlistID: wishlist.id.uuidString,
                 wishlistName: wishlist.name,
                 wishlistEmoji: wishlist.coverEmoji,
                 ownerName: ownerName,
-                role: role,
+                role: role.rawValue,
                 itemCount: itemCount,
-                expiresAt: effectiveExpiry
+                expiresAt: expiry
             )
 
-            // 4. Update local state
+            // 3. Update local state
             self.shareURL = userURL
             self.expiresAt = expiry
             self.shortID = newShortID
             self.wishlistID = wishlist.id
             self.wishlistRef = wishlist
 
-            // 5. Mark wishlist as shared
+            // 4. Mark wishlist as shared
             wishlist.isShared = true
             wishlist.sharedWishlistID = wishlist.id.uuidString
             wishlist.updatedAt = .now
@@ -129,13 +115,13 @@ final class ShareManager {
     private var wishlistRef: Wishlist?
 
     func revokeAll() async {
-        // Delete SharedWishlist + SharedItems from PublicDB
+        // Delete shared wishlist + items from Firestore
         if let wid = wishlistID {
-            try? await sharingService.deleteSharedWishlist(wishlistID: wid.uuidString)
+            try? await firestore.deleteSharedWishlist(wishlistID: wid.uuidString)
         }
-        // Delete ShareLink from PublicDB
+        // Delete invite link from Firestore
         if let shortID {
-            try? await sharingService.deleteShareLink(shortID: shortID)
+            try? await firestore.deleteInviteLink(shortID: shortID)
         }
         wishlistRef?.isShared = false
         wishlistRef?.updatedAt = .now

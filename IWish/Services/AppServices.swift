@@ -1,19 +1,13 @@
 import SwiftUI
+import FirebaseAuth
 
 @MainActor
 final class AppServices {
     static let shared = AppServices()
     let syncStatus = SyncStatusService()
     let userProfile = UserProfileService()
-    let sharing = CloudKitSharingService()
-    let sharedSync = SharedWishlistSyncService()
-    let syncQueue = SyncQueue()
-
-    init() {
-        // Wire bidirectional dependencies
-        syncQueue.syncService = sharedSync
-        sharedSync.syncQueue = syncQueue
-    }
+    let auth = AuthService()
+    let firestore = FirestoreService()
 }
 
 private struct AppServicesKey: EnvironmentKey {

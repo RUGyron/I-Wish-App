@@ -1,4 +1,3 @@
-import CloudKit
 import SwiftUI
 import SwiftData
 
@@ -10,7 +9,7 @@ struct HomeView: View {
     @State private var showingSettings = false
     @State private var showingJoin = false
     @State private var sharingWishlist: Wishlist?
-    @State private var sharedWishlists: [CloudKitSharingService.SharedWishlistInfo] = []
+    @State private var sharedWishlists: [FirestoreService.SharedWishlistInfo] = []
 
     // MARK: - Debug
 
@@ -356,16 +355,16 @@ struct HomeView: View {
 
     private func fetchSharedWishlists() async {
         do {
-            let recordID = try await withCheckedThrowingContinuation { (cont: CheckedContinuation<CKRecord.ID, Error>) in
-                CKContainer(identifier: ModelContainerFactory.cloudKitContainerID).fetchUserRecordID { id, error in
-                    if let id { cont.resume(returning: id) }
-                    else { cont.resume(throwing: error ?? CKError(.internalError)) }
+            guard let uid = services.auth.uid else { return }
+
+            let memberships = try await services.firestore.fetchMyMemberships(userUID: uid)
+
+            var fetched: [FirestoreService.SharedWishlistInfo] = []
+            for membership in memberships {
+                if let info = try? await services.firestore.fetchSharedWishlist(wishlistID: membership.wishlistID) {
+                    fetched.append(info)
                 }
             }
-
-            let fetched = try await services.sharing.fetchMySharedWishlists(
-                userRecordID: recordID.recordName
-            )
 
             // Filter out wishlists that already exist locally (owned by us)
             let localIDs = Set(activeWishlists.map(\.id.uuidString))
@@ -381,7 +380,7 @@ struct HomeView: View {
     }
 
     /// Creates a local Wishlist in SwiftData if one doesn't exist for this shared wishlist.
-    private func ensureLocalCopy(for info: CloudKitSharingService.SharedWishlistInfo) {
+    private func ensureLocalCopy(for info: FirestoreService.SharedWishlistInfo) {
         guard let uuid = UUID(uuidString: info.wishlistID) else { return }
 
         // Check if local copy already exists
@@ -391,7 +390,7 @@ struct HomeView: View {
         let local = Wishlist(
             name: info.name,
             coverEmoji: info.coverEmoji,
-            ownerRecordID: info.ownerRecordID,
+            ownerRecordID: info.ownerUID,
             isShared: true
         )
         // Override the auto-generated UUID with the shared one
@@ -427,12 +426,12 @@ struct HomeView: View {
     }
 
     /// Finds local Wishlist matching a SharedWishlistInfo by UUID.
-    private func localWishlist(for info: CloudKitSharingService.SharedWishlistInfo) -> Wishlist? {
+    private func localWishlist(for info: FirestoreService.SharedWishlistInfo) -> Wishlist? {
         guard let uuid = UUID(uuidString: info.wishlistID) else { return nil }
         return wishlists.first { $0.id == uuid }
     }
 
-    private func sharedWishlistTile(_ info: CloudKitSharingService.SharedWishlistInfo) -> some View {
+    private func sharedWishlistTile(_ info: FirestoreService.SharedWishlistInfo) -> some View {
         let itemCount = info.items.filter { !$0.isArchived }.count
         let tileUUID = UUID(uuidString: info.wishlistID) ?? UUID()
         let colors = DefaultCoverGenerator.colors(for: tileUUID)

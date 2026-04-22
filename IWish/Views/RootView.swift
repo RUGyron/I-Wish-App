@@ -23,11 +23,7 @@ struct RootView: View {
             }
         }
         .task {
-            // Wire modelContext into SyncQueue for offline retry
-            services.syncQueue.modelContext = context
-            await services.syncQueue.processQueue()
-            await services.sharing.deleteExpiredShareLinks()
-            await services.sharing.setupSubscriptions()
+            // Firebase auth is auto-initialized via AuthService.init()
         }
         .toastOverlay()
     }

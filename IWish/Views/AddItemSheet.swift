@@ -285,8 +285,21 @@ struct AddItemSheet: View {
         context.insert(item)
         try? context.save()
 
-        if wishlist.sharedWishlistID != nil {
-            Task { await services.sharedSync.pushChanges(for: wishlist) }
+        if let sharedID = wishlist.sharedWishlistID {
+            let allItems = (wishlist.items ?? []).map { item in
+                FirestoreService.SharedItemInfo(
+                    itemID: item.id.uuidString,
+                    name: item.name,
+                    tier: item.tier.rawValue,
+                    price: item.price,
+                    currency: item.currency,
+                    url: item.url,
+                    coverEmoji: item.coverEmoji,
+                    sortIndex: item.sortIndex,
+                    isArchived: item.isArchived
+                )
+            }
+            Task { try? await services.firestore.updateItems(wishlistID: sharedID, items: allItems) }
         }
 
         dismiss()

@@ -3,7 +3,7 @@ import SwiftUI
 struct InvitePreviewSheet: View {
     @Environment(\.dismiss) private var dismiss
 
-    let info: CloudKitSharingService.ShareLinkInfo
+    let info: FirestoreService.ShareLinkInfo
     let onAccept: () -> Void
 
     @State private var isAccepting = false

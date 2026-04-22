@@ -1,5 +1,6 @@
 import SwiftUI
 import SwiftData
+import FirebaseFirestore
 
 // MARK: - Sort Option
 
@@ -47,6 +48,7 @@ struct WishlistDetailView: View {
     @State private var showingEditWishlist = false
     @State private var editMode: EditMode = .inactive
     @State private var sortSnapshot: [UUID: Double] = [:]
+    @State private var itemsListener: ListenerRegistration?
     @AppStorage("collapsedTiers") private var collapsedTiersRaw: String = ""
 
     private var collapsedTiers: Set<String> {
@@ -257,26 +259,17 @@ struct WishlistDetailView: View {
             if editMode.isEditing {
                 cancelReorder()
             }
+            itemsListener?.remove()
+            itemsListener = nil
         }
         .overlay(alignment: .bottom) {
             addButton
                 .padding(.bottom, 24)
         }
         .task {
-            if wishlist.sharedWishlistID != nil {
-                await services.sharedSync.pullChanges(for: wishlist, context: context)
-            }
-        }
-        .refreshable {
-            if wishlist.sharedWishlistID != nil {
-                await services.sharedSync.pullChanges(for: wishlist, context: context)
-            }
-        }
-        .onReceive(NotificationCenter.default.publisher(for: .sharedWishlistDidChange)) { notif in
-            guard wishlist.sharedWishlistID != nil else { return }
-            if let wID = notif.userInfo?["wishlistID"] as? String,
-               wID == wishlist.sharedWishlistID {
-                Task { await services.sharedSync.pullChanges(for: wishlist, context: context) }
+            guard let sharedID = wishlist.sharedWishlistID else { return }
+            itemsListener = services.firestore.listenToItems(wishlistID: sharedID) { remoteItems in
+                mergeRemoteItems(remoteItems)
             }
         }
         .overlay {
@@ -462,8 +455,79 @@ struct WishlistDetailView: View {
     }
 
     private func pushIfShared() {
-        guard wishlist.sharedWishlistID != nil else { return }
-        Task { await services.sharedSync.pushChanges(for: wishlist) }
+        guard let sharedID = wishlist.sharedWishlistID else { return }
+        let items = (wishlist.items ?? []).map { item in
+            FirestoreService.SharedItemInfo(
+                itemID: item.id.uuidString,
+                name: item.name,
+                tier: item.tier.rawValue,
+                price: item.price,
+                currency: item.currency,
+                url: item.url,
+                coverEmoji: item.coverEmoji,
+                sortIndex: item.sortIndex,
+                isArchived: item.isArchived
+            )
+        }
+        Task { try? await services.firestore.updateItems(wishlistID: sharedID, items: items) }
+    }
+
+    /// Merges remote Firestore items into local SwiftData: add new, update changed, delete removed.
+    private func mergeRemoteItems(_ remoteItems: [FirestoreService.SharedItemInfo]) {
+        let localItems = wishlist.items ?? []
+        let localByID = Dictionary(uniqueKeysWithValues: localItems.compactMap { item -> (String, Item)? in
+            (item.id.uuidString, item)
+        })
+        let remoteIDs = Set(remoteItems.map(\.itemID))
+
+        // Delete items that no longer exist remotely
+        for local in localItems {
+            if !remoteIDs.contains(local.id.uuidString) {
+                context.delete(local)
+            }
+        }
+
+        // Add new or update changed items
+        for remote in remoteItems {
+            let tier: ItemTier
+            switch remote.tier {
+            case "must": tier = .must
+            case "maybe": tier = .maybe
+            default: tier = .idea
+            }
+
+            if let local = localByID[remote.itemID] {
+                // Update existing
+                local.name = remote.name
+                local.tier = tier
+                local.price = remote.price
+                local.currency = remote.currency
+                local.url = remote.url
+                local.coverEmoji = remote.coverEmoji
+                local.sortIndex = remote.sortIndex
+                local.isArchived = remote.isArchived
+                local.updatedAt = .now
+            } else {
+                // Add new
+                let item = Item(
+                    name: remote.name,
+                    tier: tier,
+                    currency: remote.currency,
+                    price: remote.price,
+                    url: remote.url
+                )
+                item.coverEmoji = remote.coverEmoji
+                item.sortIndex = remote.sortIndex
+                item.isArchived = remote.isArchived
+                item.wishlist = wishlist
+                if let uuid = UUID(uuidString: remote.itemID) {
+                    item.id = uuid
+                }
+                context.insert(item)
+            }
+        }
+
+        try? context.save()
     }
 
     // MARK: - Flat Sorted

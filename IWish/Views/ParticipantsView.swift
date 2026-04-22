@@ -7,7 +7,7 @@ struct ParticipantsView: View {
     let wishlist: Wishlist
     var onShareRequested: (() -> Void)? = nil
 
-    @State private var members: [(recordID: String, role: String)] = []
+    @State private var members: [(userUID: String, role: String)] = []
     @State private var isLoading = true
 
     var body: some View {
@@ -124,11 +124,12 @@ struct ParticipantsView: View {
             }
             .task {
                 do {
-                    let info = try await services.sharing.fetchSharedWishlist(
-                        wishlistID: wishlist.id.uuidString
+                    let sharedID = wishlist.sharedWishlistID ?? wishlist.id.uuidString
+                    let info = try await services.firestore.fetchSharedWishlist(
+                        wishlistID: sharedID
                     )
                     // Filter out the owner — they're shown in the owner section
-                    members = info.members.filter { $0.recordID != info.ownerRecordID }
+                    members = info.members.filter { $0.userUID != info.ownerUID }
                 } catch {
                     members = []
                 }
