@@ -74,6 +74,7 @@ final class CloudKitSharingService {
     private static let shareLinkRecordType = "ShareLink"
     private static let sharedWishlistRecordType = "SharedWishlist"
     private static let sharedItemRecordType = "SharedItem"
+    private static let membershipRecordType = "SharedMembership"
 
     // MARK: - Properties
 
@@ -196,14 +197,18 @@ final class CloudKitSharingService {
             cursor = nextCursor
         }
 
-        // 3. Build members array
-        let memberIDs = wishlistRecord["memberRecordIDs"] as? [String] ?? []
-        let memberRoles = wishlistRecord["memberRoles"] as? [String] ?? []
-
+        // 3. Build members from SharedMembership records
+        let memberPredicate = NSPredicate(format: "wishlistID == %@", wishlistID)
+        let memberQuery = CKQuery(recordType: Self.membershipRecordType, predicate: memberPredicate)
         var members: [(recordID: String, role: String)] = []
-        for i in 0..<memberIDs.count {
-            let role = i < memberRoles.count ? memberRoles[i] : "viewer"
-            members.append((recordID: memberIDs[i], role: role))
+        if let (memberResults, _) = try? await publicDB.records(matching: memberQuery) {
+            for (_, result) in memberResults {
+                if let rec = try? result.get() {
+                    let uid = rec["userRecordID"] as? String ?? ""
+                    let role = rec["role"] as? String ?? "viewer"
+                    if !uid.isEmpty { members.append((recordID: uid, role: role)) }
+                }
+            }
         }
 
         let name = wishlistRecord["name"] as? String ?? ""
@@ -225,45 +230,27 @@ final class CloudKitSharingService {
     // MARK: - Join Wishlist
 
     /// Adds userRecordID to memberRecordIDs array of the SharedWishlist.
+    /// Joins a shared wishlist by creating a SharedMembership record owned by the receiver.
+    /// This avoids PublicDB permission issues (only creator can modify their own records).
     nonisolated func joinWishlist(
         wishlistID: String,
         userRecordID: String,
         role: String = "viewer"
     ) async throws {
-        try await retryOnConflict { [self] in
-            let recordID = CKRecord.ID(recordName: wishlistID)
-            let record: CKRecord
-            do {
-                record = try await publicDB.record(for: recordID)
-            } catch {
-                throw SharingError.wishlistNotFound
-            }
+        // Each user creates their own membership record — no permission conflict
+        let membershipID = CKRecord.ID(recordName: "\(wishlistID)_\(userRecordID)")
+        let record = CKRecord(recordType: Self.membershipRecordType, recordID: membershipID)
+        record["wishlistID"] = wishlistID as CKRecordValue
+        record["userRecordID"] = userRecordID as CKRecordValue
+        record["role"] = role as CKRecordValue
+        record["joinedAt"] = Date.now as CKRecordValue
 
-            var memberIDs = record["memberRecordIDs"] as? [String] ?? []
-            var memberRoles = record["memberRoles"] as? [String] ?? []
-
-            // Already a member — no-op
-            if memberIDs.contains(userRecordID) { return }
-
-            memberIDs.append(userRecordID)
-            memberRoles.append(role)
-
-            record["memberRecordIDs"] = memberIDs as CKRecordValue
-            record["memberRoles"] = memberRoles as CKRecordValue
-            record["updatedAt"] = Date.now as CKRecordValue
-
-            do {
-                let (saveResults, _) = try await publicDB.modifyRecords(
-                    saving: [record],
-                    deleting: [],
-                    savePolicy: .changedKeys
-                )
-                for (_, result) in saveResults {
-                    _ = try result.get()
-                }
-            } catch {
-                throw SharingError.joinFailed(error)
-            }
+        do {
+            _ = try await publicDB.save(record)
+        } catch let error as CKError where error.code == .serverRecordChanged {
+            // Already joined — no-op
+        } catch {
+            throw SharingError.joinFailed(error)
         }
     }
 
@@ -333,83 +320,31 @@ final class CloudKitSharingService {
     // MARK: - Fetch My Shared Wishlists
 
     /// Returns all SharedWishlists where userRecordID is in memberRecordIDs.
+    /// Fetches wishlists where the user is a member (via SharedMembership records).
     nonisolated func fetchMySharedWishlists(
         userRecordID: String
     ) async throws -> [SharedWishlistInfo] {
-        let predicate = NSPredicate(
-            format: "memberRecordIDs CONTAINS %@",
-            userRecordID
-        )
-        let query = CKQuery(
-            recordType: Self.sharedWishlistRecordType,
-            predicate: predicate
-        )
+        // 1. Find all SharedMembership records for this user
+        let predicate = NSPredicate(format: "userRecordID == %@", userRecordID)
+        let query = CKQuery(recordType: Self.membershipRecordType, predicate: predicate)
 
-        var wishlistRecords: [CKRecord] = []
-        var cursor: CKQueryOperation.Cursor?
-
-        let (firstResults, firstCursor) = try await publicDB.records(matching: query)
-        for (_, result) in firstResults {
+        var wishlistIDs: [(id: String, role: String)] = []
+        let (membershipResults, _) = try await publicDB.records(matching: query)
+        for (_, result) in membershipResults {
             if let record = try? result.get() {
-                wishlistRecords.append(record)
+                let wID = record["wishlistID"] as? String ?? ""
+                let role = record["role"] as? String ?? "viewer"
+                if !wID.isEmpty { wishlistIDs.append((id: wID, role: role)) }
             }
         }
-        cursor = firstCursor
 
-        while let activeCursor = cursor {
-            let (moreResults, nextCursor) = try await publicDB.records(
-                continuingMatchFrom: activeCursor
-            )
-            for (_, result) in moreResults {
-                if let record = try? result.get() {
-                    wishlistRecords.append(record)
-                }
-            }
-            cursor = nextCursor
-        }
-
-        // For each wishlist, fetch its items
+        // 2. For each wishlist, fetch the SharedWishlist + items
         var results: [SharedWishlistInfo] = []
-        for wishlistRecord in wishlistRecords {
-            let wID = wishlistRecord["wishlistID"] as? String ?? wishlistRecord.recordID.recordName
-
-            // Fetch items
-            let itemPredicate = NSPredicate(format: "wishlistID == %@", wID)
-            let itemQuery = CKQuery(recordType: Self.sharedItemRecordType, predicate: itemPredicate)
-            itemQuery.sortDescriptors = [NSSortDescriptor(key: "sortIndex", ascending: true)]
-
-            var items: [SharedItemInfo] = []
-            let (itemResults, _) = try await publicDB.records(matching: itemQuery)
-            for (_, result) in itemResults {
-                if let record = try? result.get() {
-                    items.append(sharedItemInfo(from: record))
-                }
+        for membership in wishlistIDs {
+            guard let info = try? await fetchSharedWishlist(wishlistID: membership.id) else {
+                continue
             }
-
-            // Build members
-            let memberIDs = wishlistRecord["memberRecordIDs"] as? [String] ?? []
-            let memberRoles = wishlistRecord["memberRoles"] as? [String] ?? []
-
-            var members: [(recordID: String, role: String)] = []
-            for i in 0..<memberIDs.count {
-                let role = i < memberRoles.count ? memberRoles[i] : "viewer"
-                members.append((recordID: memberIDs[i], role: role))
-            }
-
-            let name = wishlistRecord["name"] as? String ?? ""
-            let emoji = wishlistRecord["coverEmoji"] as? String
-            let ownerRecordID = wishlistRecord["ownerRecordID"] as? String ?? ""
-            let ownerName = wishlistRecord["ownerName"] as? String
-
-            results.append(SharedWishlistInfo(
-                wishlistID: wID,
-                name: name,
-                coverEmoji: emoji?.isEmpty == true ? nil : emoji,
-                ownerRecordID: ownerRecordID,
-                ownerName: ownerName?.isEmpty == true ? nil : ownerName,
-                members: members,
-                items: items
-            ))
+            results.append(info)
         }
 
         return results
