@@ -21,6 +21,9 @@ struct SettingsView: View {
             wishesSection
             invitesSection
             aboutSection
+            if services.auth.isAuthenticated {
+                signOutSection
+            }
         }
         .sheet(isPresented: $showingAppleSignIn) {
             SignInWithAppleSheet { result in
@@ -195,6 +198,32 @@ struct SettingsView: View {
                 .foregroundStyle(.tertiary)
                 .frame(maxWidth: .infinity, alignment: .center)
                 .padding(.top, 8)
+        }
+    }
+
+    // MARK: - Sign Out
+
+    private var signOutSection: some View {
+        Section {
+            Button(role: .destructive) {
+                // Clear local SwiftData cache
+                let wishlistDescriptor = FetchDescriptor<Wishlist>()
+                if let allWishlists = try? context.fetch(wishlistDescriptor) {
+                    for wl in allWishlists {
+                        context.delete(wl)
+                    }
+                }
+                let itemDescriptor = FetchDescriptor<Item>()
+                if let allItems = try? context.fetch(itemDescriptor) {
+                    for item in allItems {
+                        context.delete(item)
+                    }
+                }
+                try? context.save()
+                try? services.auth.signOut()
+            } label: {
+                Label("Выйти из аккаунта", systemImage: "rectangle.portrait.and.arrow.right")
+            }
         }
     }
 

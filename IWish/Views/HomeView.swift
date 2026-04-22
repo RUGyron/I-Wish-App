@@ -9,6 +9,7 @@ struct HomeView: View {
     @State private var showingSettings = false
     @State private var showingJoin = false
     @State private var sharingWishlist: Wishlist?
+    @State private var pollTimer: Timer?
 
     // MARK: - Debug
 
@@ -81,6 +82,12 @@ struct HomeView: View {
         .task {
             await services.data?.refreshWishlists()
         }
+        .onAppear {
+            startPolling()
+        }
+        .onDisappear {
+            stopPolling()
+        }
         .onReceive(NotificationCenter.default.publisher(for: .didReceiveShareLink)) { _ in
             showingJoin = true
         }
@@ -103,18 +110,26 @@ struct HomeView: View {
     private var syncSubtitle: some View {
         if let data = services.data {
             if data.isSyncing {
-                HStack(spacing: 4) {
+                HStack(spacing: 3) {
                     ProgressView()
-                        .controlSize(.mini)
+                        .scaleEffect(0.6)
                     Text("Синхронизация...")
-                        .font(.caption2)
-                        .foregroundStyle(.secondary)
+                        .font(.system(size: 10))
                 }
-            } else if let error = data.syncError {
-                Text(error)
-                    .font(.caption2)
+                .foregroundStyle(.secondary)
+            } else if data.syncError != nil {
+                Button {
+                    Task { await services.data?.refreshWishlists() }
+                } label: {
+                    HStack(spacing: 3) {
+                        Image(systemName: "exclamationmark.icloud")
+                            .font(.system(size: 9))
+                        Text("Ошибка синхры")
+                            .font(.system(size: 10))
+                    }
                     .foregroundStyle(.orange)
-                    .lineLimit(1)
+                }
+                .buttonStyle(.plain)
             }
         }
     }
@@ -272,9 +287,7 @@ struct HomeView: View {
                         .clipped()
                 }
             } else {
-                let colors = wishlist.gradientSeed != 0
-                    ? DefaultCoverGenerator.colors(forSeed: wishlist.gradientSeed)
-                    : DefaultCoverGenerator.colors(for: wishlist.id)
+                let colors = DefaultCoverGenerator.colors(forSeed: wishlist.gradientSeed != 0 ? wishlist.gradientSeed : wishlist.id.hashValue)
                 ZStack {
                     MeshGradient(
                         width: 3, height: 3,
@@ -337,6 +350,21 @@ struct HomeView: View {
         formatter.currencyCode = currency
         formatter.maximumFractionDigits = 0
         return formatter.string(from: NSNumber(value: price)) ?? "\(Int(price)) \(currency)"
+    }
+
+    // MARK: - Polling
+
+    private func startPolling() {
+        pollTimer = Timer.scheduledTimer(withTimeInterval: 10.0, repeats: true) { _ in
+            Task { @MainActor in
+                await services.data?.refreshWishlists()
+            }
+        }
+    }
+
+    private func stopPolling() {
+        pollTimer?.invalidate()
+        pollTimer = nil
     }
 
     // MARK: - FAB

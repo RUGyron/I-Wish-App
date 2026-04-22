@@ -188,7 +188,9 @@ final class AuthService: NSObject {
         _uid = nil
         _idToken = nil
         _refreshToken = nil
+        _isAppleSignedIn = false
         userName = nil
+        UserDefaults.standard.removeObject(forKey: "auth_userName")
     }
 
     enum AuthError: LocalizedError {

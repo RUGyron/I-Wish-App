@@ -36,11 +36,13 @@ struct DefaultCoverView: View {
     }
 
     private var meshBackground: some View {
-        let colors: [Color] = if let seed = gradientSeed, seed != 0 {
-            DefaultCoverGenerator.colors(forSeed: seed)
-        } else {
-            DefaultCoverGenerator.colors(for: id)
-        }
+        let colors: [Color] = {
+            if let seed = gradientSeed, seed != 0 {
+                return DefaultCoverGenerator.colors(forSeed: seed)
+            }
+            // Fallback: derive seed from UUID hashValue for consistency
+            return DefaultCoverGenerator.colors(forSeed: id.hashValue)
+        }()
         return MeshGradient(
             width: 3,
             height: 3,

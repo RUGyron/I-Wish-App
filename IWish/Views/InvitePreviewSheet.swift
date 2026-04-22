@@ -29,9 +29,9 @@ struct InvitePreviewSheet: View {
                         .ignoresSafeArea(edges: .top)
 
                     heroIcon
-                        .padding(.vertical, 40)
                 }
                 .frame(maxWidth: .infinity)
+                .frame(height: 120)
 
                 // Content area
                 VStack(spacing: 20) {
@@ -40,7 +40,6 @@ struct InvitePreviewSheet: View {
                     Text(info.wishlistName)
                         .font(.title2.weight(.semibold))
                         .multilineTextAlignment(.center)
-                        .padding(.top, 28)
 
                     // Info card
                     VStack(alignment: .leading, spacing: 14) {
@@ -87,12 +86,11 @@ struct InvitePreviewSheet: View {
                             if isAccepting {
                                 ProgressView()
                                     .tint(.white)
-                                    .scaleEffect(1.2)
                             } else {
                                 Text("Принять приглашение")
                             }
                         }
-                        .frame(maxWidth: .infinity, minHeight: 20)
+                        .frame(maxWidth: .infinity, minHeight: 50)
                     }
                     .buttonStyle(.borderedProminent)
                     .controlSize(.large)
@@ -154,8 +152,8 @@ struct InvitePreviewSheet: View {
                     c3, c1, c2
                 ]
             )
-            .frame(width: 110, height: 110)
-            .clipShape(RoundedRectangle(cornerRadius: 24, style: .continuous))
+            .frame(width: 80, height: 80)
+            .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
         }
     }
 

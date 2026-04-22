@@ -311,9 +311,55 @@ final class FirestoreService {
         }
     }
 
+    func updateSharedWishlist(wishlistID: String, name: String, emoji: String?) async throws {
+        let fields = toFields([
+            "name": name,
+            "coverEmoji": emoji ?? "",
+            "updatedAt": Date() as Any
+        ])
+        let _ = try await request("PATCH", path: "shared_wishlists/\(wishlistID)?updateMask.fieldPaths=name&updateMask.fieldPaths=coverEmoji&updateMask.fieldPaths=updatedAt", body: ["fields": fields])
+    }
+
     func fetchSharedWishlistItems(wishlistID: String) async throws -> [SharedItemInfo] {
         let docs = try await listDocuments(parentPath: "shared_wishlists/\(wishlistID)/items")
         return docs.map { parseItemFromDoc($0) }.sorted { $0.sortIndex < $1.sortIndex }
+    }
+
+    // MARK: - Shared Items CRUD (shared_wishlists/{wid}/items)
+
+    func createSharedItem(wishlistID: String, itemID: String, name: String, tier: String, price: Double?, currency: String, url: String?, emoji: String?, sortIndex: Double) async throws {
+        let fields = toFields([
+            "name": name,
+            "tier": tier,
+            "price": price as Any?,
+            "currency": currency,
+            "url": url ?? "",
+            "coverEmoji": emoji ?? "",
+            "sortIndex": sortIndex as Any,
+            "isArchived": false as Any,
+            "createdAt": Date() as Any,
+            "updatedAt": Date() as Any
+        ])
+        let _ = try await request("PATCH", path: "shared_wishlists/\(wishlistID)/items/\(itemID)", body: ["fields": fields])
+    }
+
+    func updateSharedItem(wishlistID: String, itemID: String, name: String, tier: String, price: Double?, currency: String, url: String?, emoji: String?, sortIndex: Double, isArchived: Bool) async throws {
+        let fields = toFields([
+            "name": name,
+            "tier": tier,
+            "price": price as Any?,
+            "currency": currency,
+            "url": url ?? "",
+            "coverEmoji": emoji ?? "",
+            "sortIndex": sortIndex as Any,
+            "isArchived": isArchived as Any,
+            "updatedAt": Date() as Any
+        ])
+        let _ = try await request("PATCH", path: "shared_wishlists/\(wishlistID)/items/\(itemID)", body: ["fields": fields])
+    }
+
+    func deleteSharedItem(wishlistID: String, itemID: String) async throws {
+        let _ = try await request("DELETE", path: "shared_wishlists/\(wishlistID)/items/\(itemID)")
     }
 
     func deleteSharedWishlistFull(wishlistID: String) async throws {

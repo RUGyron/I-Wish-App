@@ -25,7 +25,8 @@ struct WishlistArchiveView: View {
                                 DefaultCoverView(
                                     id: wishlist.id,
                                     imageData: wishlist.coverImageData,
-                                    emoji: wishlist.coverEmoji
+                                    emoji: wishlist.coverEmoji,
+                                    gradientSeed: wishlist.gradientSeed
                                 )
                                 .frame(width: 48, height: 48)
 

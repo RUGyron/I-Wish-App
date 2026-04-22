@@ -47,6 +47,7 @@ struct WishlistDetailView: View {
     @State private var showingEditWishlist = false
     @State private var editMode: EditMode = .inactive
     @State private var sortSnapshot: [UUID: Double] = [:]
+    @State private var pollTimer: Timer?
     @AppStorage("collapsedTiers") private var collapsedTiersRaw: String = ""
 
     private var collapsedTiers: Set<String> {
@@ -244,7 +245,11 @@ struct WishlistDetailView: View {
                 }
             }
         }
+        .onAppear {
+            startPolling()
+        }
         .onDisappear {
+            stopPolling()
             if editMode.isEditing {
                 cancelReorder()
             }
@@ -306,7 +311,8 @@ struct WishlistDetailView: View {
             DefaultCoverView(
                 id: wishlist.id,
                 imageData: wishlist.coverImageData,
-                emoji: wishlist.coverEmoji
+                emoji: wishlist.coverEmoji,
+                gradientSeed: wishlist.gradientSeed
             )
             .frame(width: 64, height: 64)
 
@@ -423,18 +429,26 @@ struct WishlistDetailView: View {
     private var detailSyncSubtitle: some View {
         if let data = services.data {
             if data.isSyncing {
-                HStack(spacing: 4) {
+                HStack(spacing: 3) {
                     ProgressView()
-                        .controlSize(.mini)
+                        .scaleEffect(0.6)
                     Text("Синхронизация...")
-                        .font(.caption2)
-                        .foregroundStyle(.secondary)
+                        .font(.system(size: 10))
                 }
-            } else if let error = data.syncError {
-                Text(error)
-                    .font(.caption2)
+                .foregroundStyle(.secondary)
+            } else if data.syncError != nil {
+                Button {
+                    Task { await services.data?.refreshItems(for: wishlist.id.uuidString) }
+                } label: {
+                    HStack(spacing: 3) {
+                        Image(systemName: "exclamationmark.icloud")
+                            .font(.system(size: 9))
+                        Text("Ошибка синхры")
+                            .font(.system(size: 10))
+                    }
                     .foregroundStyle(.orange)
-                    .lineLimit(1)
+                }
+                .buttonStyle(.plain)
             }
         }
     }
@@ -549,6 +563,21 @@ struct WishlistDetailView: View {
             sortSnapshot = [:]
         }
         withAnimation { editMode = .inactive }
+    }
+
+    // MARK: - Polling
+
+    private func startPolling() {
+        pollTimer = Timer.scheduledTimer(withTimeInterval: 5.0, repeats: true) { _ in
+            Task { @MainActor in
+                await services.data?.refreshItems(for: wishlist.id.uuidString)
+            }
+        }
+    }
+
+    private func stopPolling() {
+        pollTimer?.invalidate()
+        pollTimer = nil
     }
 
     // MARK: - FAB

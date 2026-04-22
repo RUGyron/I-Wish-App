@@ -83,11 +83,9 @@ final class DataService {
         }
 
         do {
-            if wishlistIsShared(wishlist) {
-                // Update in shared_wishlists
-                let fields: [String: Any?] = ["name": name, "coverEmoji": emoji ?? "", "updatedAt": Date()]
-                // Use shared path — we keep it simple: PATCH the document
-                try await firestore.updatePersonalWishlist(uid: currentUID, wishlistID: id, name: name, emoji: emoji)
+            if wishlistIsShared(wishlist), let sharedID = wishlist.sharedWishlistID {
+                // Update in shared_wishlists via direct PATCH
+                try await firestore.updateSharedWishlist(wishlistID: sharedID, name: name, emoji: emoji)
             } else {
                 try await firestore.updatePersonalWishlist(uid: currentUID, wishlistID: id, name: name, emoji: emoji)
             }
@@ -168,7 +166,7 @@ final class DataService {
 
         do {
             if wishlistIsShared(wishlist), let sharedID = wishlist.sharedWishlistID {
-                try await firestore.createPersonalItem(uid: currentUID, wishlistID: sharedID, itemID: itemID, name: name, tier: tier.rawValue, price: price, currency: currency, url: url, emoji: emoji, sortIndex: sortIndex)
+                try await firestore.createSharedItem(wishlistID: sharedID, itemID: itemID, name: name, tier: tier.rawValue, price: price, currency: currency, url: url, emoji: emoji, sortIndex: sortIndex)
             } else {
                 try await firestore.createPersonalItem(uid: currentUID, wishlistID: wishlistID, itemID: itemID, name: name, tier: tier.rawValue, price: price, currency: currency, url: url, emoji: emoji, sortIndex: sortIndex)
             }
@@ -199,15 +197,15 @@ final class DataService {
         }
 
         let wishlist = item.wishlist
-        let firestoreWishlistID: String
-        if let wishlist, wishlistIsShared(wishlist), let sharedID = wishlist.sharedWishlistID {
-            firestoreWishlistID = sharedID
-        } else {
-            firestoreWishlistID = wishlistID
-        }
+        let isShared = wishlist.map { wishlistIsShared($0) } ?? false
+        let sharedID = wishlist?.sharedWishlistID
 
         do {
-            try await firestore.updatePersonalItem(uid: currentUID, wishlistID: firestoreWishlistID, itemID: id, name: name, tier: tier.rawValue, price: price, currency: currency, url: url, emoji: emoji, sortIndex: sortIndex, isArchived: isArchived)
+            if isShared, let sharedID {
+                try await firestore.updateSharedItem(wishlistID: sharedID, itemID: id, name: name, tier: tier.rawValue, price: price, currency: currency, url: url, emoji: emoji, sortIndex: sortIndex, isArchived: isArchived)
+            } else {
+                try await firestore.updatePersonalItem(uid: currentUID, wishlistID: wishlistID, itemID: id, name: name, tier: tier.rawValue, price: price, currency: currency, url: url, emoji: emoji, sortIndex: sortIndex, isArchived: isArchived)
+            }
         } catch {
             isSyncing = false
             syncError = error.localizedDescription
@@ -244,15 +242,15 @@ final class DataService {
         }
 
         let wishlist = item.wishlist
-        let firestoreWishlistID: String
-        if let wishlist, wishlistIsShared(wishlist), let sharedID = wishlist.sharedWishlistID {
-            firestoreWishlistID = sharedID
-        } else {
-            firestoreWishlistID = wishlistID
-        }
+        let isShared = wishlist.map { wishlistIsShared($0) } ?? false
+        let sharedID = wishlist?.sharedWishlistID
 
         do {
-            try await firestore.deletePersonalItem(uid: currentUID, wishlistID: firestoreWishlistID, itemID: id)
+            if isShared, let sharedID {
+                try await firestore.deleteSharedItem(wishlistID: sharedID, itemID: id)
+            } else {
+                try await firestore.deletePersonalItem(uid: currentUID, wishlistID: wishlistID, itemID: id)
+            }
         } catch {
             isSyncing = false
             syncError = error.localizedDescription
@@ -278,15 +276,15 @@ final class DataService {
         }
 
         let wishlist = item.wishlist
-        let firestoreWishlistID: String
-        if let wishlist, wishlistIsShared(wishlist), let sharedID = wishlist.sharedWishlistID {
-            firestoreWishlistID = sharedID
-        } else {
-            firestoreWishlistID = wishlistID
-        }
+        let isShared = wishlist.map { wishlistIsShared($0) } ?? false
+        let sharedID = wishlist?.sharedWishlistID
 
         do {
-            try await firestore.updatePersonalItem(uid: currentUID, wishlistID: firestoreWishlistID, itemID: id, name: item.name, tier: item.tier.rawValue, price: item.price, currency: item.currency, url: item.url, emoji: item.coverEmoji, sortIndex: item.sortIndex, isArchived: true)
+            if isShared, let sharedID {
+                try await firestore.updateSharedItem(wishlistID: sharedID, itemID: id, name: item.name, tier: item.tier.rawValue, price: item.price, currency: item.currency, url: item.url, emoji: item.coverEmoji, sortIndex: item.sortIndex, isArchived: true)
+            } else {
+                try await firestore.updatePersonalItem(uid: currentUID, wishlistID: wishlistID, itemID: id, name: item.name, tier: item.tier.rawValue, price: item.price, currency: item.currency, url: item.url, emoji: item.coverEmoji, sortIndex: item.sortIndex, isArchived: true)
+            }
         } catch {
             isSyncing = false
             syncError = error.localizedDescription
@@ -321,9 +319,13 @@ final class DataService {
             let remoteIDs = Set(remote.map(\.id))
 
             // 3. Delete local wishlists not in remote (only personal, non-shared)
-            for local in allLocal where !local.isShared {
-                if !remoteIDs.contains(local.id.uuidString) {
-                    modelContext.delete(local)
+            // Safety: if remote returned empty but local has data, assume network issue and skip deletion
+            let localPersonal = allLocal.filter { !$0.isShared }
+            if !remote.isEmpty || localPersonal.isEmpty {
+                for local in localPersonal {
+                    if !remoteIDs.contains(local.id.uuidString) {
+                        modelContext.delete(local)
+                    }
                 }
             }
 
@@ -357,10 +359,14 @@ final class DataService {
             })
 
             // 5a. Delete shared wishlists not in memberships
+            // Safety: only clean up if memberships fetch returned results or local has no shared wishlists
             let remoteMembershipIDs = Set(memberships.map(\.wishlistID))
-            for local in allLocalRefreshed where local.isShared {
-                if let sid = local.sharedWishlistID, !remoteMembershipIDs.contains(sid) {
-                    modelContext.delete(local)
+            let localShared = allLocalRefreshed.filter { $0.isShared }
+            if !memberships.isEmpty || localShared.isEmpty {
+                for local in localShared {
+                    if let sid = local.sharedWishlistID, !remoteMembershipIDs.contains(sid) {
+                        modelContext.delete(local)
+                    }
                 }
             }
 
@@ -462,9 +468,12 @@ final class DataService {
         let remoteIDs = Set(remoteItems.map(\.itemID))
 
         // Delete items that no longer exist remotely
-        for local in localItems {
-            if !remoteIDs.contains(local.id.uuidString) {
-                modelContext.delete(local)
+        // Safety: if remote returned empty but local has items, assume network issue and skip deletion
+        if !remoteItems.isEmpty || localItems.isEmpty {
+            for local in localItems {
+                if !remoteIDs.contains(local.id.uuidString) {
+                    modelContext.delete(local)
+                }
             }
         }
 
