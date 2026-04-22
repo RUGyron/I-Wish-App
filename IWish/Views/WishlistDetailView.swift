@@ -112,7 +112,10 @@ struct WishlistDetailView: View {
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {
             ToolbarItem(placement: .principal) {
-                Text("Желания").font(.headline)
+                VStack(spacing: 1) {
+                    Text("Желания").font(.headline)
+                    detailSyncSubtitle
+                }
             }
 
             ToolbarItem(placement: .topBarTrailing) {
@@ -235,9 +238,10 @@ struct WishlistDetailView: View {
         }
         .confirmationDialog("Удалить «\(wishlist.name)»?", isPresented: $showingDeleteConfirmation, titleVisibility: .visible) {
             Button("Удалить список", role: .destructive) {
-                context.delete(wishlist)
-                try? context.save()
-                dismiss()
+                Task {
+                    try? await services.data?.deleteWishlist(id: wishlist.id.uuidString)
+                    dismiss()
+                }
             }
         }
         .onDisappear {
@@ -250,22 +254,10 @@ struct WishlistDetailView: View {
                 .padding(.bottom, 24)
         }
         .task {
-            guard let sharedID = wishlist.sharedWishlistID else { return }
-            do {
-                let remoteItems = try await services.firestore.fetchItems(wishlistID: sharedID)
-                mergeRemoteItems(remoteItems)
-            } catch {
-                print("[FirestoreREST] fetchItems error: \(error)")
-            }
+            await services.data?.refreshItems(for: wishlist.id.uuidString)
         }
         .refreshable {
-            guard let sharedID = wishlist.sharedWishlistID else { return }
-            do {
-                let remoteItems = try await services.firestore.fetchItems(wishlistID: sharedID)
-                mergeRemoteItems(remoteItems)
-            } catch {
-                print("[FirestoreREST] refreshItems error: \(error)")
-            }
+            await services.data?.refreshItems(for: wishlist.id.uuidString)
         }
     }
 
@@ -355,8 +347,8 @@ struct WishlistDetailView: View {
                     if !collapsedTiers.contains(tier.rawValue) {
                         ForEach(tierItems) { item in
                             itemRow(item)
-                                .itemContextMenu(item: item, context: context, editingItem: $editingItem, onMutate: { pushIfShared() })
-                                .itemSwipeActions(item: item, context: context, onMutate: { pushIfShared() })
+                                .itemContextMenu(item: item, context: context, editingItem: $editingItem, dataService: services.data, wishlistID: wishlist.id.uuidString)
+                                .itemSwipeActions(item: item, dataService: services.data, wishlistID: wishlist.id.uuidString)
                         }
                         .onMove { from, to in
                             reorderItems(in: tier, from: from, to: to)
@@ -408,83 +400,43 @@ struct WishlistDetailView: View {
             item.updatedAt = .now
         }
         try? context.save()
-        pushIfShared()
-    }
-
-    private func pushIfShared() {
-        guard let sharedID = wishlist.sharedWishlistID else { return }
-        let items = (wishlist.items ?? []).map { item in
-            FirestoreService.SharedItemInfo(
-                itemID: item.id.uuidString,
-                name: item.name,
-                tier: item.tier.rawValue,
-                price: item.price,
-                currency: item.currency,
-                url: item.url,
-                coverEmoji: item.coverEmoji,
-                sortIndex: item.sortIndex,
-                isArchived: item.isArchived
-            )
-        }
-        Task { try? await services.firestore.updateItems(wishlistID: sharedID, items: items) }
-    }
-
-    /// Merges remote Firestore items into local SwiftData: add new, update changed, delete removed.
-    private func mergeRemoteItems(_ remoteItems: [FirestoreService.SharedItemInfo]) {
-        let localItems = wishlist.items ?? []
-        let localByID = Dictionary(uniqueKeysWithValues: localItems.compactMap { item -> (String, Item)? in
-            (item.id.uuidString, item)
-        })
-        let remoteIDs = Set(remoteItems.map(\.itemID))
-
-        // Delete items that no longer exist remotely
-        for local in localItems {
-            if !remoteIDs.contains(local.id.uuidString) {
-                context.delete(local)
-            }
-        }
-
-        // Add new or update changed items
-        for remote in remoteItems {
-            let tier: ItemTier
-            switch remote.tier {
-            case "must": tier = .must
-            case "maybe": tier = .maybe
-            default: tier = .idea
-            }
-
-            if let local = localByID[remote.itemID] {
-                // Update existing
-                local.name = remote.name
-                local.tier = tier
-                local.price = remote.price
-                local.currency = remote.currency
-                local.url = remote.url
-                local.coverEmoji = remote.coverEmoji
-                local.sortIndex = remote.sortIndex
-                local.isArchived = remote.isArchived
-                local.updatedAt = .now
-            } else {
-                // Add new
-                let item = Item(
-                    name: remote.name,
-                    tier: tier,
-                    currency: remote.currency,
-                    price: remote.price,
-                    url: remote.url
+        // Sync reordered items to Firestore
+        for item in tierItems {
+            Task {
+                try? await services.data?.updateItem(
+                    id: item.id.uuidString,
+                    wishlistID: wishlist.id.uuidString,
+                    name: item.name,
+                    tier: item.tier,
+                    price: item.price,
+                    currency: item.currency,
+                    url: item.url,
+                    emoji: item.coverEmoji,
+                    sortIndex: item.sortIndex,
+                    isArchived: item.isArchived
                 )
-                item.coverEmoji = remote.coverEmoji
-                item.sortIndex = remote.sortIndex
-                item.isArchived = remote.isArchived
-                item.wishlist = wishlist
-                if let uuid = UUID(uuidString: remote.itemID) {
-                    item.id = uuid
-                }
-                context.insert(item)
             }
         }
+    }
 
-        try? context.save()
+    @ViewBuilder
+    private var detailSyncSubtitle: some View {
+        if let data = services.data {
+            if data.isSyncing {
+                HStack(spacing: 4) {
+                    ProgressView()
+                        .controlSize(.mini)
+                    Text("Синхронизация...")
+                        .font(.caption2)
+                        .foregroundStyle(.secondary)
+                }
+            } else if let error = data.syncError {
+                Text(error)
+                    .font(.caption2)
+                    .foregroundStyle(.orange)
+                    .lineLimit(1)
+            }
+        }
     }
 
     // MARK: - Flat Sorted
@@ -496,8 +448,8 @@ struct WishlistDetailView: View {
         Section {
             ForEach(sorted) { item in
                 itemRow(item)
-                    .itemContextMenu(item: item, context: context, editingItem: $editingItem, onMutate: { pushIfShared() })
-                    .itemSwipeActions(item: item, context: context, onMutate: { pushIfShared() })
+                    .itemContextMenu(item: item, context: context, editingItem: $editingItem, dataService: services.data, wishlistID: wishlist.id.uuidString)
+                    .itemSwipeActions(item: item, dataService: services.data, wishlistID: wishlist.id.uuidString)
             }
         }
     }
@@ -642,7 +594,7 @@ struct WishlistDetailView: View {
 // MARK: - Context Menu & Swipe Actions
 
 private extension View {
-    func itemContextMenu(item: Item, context: ModelContext, editingItem: Binding<Item?>, onMutate: (() -> Void)? = nil) -> some View {
+    func itemContextMenu(item: Item, context: ModelContext, editingItem: Binding<Item?>, dataService: DataService?, wishlistID: String) -> some View {
         self.contextMenu {
             Button {
                 editingItem.wrappedValue = item
@@ -661,10 +613,20 @@ private extension View {
             Menu {
                 ForEach(ItemTier.allCases) { tier in
                     Button {
-                        item.tier = tier
-                        item.updatedAt = .now
-                        try? context.save()
-                        onMutate?()
+                        Task {
+                            try? await dataService?.updateItem(
+                                id: item.id.uuidString,
+                                wishlistID: wishlistID,
+                                name: item.name,
+                                tier: tier,
+                                price: item.price,
+                                currency: item.currency,
+                                url: item.url,
+                                emoji: item.coverEmoji,
+                                sortIndex: item.sortIndex,
+                                isArchived: item.isArchived
+                            )
+                        }
                     } label: {
                         if item.tier == tier {
                             Label {
@@ -682,40 +644,38 @@ private extension View {
             }
 
             Button {
-                item.isArchived = true
-                item.updatedAt = .now
-                try? context.save()
-                onMutate?()
+                Task {
+                    try? await dataService?.archiveItem(id: item.id.uuidString, wishlistID: wishlistID)
+                }
             } label: {
                 Label("В архив", systemImage: "archivebox")
             }
 
             Button(role: .destructive) {
-                context.delete(item)
-                try? context.save()
-                onMutate?()
+                Task {
+                    try? await dataService?.deleteItem(id: item.id.uuidString, wishlistID: wishlistID)
+                }
             } label: {
                 Label("Удалить", systemImage: "trash")
             }
         }
     }
 
-    func itemSwipeActions(item: Item, context: ModelContext, onMutate: (() -> Void)? = nil) -> some View {
+    func itemSwipeActions(item: Item, dataService: DataService?, wishlistID: String) -> some View {
         self.swipeActions(edge: .trailing, allowsFullSwipe: false) {
             Button(role: .destructive) {
-                context.delete(item)
-                try? context.save()
-                onMutate?()
+                Task {
+                    try? await dataService?.deleteItem(id: item.id.uuidString, wishlistID: wishlistID)
+                }
             } label: {
                 Label("Удалить", systemImage: "trash")
             }
             .tint(.red)
 
             Button {
-                item.isArchived = true
-                item.updatedAt = .now
-                try? context.save()
-                onMutate?()
+                Task {
+                    try? await dataService?.archiveItem(id: item.id.uuidString, wishlistID: wishlistID)
+                }
             } label: {
                 Label("В архив", systemImage: "archivebox")
             }

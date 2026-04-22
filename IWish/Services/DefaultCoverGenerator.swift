@@ -26,4 +26,14 @@ enum DefaultCoverGenerator {
     static func colors(for id: UUID) -> [Color] {
         palettes[paletteIndex(for: id)]
     }
+
+    /// Детерминированный индекс палитры по gradientSeed.
+    static func paletteIndex(forSeed seed: Int) -> Int {
+        abs(seed) % palettes.count
+    }
+
+    /// Возвращает 3 цвета для данного gradientSeed.
+    static func colors(forSeed seed: Int) -> [Color] {
+        palettes[paletteIndex(forSeed: seed)]
+    }
 }

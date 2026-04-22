@@ -4,6 +4,7 @@ import SwiftData
 struct AddWishlistSheet: View {
     @Environment(\.modelContext) private var context
     @Environment(\.dismiss) private var dismiss
+    @Environment(\.appServices) private var services
     @Query private var wishlists: [Wishlist]
 
     @State private var name: String = ""
@@ -93,14 +94,19 @@ struct AddWishlistSheet: View {
             ? generateName()
             : trimmed
 
-        let wishlist = Wishlist(
-            name: finalName,
-            coverImageData: coverImageData,
-            coverEmoji: coverEmoji
-        )
-        context.insert(wishlist)
-        try? context.save()
-        dismiss()
+        Task {
+            do {
+                let wishlist = try await services.data.createWishlist(name: finalName, emoji: coverEmoji)
+                // Apply cover image locally (not stored in Firestore)
+                if let coverImageData {
+                    wishlist.coverImageData = coverImageData
+                    try? context.save()
+                }
+                dismiss()
+            } catch {
+                errorMessage = error.localizedDescription
+            }
+        }
     }
 }
 

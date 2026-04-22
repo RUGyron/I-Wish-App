@@ -264,45 +264,30 @@ struct AddItemSheet: View {
 
         let trimmedURL = urlString.trimmingCharacters(in: .whitespaces)
         let nextSortIndex = nextSortIndexForTier(tier)
+        let probEnd: Date? = probationEnabled
+            ? Date.now.addingTimeInterval(Double(probationDays) * 86400)
+            : nil
 
-        let item = Item(
-            name: trimmedName,
-            tier: tier,
-            sortIndex: nextSortIndex,
-            currency: currency.isEmpty ? "RUB" : currency,
-            price: parsePrice(priceString),
-            descriptionText: descriptionText.isEmpty ? nil : descriptionText,
-            url: trimmedURL.isEmpty ? nil : trimmedURL,
-            coverImageData: coverImageData,
-            coverEmoji: coverEmoji
-        )
-
-        if probationEnabled {
-            item.probationEndAt = Date.now.addingTimeInterval(Double(probationDays) * 86400)
-        }
-
-        item.wishlist = wishlist
-        context.insert(item)
-        try? context.save()
-
-        if let sharedID = wishlist.sharedWishlistID {
-            let allItems = (wishlist.items ?? []).map { item in
-                FirestoreService.SharedItemInfo(
-                    itemID: item.id.uuidString,
-                    name: item.name,
-                    tier: item.tier.rawValue,
-                    price: item.price,
-                    currency: item.currency,
-                    url: item.url,
-                    coverEmoji: item.coverEmoji,
-                    sortIndex: item.sortIndex,
-                    isArchived: item.isArchived
+        Task {
+            do {
+                let item = try await services.data.addItem(
+                    to: wishlist.id.uuidString,
+                    name: trimmedName,
+                    tier: tier,
+                    price: parsePrice(priceString),
+                    currency: currency.isEmpty ? "RUB" : currency,
+                    url: trimmedURL.isEmpty ? nil : trimmedURL,
+                    emoji: coverEmoji,
+                    sortIndex: nextSortIndex,
+                    descriptionText: descriptionText.isEmpty ? nil : descriptionText,
+                    probationEndAt: probEnd,
+                    coverImageData: coverImageData
                 )
+                dismiss()
+            } catch {
+                errorMessage = error.localizedDescription
             }
-            Task { try? await services.firestore.updateItems(wishlistID: sharedID, items: allItems) }
         }
-
-        dismiss()
     }
 
     // MARK: - Helpers

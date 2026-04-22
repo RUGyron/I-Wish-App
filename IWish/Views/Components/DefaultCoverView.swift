@@ -6,6 +6,7 @@ struct DefaultCoverView: View {
     let id: UUID
     var imageData: Data? = nil
     var emoji: String? = nil
+    var gradientSeed: Int? = nil
 
     var body: some View {
         if let imageData, let uiImage = UIImage(data: imageData) {
@@ -35,7 +36,11 @@ struct DefaultCoverView: View {
     }
 
     private var meshBackground: some View {
-        let colors = DefaultCoverGenerator.colors(for: id)
+        let colors: [Color] = if let seed = gradientSeed, seed != 0 {
+            DefaultCoverGenerator.colors(forSeed: seed)
+        } else {
+            DefaultCoverGenerator.colors(for: id)
+        }
         return MeshGradient(
             width: 3,
             height: 3,

@@ -4,6 +4,7 @@ import SwiftData
 struct EditWishlistSheet: View {
     @Environment(\.modelContext) private var context
     @Environment(\.dismiss) private var dismiss
+    @Environment(\.appServices) private var services
 
     let wishlist: Wishlist
 
@@ -55,11 +56,23 @@ struct EditWishlistSheet: View {
     private func save() {
         let trimmed = name.trimmingCharacters(in: .whitespaces)
         guard !trimmed.isEmpty else { return }
-        wishlist.name = trimmed
-        wishlist.coverImageData = coverImageData
-        wishlist.coverEmoji = coverEmoji
-        wishlist.updatedAt = .now
-        try? context.save()
-        dismiss()
+
+        Task {
+            do {
+                try await services.data.updateWishlist(id: wishlist.id.uuidString, name: trimmed, emoji: coverEmoji)
+                // Apply cover image locally (not stored in Firestore)
+                wishlist.coverImageData = coverImageData
+                try? context.save()
+                dismiss()
+            } catch {
+                // Fallback: save locally if Firestore fails
+                wishlist.name = trimmed
+                wishlist.coverImageData = coverImageData
+                wishlist.coverEmoji = coverEmoji
+                wishlist.updatedAt = .now
+                try? context.save()
+                dismiss()
+            }
+        }
     }
 }

@@ -13,6 +13,7 @@ final class Wishlist {
     var isShared: Bool = false
     var isArchived: Bool = false
     var sharedWishlistID: String?
+    var gradientSeed: Int = 0
 
     @Relationship(deleteRule: .cascade, inverse: \Item.wishlist)
     var items: [Item]?
@@ -24,7 +25,8 @@ final class Wishlist {
         ownerRecordID: String? = nil,
         isShared: Bool = false,
         isArchived: Bool = false,
-        sharedWishlistID: String? = nil
+        sharedWishlistID: String? = nil,
+        gradientSeed: Int? = nil
     ) {
         let now = Date.now
         self.id = UUID()
@@ -37,5 +39,6 @@ final class Wishlist {
         self.isShared = isShared
         self.isArchived = isArchived
         self.sharedWishlistID = sharedWishlistID
+        self.gradientSeed = gradientSeed ?? UUID().hashValue
     }
 }

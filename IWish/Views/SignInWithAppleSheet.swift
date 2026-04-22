@@ -3,7 +3,6 @@ import AuthenticationServices
 
 struct SignInWithAppleSheet: View {
     let onComplete: (Result<ASAuthorization, Error>) -> Void
-    var onSkip: (() -> Void)? = nil
     @Environment(\.dismiss) private var dismiss
 
     var body: some View {
@@ -18,7 +17,7 @@ struct SignInWithAppleSheet: View {
                 .font(.title3.weight(.semibold))
                 .multilineTextAlignment(.center)
 
-            Text("Для создания и просмотра общих списков желаний нужен Apple ID. Ваше имя будет видно участникам.")
+            Text("Для работы с приложением необходим Apple ID. Ваши данные надёжно защищены.")
                 .font(.subheadline)
                 .foregroundStyle(.secondary)
                 .multilineTextAlignment(.center)
@@ -34,13 +33,6 @@ struct SignInWithAppleSheet: View {
             .signInWithAppleButtonStyle(.black)
             .frame(height: 50)
             .padding(.horizontal, 32)
-
-            if onSkip != nil {
-                Button("Не сейчас") {
-                    onSkip?()
-                }
-                .foregroundStyle(.secondary)
-            }
 
             Spacer()
         }

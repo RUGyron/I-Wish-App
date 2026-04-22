@@ -124,34 +124,43 @@ struct EditItemSheet: View {
     }
 
     private func save() {
-        item.name = name.trimmingCharacters(in: .whitespaces)
-        item.descriptionText = descriptionText.isEmpty ? nil : descriptionText
-        item.coverImageData = coverImageData
-        item.coverEmoji = coverEmoji
-        item.tier = tier
-        item.price = Double(priceString)
-        item.currency = currency
-        item.url = urlString.isEmpty ? nil : urlString
-        item.updatedAt = .now
-        try? context.save()
+        let wishlistID = item.wishlist?.id.uuidString ?? ""
+        let probEnd: Date? = probationEnabled
+            ? Date.now.addingTimeInterval(Double(probationDays) * 86400)
+            : nil
 
-        if let wishlist = item.wishlist, let sharedID = wishlist.sharedWishlistID {
-            let allItems = (wishlist.items ?? []).map { item in
-                FirestoreService.SharedItemInfo(
-                    itemID: item.id.uuidString,
-                    name: item.name,
-                    tier: item.tier.rawValue,
-                    price: item.price,
-                    currency: item.currency,
-                    url: item.url,
-                    coverEmoji: item.coverEmoji,
+        Task {
+            do {
+                try await services.data.updateItem(
+                    id: item.id.uuidString,
+                    wishlistID: wishlistID,
+                    name: name.trimmingCharacters(in: .whitespaces),
+                    tier: tier,
+                    price: Double(priceString),
+                    currency: currency,
+                    url: urlString.isEmpty ? nil : urlString,
+                    emoji: coverEmoji,
                     sortIndex: item.sortIndex,
-                    isArchived: item.isArchived
+                    isArchived: item.isArchived,
+                    descriptionText: descriptionText.isEmpty ? nil : descriptionText,
+                    coverImageData: coverImageData,
+                    probationEndAt: probEnd
                 )
+                dismiss()
+            } catch {
+                // Fallback: save locally
+                item.name = name.trimmingCharacters(in: .whitespaces)
+                item.descriptionText = descriptionText.isEmpty ? nil : descriptionText
+                item.coverImageData = coverImageData
+                item.coverEmoji = coverEmoji
+                item.tier = tier
+                item.price = Double(priceString)
+                item.currency = currency
+                item.url = urlString.isEmpty ? nil : urlString
+                item.updatedAt = .now
+                try? context.save()
+                dismiss()
             }
-            Task { try? await services.firestore.updateItems(wishlistID: sharedID, items: allItems) }
         }
-
-        dismiss()
     }
 }

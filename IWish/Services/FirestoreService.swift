@@ -167,7 +167,179 @@ final class FirestoreService {
         "\(projectPath)/\(collectionPath)"
     }
 
-    // MARK: - Publish Wishlist
+    // MARK: - Personal Wishlists (users/{uid}/wishlists)
+
+    func createPersonalWishlist(uid: String, wishlistID: String, name: String, emoji: String?, gradientSeed: Int) async throws {
+        let fields = toFields([
+            "name": name,
+            "coverEmoji": emoji ?? "",
+            "gradientSeed": gradientSeed as Any,
+            "createdAt": Date() as Any,
+            "updatedAt": Date() as Any
+        ])
+        let _ = try await request("PATCH", path: "users/\(uid)/wishlists/\(wishlistID)", body: ["fields": fields])
+    }
+
+    func updatePersonalWishlist(uid: String, wishlistID: String, name: String, emoji: String?) async throws {
+        let fields = toFields([
+            "name": name,
+            "coverEmoji": emoji ?? "",
+            "updatedAt": Date() as Any
+        ])
+        let _ = try await request("PATCH", path: "users/\(uid)/wishlists/\(wishlistID)?updateMask.fieldPaths=name&updateMask.fieldPaths=coverEmoji&updateMask.fieldPaths=updatedAt", body: ["fields": fields])
+    }
+
+    func deletePersonalWishlist(uid: String, wishlistID: String) async throws {
+        // Delete items first
+        let itemsDocs = try await listDocuments(parentPath: "users/\(uid)/wishlists/\(wishlistID)/items")
+        if !itemsDocs.isEmpty {
+            var writes: [[String: Any]] = []
+            for doc in itemsDocs {
+                if let name = doc["name"] as? String {
+                    writes.append(["delete": name])
+                }
+            }
+            let commitURL = "\(baseURL):commit"
+            let _ = try await request("POST", path: commitURL, body: ["writes": writes])
+        }
+        // Delete wishlist
+        let _ = try await request("DELETE", path: "users/\(uid)/wishlists/\(wishlistID)")
+    }
+
+    func fetchPersonalWishlists(uid: String) async throws -> [(id: String, name: String, emoji: String?, gradientSeed: Int)] {
+        let docs = try await listDocuments(parentPath: "users/\(uid)/wishlists")
+        return docs.compactMap { doc -> (id: String, name: String, emoji: String?, gradientSeed: Int)? in
+            guard let name = doc["name"] as? String else { return nil }
+            let docID = documentID(from: name)
+            guard let fields = doc["fields"] as? [String: Any] else { return nil }
+            let data = parseFields(fields)
+            let emoji = (data["coverEmoji"] as? String)?.isEmpty == true ? nil : data["coverEmoji"] as? String
+            let seed: Int
+            if let s = data["gradientSeed"] as? Int {
+                seed = s
+            } else {
+                seed = 0
+            }
+            return (id: docID, name: data["name"] as? String ?? "", emoji: emoji, gradientSeed: seed)
+        }
+    }
+
+    // MARK: - Personal Items (users/{uid}/wishlists/{wid}/items)
+
+    func createPersonalItem(uid: String, wishlistID: String, itemID: String, name: String, tier: String, price: Double?, currency: String, url: String?, emoji: String?, sortIndex: Double) async throws {
+        let fields = toFields([
+            "name": name,
+            "tier": tier,
+            "price": price as Any?,
+            "currency": currency,
+            "url": url ?? "",
+            "coverEmoji": emoji ?? "",
+            "sortIndex": sortIndex as Any,
+            "isArchived": false as Any,
+            "createdAt": Date() as Any,
+            "updatedAt": Date() as Any
+        ])
+        let _ = try await request("PATCH", path: "users/\(uid)/wishlists/\(wishlistID)/items/\(itemID)", body: ["fields": fields])
+    }
+
+    func updatePersonalItem(uid: String, wishlistID: String, itemID: String, name: String, tier: String, price: Double?, currency: String, url: String?, emoji: String?, sortIndex: Double, isArchived: Bool) async throws {
+        let fields = toFields([
+            "name": name,
+            "tier": tier,
+            "price": price as Any?,
+            "currency": currency,
+            "url": url ?? "",
+            "coverEmoji": emoji ?? "",
+            "sortIndex": sortIndex as Any,
+            "isArchived": isArchived as Any,
+            "updatedAt": Date() as Any
+        ])
+        let _ = try await request("PATCH", path: "users/\(uid)/wishlists/\(wishlistID)/items/\(itemID)", body: ["fields": fields])
+    }
+
+    func deletePersonalItem(uid: String, wishlistID: String, itemID: String) async throws {
+        let _ = try await request("DELETE", path: "users/\(uid)/wishlists/\(wishlistID)/items/\(itemID)")
+    }
+
+    func fetchPersonalItems(uid: String, wishlistID: String) async throws -> [SharedItemInfo] {
+        let docs = try await listDocuments(parentPath: "users/\(uid)/wishlists/\(wishlistID)/items")
+        return docs.map { parseItemFromDoc($0) }.sorted { $0.sortIndex < $1.sortIndex }
+    }
+
+    // MARK: - Shared Wishlists (shared_wishlists/)
+
+    func createSharedWishlist(wishlistID: String, name: String, emoji: String?, gradientSeed: Int, ownerUID: String, ownerName: String?, items: [SharedItemInfo]) async throws {
+        // 1. Write the wishlist document
+        let wishlistFields = toFields([
+            "name": name,
+            "coverEmoji": emoji ?? "",
+            "gradientSeed": gradientSeed as Any,
+            "ownerUID": ownerUID,
+            "ownerName": ownerName ?? "",
+            "createdAt": Date() as Any,
+            "updatedAt": Date() as Any
+        ])
+        let _ = try await request("PATCH", path: "shared_wishlists/\(wishlistID)", body: ["fields": wishlistFields])
+
+        // 2. Batch write all items
+        if !items.isEmpty {
+            var writes: [[String: Any]] = []
+            for item in items {
+                let itemFields = toFields([
+                    "name": item.name,
+                    "tier": item.tier,
+                    "price": item.price as Any?,
+                    "currency": item.currency,
+                    "url": item.url ?? "",
+                    "coverEmoji": item.coverEmoji ?? "",
+                    "sortIndex": item.sortIndex as Any,
+                    "isArchived": item.isArchived as Any,
+                    "createdAt": Date() as Any,
+                    "updatedAt": Date() as Any
+                ])
+                writes.append([
+                    "update": [
+                        "name": fullDocName("shared_wishlists/\(wishlistID)/items/\(item.itemID)"),
+                        "fields": itemFields
+                    ]
+                ])
+            }
+            let commitURL = "\(baseURL):commit"
+            let _ = try await request("POST", path: commitURL, body: ["writes": writes])
+        }
+    }
+
+    func fetchSharedWishlistItems(wishlistID: String) async throws -> [SharedItemInfo] {
+        let docs = try await listDocuments(parentPath: "shared_wishlists/\(wishlistID)/items")
+        return docs.map { parseItemFromDoc($0) }.sorted { $0.sortIndex < $1.sortIndex }
+    }
+
+    func deleteSharedWishlistFull(wishlistID: String) async throws {
+        // 1. Delete items + wishlist
+        let itemsDocs = try await listDocuments(parentPath: "shared_wishlists/\(wishlistID)/items")
+        var writes: [[String: Any]] = []
+        for itemDoc in itemsDocs {
+            if let name = itemDoc["name"] as? String {
+                writes.append(["delete": name])
+            }
+        }
+        writes.append(["delete": fullDocName("shared_wishlists/\(wishlistID)")])
+        if !writes.isEmpty {
+            let commitURL = "\(baseURL):commit"
+            let _ = try await request("POST", path: commitURL, body: ["writes": writes])
+        }
+
+        // 2. Delete memberships
+        let memberResults = try await runQuery(collectionId: "memberships", field: "wishlistID", op: "EQUAL", value: wishlistID)
+        for entry in memberResults {
+            if let doc = entry["document"] as? [String: Any], let name = doc["name"] as? String {
+                let docID = documentID(from: name)
+                let _ = try? await request("DELETE", path: "memberships/\(docID)")
+            }
+        }
+    }
+
+    // MARK: - Publish Wishlist (legacy)
 
     func publishWishlist(
         id wishlistID: String,

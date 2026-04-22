@@ -6,10 +6,11 @@ struct RootView: View {
     @Environment(\.colorScheme) private var detectedSystemScheme
     @Environment(\.appServices) private var services
     @Query private var settingsList: [AppSettings]
+    @State private var didConfigure = false
 
     var body: some View {
         Group {
-            if !services.auth.isAuthenticated && !services.auth.skippedSignIn {
+            if !services.auth.isAuthenticated {
                 signInView
             } else {
                 mainContent
@@ -23,6 +24,10 @@ struct RootView: View {
             if settingsList.isEmpty {
                 _ = AppSettings.loadOrCreate(in: context)
             }
+            if !didConfigure {
+                services.configure(modelContext: context)
+                didConfigure = true
+            }
         }
         .toastOverlay()
     }
@@ -32,6 +37,9 @@ struct RootView: View {
             HomeView()
         }
         .toolbarBackground(Theme.warmOverlay, for: .navigationBar)
+        .task {
+            await services.data?.refreshWishlists()
+        }
     }
 
     private var signInView: some View {
@@ -39,8 +47,6 @@ struct RootView: View {
             Task {
                 try? await services.auth.handleSignInWithApple(result: result)
             }
-        } onSkip: {
-            services.auth.skippedSignIn = true
         }
     }
 

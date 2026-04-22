@@ -9,7 +9,6 @@ struct HomeView: View {
     @State private var showingSettings = false
     @State private var showingJoin = false
     @State private var sharingWishlist: Wishlist?
-    @State private var sharedWishlists: [FirestoreService.SharedWishlistInfo] = []
 
     // MARK: - Debug
 
@@ -30,7 +29,7 @@ struct HomeView: View {
     }
 
     private var hasAnyWishlists: Bool {
-        !activeWishlists.isEmpty || !sharedWishlists.isEmpty
+        !activeWishlists.isEmpty
     }
 
     var body: some View {
@@ -80,7 +79,7 @@ struct HomeView: View {
                 .applyTheme()
         }
         .task {
-            await fetchSharedWishlists()
+            await services.data?.refreshWishlists()
         }
         .onReceive(NotificationCenter.default.publisher(for: .didReceiveShareLink)) { _ in
             showingJoin = true
@@ -94,7 +93,30 @@ struct HomeView: View {
     // MARK: - Debug
 
     private var homeNavTitle: some View {
-        Text("Вишлисты").font(.headline)
+        VStack(spacing: 1) {
+            Text("Вишлисты").font(.headline)
+            syncSubtitle
+        }
+    }
+
+    @ViewBuilder
+    private var syncSubtitle: some View {
+        if let data = services.data {
+            if data.isSyncing {
+                HStack(spacing: 4) {
+                    ProgressView()
+                        .controlSize(.mini)
+                    Text("Синхронизация...")
+                        .font(.caption2)
+                        .foregroundStyle(.secondary)
+                }
+            } else if let error = data.syncError {
+                Text(error)
+                    .font(.caption2)
+                    .foregroundStyle(.orange)
+                    .lineLimit(1)
+            }
+        }
     }
 
     // MARK: - Debug Helpers
@@ -219,25 +241,15 @@ struct HomeView: View {
                             }
                             Divider()
                             Button(role: .destructive) {
-                                context.delete(wishlist)
-                                try? context.save()
+                                Task {
+                                    try? await services.data?.deleteWishlist(id: wishlist.id.uuidString)
+                                }
                             } label: {
                                 Label("Удалить", systemImage: "trash")
                             }
                         }
                     }
 
-                    // Shared wishlists from PublicDB (not owned locally)
-                    ForEach(sharedWishlists, id: \.wishlistID) { info in
-                        NavigationLink {
-                            if let local = localWishlist(for: info) {
-                                WishlistDetailView(wishlist: local)
-                            }
-                        } label: {
-                            sharedWishlistTile(info)
-                        }
-                        .buttonStyle(.plain)
-                    }
                 }
                 .padding(.horizontal, 16)
             }
@@ -260,7 +272,9 @@ struct HomeView: View {
                         .clipped()
                 }
             } else {
-                let colors = DefaultCoverGenerator.colors(for: wishlist.id)
+                let colors = wishlist.gradientSeed != 0
+                    ? DefaultCoverGenerator.colors(forSeed: wishlist.gradientSeed)
+                    : DefaultCoverGenerator.colors(for: wishlist.id)
                 ZStack {
                     MeshGradient(
                         width: 3, height: 3,
@@ -306,145 +320,6 @@ struct HomeView: View {
                         .foregroundStyle(.white.opacity(0.8))
                 } else {
                     Text(String(format: NSLocalizedString("%lld желаний", comment: ""), activeItems.count))
-                        .font(.caption2)
-                        .foregroundStyle(.white.opacity(0.8))
-                }
-            }
-            .padding(10)
-        }
-        .aspectRatio(1, contentMode: .fit)
-        .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
-        .titaniumBorder(cornerRadius: 16)
-    }
-
-    // MARK: - Shared Wishlists
-
-    private func fetchSharedWishlists() async {
-        do {
-            guard let uid = services.auth.uid else { return }
-
-            let memberships = try await services.firestore.fetchMyMemberships(userUID: uid)
-
-            var fetched: [FirestoreService.SharedWishlistInfo] = []
-            for membership in memberships {
-                if let info = try? await services.firestore.fetchSharedWishlist(wishlistID: membership.wishlistID) {
-                    fetched.append(info)
-                }
-            }
-
-            // Filter out wishlists that already exist locally (owned by us)
-            let localIDs = Set(activeWishlists.map(\.id.uuidString))
-            sharedWishlists = fetched.filter { !localIDs.contains($0.wishlistID) }
-
-            // Ensure each shared wishlist has a local copy for WishlistDetailView
-            for info in sharedWishlists {
-                ensureLocalCopy(for: info)
-            }
-        } catch {
-            sharedWishlists = []
-        }
-    }
-
-    /// Creates a local Wishlist in SwiftData if one doesn't exist for this shared wishlist.
-    private func ensureLocalCopy(for info: FirestoreService.SharedWishlistInfo) {
-        guard let uuid = UUID(uuidString: info.wishlistID) else { return }
-
-        // Check if local copy already exists
-        let existing = wishlists.first { $0.id == uuid }
-        if existing != nil { return }
-
-        let local = Wishlist(
-            name: info.name,
-            coverEmoji: info.coverEmoji,
-            ownerRecordID: info.ownerUID,
-            isShared: true
-        )
-        // Override the auto-generated UUID with the shared one
-        local.id = uuid
-        context.insert(local)
-
-        // Create local items from shared items
-        for (idx, sharedItem) in info.items.enumerated() {
-            let tier: ItemTier
-            switch sharedItem.tier {
-            case "must": tier = .must
-            case "maybe": tier = .maybe
-            default: tier = .idea
-            }
-            let item = Item(
-                name: sharedItem.name,
-                tier: tier,
-                currency: sharedItem.currency,
-                price: sharedItem.price,
-                url: sharedItem.url
-            )
-            item.coverEmoji = sharedItem.coverEmoji
-            item.sortIndex = sharedItem.sortIndex
-            item.isArchived = sharedItem.isArchived
-            item.wishlist = local
-            if let itemUUID = UUID(uuidString: sharedItem.itemID) {
-                item.id = itemUUID
-            }
-            context.insert(item)
-        }
-
-        try? context.save()
-    }
-
-    /// Finds local Wishlist matching a SharedWishlistInfo by UUID.
-    private func localWishlist(for info: FirestoreService.SharedWishlistInfo) -> Wishlist? {
-        guard let uuid = UUID(uuidString: info.wishlistID) else { return nil }
-        return wishlists.first { $0.id == uuid }
-    }
-
-    private func sharedWishlistTile(_ info: FirestoreService.SharedWishlistInfo) -> some View {
-        let itemCount = info.items.filter { !$0.isArchived }.count
-        let tileUUID = UUID(uuidString: info.wishlistID) ?? UUID()
-        let colors = DefaultCoverGenerator.colors(for: tileUUID)
-
-        return ZStack(alignment: .bottomLeading) {
-            ZStack {
-                MeshGradient(
-                    width: 3, height: 3,
-                    points: [
-                        .init(0, 0),   .init(0.5, 0),   .init(1, 0),
-                        .init(0, 0.5), .init(0.5, 0.5), .init(1, 0.5),
-                        .init(0, 1),   .init(0.5, 1),   .init(1, 1),
-                    ],
-                    colors: [
-                        colors[0], colors[1], colors[2],
-                        colors[1], colors[2], colors[0],
-                        colors[2], colors[0], colors[1],
-                    ]
-                )
-                if let emoji = info.coverEmoji {
-                    Text(emoji).font(.system(size: 48))
-                }
-            }
-
-            LinearGradient(
-                colors: [.clear, .black.opacity(0.6)],
-                startPoint: .top,
-                endPoint: .bottom
-            )
-
-            VStack(alignment: .leading, spacing: 2) {
-                HStack(spacing: 4) {
-                    Text(info.name)
-                        .font(.subheadline)
-                        .fontWeight(.semibold)
-                        .foregroundStyle(.white)
-                        .lineLimit(2)
-                    Image(systemName: "person.2.fill")
-                        .font(.caption2)
-                        .foregroundStyle(.white.opacity(0.8))
-                }
-                if let ownerName = info.ownerName {
-                    Text(ownerName)
-                        .font(.caption2)
-                        .foregroundStyle(.white.opacity(0.8))
-                } else {
-                    Text(String(format: NSLocalizedString("%lld желаний", comment: ""), itemCount))
                         .font(.caption2)
                         .foregroundStyle(.white.opacity(0.8))
                 }

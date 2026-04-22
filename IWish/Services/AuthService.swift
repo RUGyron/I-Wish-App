@@ -21,9 +21,6 @@ final class AuthService: NSObject {
 
     private static let apiKey = "AIzaSyBifbBfRvO47M7mZnxJ55QZSqeelqPeSMs"
 
-    /// Whether the user has dismissed sign-in for now
-    var skippedSignIn: Bool = false
-
     override init() {
         super.init()
         if let user = Auth.auth().currentUser, !user.isAnonymous {
