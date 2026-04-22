@@ -76,15 +76,6 @@ struct ShareWishlistSheet: View {
                     selectedTTL = settings.defaultInviteTTL
                 }
                 Task {
-                    guard await services.auth.ensureAuth() else {
-                        toast.error("Не удалось авторизоваться")
-                        return
-                    }
-                    // Require Sign in with Apple before sharing
-                    if !services.auth.isAuthenticated {
-                        showingAppleSignIn = true
-                        return
-                    }
                     await shareManager.generateShare(
                         for: wishlist,
                         role: selectedRole,

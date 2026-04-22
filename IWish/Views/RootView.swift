@@ -8,24 +8,38 @@ struct RootView: View {
     @Query private var settingsList: [AppSettings]
 
     var body: some View {
-        NavigationStack {
-            HomeView()
+        Group {
+            if services.auth.needsSignIn {
+                signInView
+            } else {
+                mainContent
+            }
         }
         .fontDesign(.rounded)
-        .toolbarBackground(Theme.warmOverlay, for: .navigationBar)
         .environment(\.systemColorScheme, detectedSystemScheme)
         .preferredColorScheme(activeSettings.themeMode.colorScheme)
         .animation(.easeInOut(duration: 0.35), value: activeSettings.themeMode)
         .onAppear {
-            // Гарантируем что AppSettings существует в БД.
             if settingsList.isEmpty {
                 _ = AppSettings.loadOrCreate(in: context)
             }
         }
-        .task {
-            // Firebase auth is auto-initialized via AuthService.init()
-        }
         .toastOverlay()
+    }
+
+    private var mainContent: some View {
+        NavigationStack {
+            HomeView()
+        }
+        .toolbarBackground(Theme.warmOverlay, for: .navigationBar)
+    }
+
+    private var signInView: some View {
+        SignInWithAppleSheet { result in
+            Task {
+                try? await services.auth.handleSignInWithApple(result: result)
+            }
+        }
     }
 
     private var activeSettings: AppSettings {
