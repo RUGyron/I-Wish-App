@@ -76,36 +76,18 @@ struct ShareWishlistSheet: View {
                     selectedTTL = settings.defaultInviteTTL
                 }
                 Task {
-                    await shareManager.generateShare(
-                        for: wishlist,
-                        role: selectedRole,
-                        ttl: selectedTTL,
-                        ownerUID: services.auth.uid ?? "",
-                        ownerName: services.auth.userName ?? "Вы"
-                    )
+                    guard services.auth.isAuthenticated else {
+                        showingAppleSignIn = true
+                        return
+                    }
+                    await generateShareNow()
                 }
             }
             .onChange(of: selectedRole) { _, _ in
-                Task {
-                    await shareManager.generateShare(
-                        for: wishlist,
-                        role: selectedRole,
-                        ttl: selectedTTL,
-                        ownerUID: services.auth.uid ?? "",
-                        ownerName: services.auth.userName ?? "Вы"
-                    )
-                }
+                Task { await generateShareNow() }
             }
             .onChange(of: selectedTTL) { _, _ in
-                Task {
-                    await shareManager.generateShare(
-                        for: wishlist,
-                        role: selectedRole,
-                        ttl: selectedTTL,
-                        ownerUID: services.auth.uid ?? "",
-                        ownerName: services.auth.userName ?? "Вы"
-                    )
-                }
+                Task { await generateShareNow() }
             }
             .onChange(of: shareManager.error) { _, newError in
                 if let msg = newError { toast.error(msg) }
@@ -133,6 +115,18 @@ struct ShareWishlistSheet: View {
             }
             .presentationDetents([.medium])
         }
+    }
+
+    // MARK: - Helpers
+
+    private func generateShareNow() async {
+        await shareManager.generateShare(
+            for: wishlist,
+            role: selectedRole,
+            ttl: selectedTTL,
+            ownerUID: services.auth.uid ?? "",
+            ownerName: services.auth.userName ?? "Вы"
+        )
     }
 
     // MARK: - QR

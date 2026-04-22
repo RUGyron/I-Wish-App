@@ -1,21 +1,40 @@
 import SwiftUI
 import SwiftData
 import UserNotifications
+import AuthenticationServices
 
 struct SettingsView: View {
     @Environment(\.modelContext) private var context
     @Environment(\.dismiss) private var dismiss
+    @Environment(\.appServices) private var services
+    @Environment(\.toast) private var toast
     @Query private var settingsList: [AppSettings]
+    @State private var showingAppleSignIn = false
     private var settings: AppSettings {
         settingsList.first ?? AppSettings.loadOrCreate(in: context)
     }
 
     var body: some View {
         Form {
+            accountSection
             appearanceSection
             wishesSection
             invitesSection
             aboutSection
+        }
+        .sheet(isPresented: $showingAppleSignIn) {
+            SignInWithAppleSheet { result in
+                showingAppleSignIn = false
+                Task {
+                    do {
+                        try await services.auth.handleSignInWithApple(result: result)
+                        toast.success("Вы вошли как \(services.auth.userName ?? "пользователь")")
+                    } catch {
+                        toast.error("Не удалось войти")
+                    }
+                }
+            }
+            .presentationDetents([.medium])
         }
         .warmBackground()
         .navigationTitle("Настройки")
@@ -24,6 +43,46 @@ struct SettingsView: View {
             ToolbarItem(placement: .confirmationAction) {
                 Button("Готово") { dismiss() }
             }
+        }
+    }
+
+    // MARK: - Account
+
+    private var accountSection: some View {
+        Section {
+            if services.auth.isAuthenticated {
+                HStack {
+                    Image(systemName: "person.crop.circle.fill")
+                        .font(.title2)
+                        .foregroundStyle(.tint)
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text(services.auth.userName ?? "Apple ID")
+                            .font(.body.weight(.medium))
+                        Text("Вы вошли через Apple")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                    }
+                }
+            } else {
+                Button {
+                    showingAppleSignIn = true
+                } label: {
+                    HStack {
+                        Image(systemName: "person.crop.circle.badge.plus")
+                            .font(.title2)
+                            .foregroundStyle(.tint)
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text("Войти через Apple")
+                                .font(.body.weight(.medium))
+                            Text("Для шеринга списков")
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
+                        }
+                    }
+                }
+            }
+        } header: {
+            Text("Аккаунт")
         }
     }
 

@@ -21,8 +21,8 @@ final class AuthService: NSObject {
 
     private static let apiKey = "AIzaSyBifbBfRvO47M7mZnxJ55QZSqeelqPeSMs"
 
-    /// Whether the user needs to sign in (shown at app launch)
-    var needsSignIn: Bool { !_isAppleSignedIn && _idToken == nil }
+    /// Whether the user has dismissed sign-in for now
+    var skippedSignIn: Bool = false
 
     override init() {
         super.init()

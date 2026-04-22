@@ -9,7 +9,7 @@ struct RootView: View {
 
     var body: some View {
         Group {
-            if services.auth.needsSignIn {
+            if !services.auth.isAuthenticated && !services.auth.skippedSignIn {
                 signInView
             } else {
                 mainContent
@@ -39,6 +39,8 @@ struct RootView: View {
             Task {
                 try? await services.auth.handleSignInWithApple(result: result)
             }
+        } onSkip: {
+            services.auth.skippedSignIn = true
         }
     }
 
