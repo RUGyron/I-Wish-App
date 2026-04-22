@@ -123,7 +123,7 @@ final class CloudKitSharingService {
         wishlistID: UUID,
         in zone: CKRecordZone
     ) async throws -> CKRecord {
-        let predicate = NSPredicate(format: "CD_id == %@", wishlistID as CVarArg)
+        let predicate = NSPredicate(format: "CD_id == %@", wishlistID.uuidString)
         let query = CKQuery(recordType: "CD_Wishlist", predicate: predicate)
 
         let (results, _) = try await privateDB.records(
