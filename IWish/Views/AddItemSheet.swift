@@ -4,6 +4,7 @@ import SwiftData
 struct AddItemSheet: View {
     @Environment(\.modelContext) private var context
     @Environment(\.dismiss) private var dismiss
+    @Environment(\.appServices) private var services
     @Query private var settingsList: [AppSettings]
 
     let wishlist: Wishlist
@@ -283,6 +284,11 @@ struct AddItemSheet: View {
         item.wishlist = wishlist
         context.insert(item)
         try? context.save()
+
+        if wishlist.sharedWishlistID != nil {
+            Task { await services.sharedSync.pushChanges(for: wishlist) }
+        }
+
         dismiss()
     }
 

@@ -115,6 +115,7 @@ final class ShareManager {
 
             // 5. Mark wishlist as shared
             wishlist.isShared = true
+            wishlist.sharedWishlistID = wishlist.id.uuidString
             wishlist.updatedAt = .now
         } catch {
             self.error = error.localizedDescription

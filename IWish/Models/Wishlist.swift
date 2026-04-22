@@ -12,6 +12,7 @@ final class Wishlist {
     var ownerRecordID: String?
     var isShared: Bool = false
     var isArchived: Bool = false
+    var sharedWishlistID: String?
 
     @Relationship(deleteRule: .cascade, inverse: \Item.wishlist)
     var items: [Item]?
@@ -22,7 +23,8 @@ final class Wishlist {
         coverEmoji: String? = nil,
         ownerRecordID: String? = nil,
         isShared: Bool = false,
-        isArchived: Bool = false
+        isArchived: Bool = false,
+        sharedWishlistID: String? = nil
     ) {
         let now = Date.now
         self.id = UUID()
@@ -34,5 +36,6 @@ final class Wishlist {
         self.ownerRecordID = ownerRecordID
         self.isShared = isShared
         self.isArchived = isArchived
+        self.sharedWishlistID = sharedWishlistID
     }
 }

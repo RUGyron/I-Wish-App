@@ -262,6 +262,16 @@ struct WishlistDetailView: View {
             addButton
                 .padding(.bottom, 24)
         }
+        .task {
+            if wishlist.sharedWishlistID != nil {
+                await services.sharedSync.pullChanges(for: wishlist, context: context)
+            }
+        }
+        .refreshable {
+            if wishlist.sharedWishlistID != nil {
+                await services.sharedSync.pullChanges(for: wishlist, context: context)
+            }
+        }
         .overlay {
             if wishlist.isShared && !services.syncStatus.hasEverSynced {
                 sharedSyncGate
@@ -388,8 +398,8 @@ struct WishlistDetailView: View {
                     if !collapsedTiers.contains(tier.rawValue) {
                         ForEach(tierItems) { item in
                             itemRow(item)
-                                .itemContextMenu(item: item, context: context, editingItem: $editingItem)
-                                .itemSwipeActions(item: item, context: context)
+                                .itemContextMenu(item: item, context: context, editingItem: $editingItem, onMutate: { pushIfShared() })
+                                .itemSwipeActions(item: item, context: context, onMutate: { pushIfShared() })
                         }
                         .onMove { from, to in
                             reorderItems(in: tier, from: from, to: to)
@@ -441,6 +451,12 @@ struct WishlistDetailView: View {
             item.updatedAt = .now
         }
         try? context.save()
+        pushIfShared()
+    }
+
+    private func pushIfShared() {
+        guard wishlist.sharedWishlistID != nil else { return }
+        Task { await services.sharedSync.pushChanges(for: wishlist) }
     }
 
     // MARK: - Flat Sorted
@@ -452,8 +468,8 @@ struct WishlistDetailView: View {
         Section {
             ForEach(sorted) { item in
                 itemRow(item)
-                    .itemContextMenu(item: item, context: context, editingItem: $editingItem)
-                    .itemSwipeActions(item: item, context: context)
+                    .itemContextMenu(item: item, context: context, editingItem: $editingItem, onMutate: { pushIfShared() })
+                    .itemSwipeActions(item: item, context: context, onMutate: { pushIfShared() })
             }
         }
     }
@@ -644,7 +660,7 @@ struct WishlistDetailView: View {
 // MARK: - Context Menu & Swipe Actions
 
 private extension View {
-    func itemContextMenu(item: Item, context: ModelContext, editingItem: Binding<Item?>) -> some View {
+    func itemContextMenu(item: Item, context: ModelContext, editingItem: Binding<Item?>, onMutate: (() -> Void)? = nil) -> some View {
         self.contextMenu {
             Button {
                 editingItem.wrappedValue = item
@@ -666,6 +682,7 @@ private extension View {
                         item.tier = tier
                         item.updatedAt = .now
                         try? context.save()
+                        onMutate?()
                     } label: {
                         if item.tier == tier {
                             Label {
@@ -686,6 +703,7 @@ private extension View {
                 item.isArchived = true
                 item.updatedAt = .now
                 try? context.save()
+                onMutate?()
             } label: {
                 Label("В архив", systemImage: "archivebox")
             }
@@ -693,17 +711,19 @@ private extension View {
             Button(role: .destructive) {
                 context.delete(item)
                 try? context.save()
+                onMutate?()
             } label: {
                 Label("Удалить", systemImage: "trash")
             }
         }
     }
 
-    func itemSwipeActions(item: Item, context: ModelContext) -> some View {
+    func itemSwipeActions(item: Item, context: ModelContext, onMutate: (() -> Void)? = nil) -> some View {
         self.swipeActions(edge: .trailing, allowsFullSwipe: false) {
             Button(role: .destructive) {
                 context.delete(item)
                 try? context.save()
+                onMutate?()
             } label: {
                 Label("Удалить", systemImage: "trash")
             }
@@ -713,6 +733,7 @@ private extension View {
                 item.isArchived = true
                 item.updatedAt = .now
                 try? context.save()
+                onMutate?()
             } label: {
                 Label("В архив", systemImage: "archivebox")
             }

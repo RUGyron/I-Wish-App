@@ -197,7 +197,8 @@ struct JoinWishlistSheet: View {
                     name: sharedData.name,
                     coverEmoji: sharedData.coverEmoji,
                     ownerRecordID: sharedData.ownerRecordID,
-                    isShared: true
+                    isShared: true,
+                    sharedWishlistID: info.wishlistID
                 )
                 context.insert(wishlist)
 

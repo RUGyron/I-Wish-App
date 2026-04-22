@@ -5,6 +5,7 @@ import LinkPresentation
 struct EditItemSheet: View {
     @Environment(\.modelContext) private var context
     @Environment(\.dismiss) private var dismiss
+    @Environment(\.appServices) private var services
 
     let item: Item
 
@@ -133,6 +134,11 @@ struct EditItemSheet: View {
         item.url = urlString.isEmpty ? nil : urlString
         item.updatedAt = .now
         try? context.save()
+
+        if let wishlist = item.wishlist, wishlist.sharedWishlistID != nil {
+            Task { await services.sharedSync.pushChanges(for: wishlist) }
+        }
+
         dismiss()
     }
 }
