@@ -102,34 +102,13 @@ struct HomeView: View {
     private var homeNavTitle: some View {
         VStack(spacing: 1) {
             Text("Вишлисты").font(.headline)
-            syncSubtitle
-        }
-    }
-
-    @ViewBuilder
-    private var syncSubtitle: some View {
-        if let data = services.data {
-            if data.isSyncing {
-                HStack(spacing: 3) {
-                    ProgressView()
-                        .scaleEffect(0.6)
-                    Text("Синхронизация...")
-                        .font(.system(size: 10))
-                }
-                .foregroundStyle(.secondary)
-            } else if data.syncError != nil {
-                Button {
-                    Task { await services.data?.refreshWishlists() }
-                } label: {
-                    HStack(spacing: 3) {
-                        Image(systemName: "exclamationmark.icloud")
-                            .font(.system(size: 9))
-                        Text("Ошибка синхры")
-                            .font(.system(size: 10))
-                    }
-                    .foregroundStyle(.orange)
-                }
-                .buttonStyle(.plain)
+            if let data = services.data {
+                SyncStatusBadge(
+                    isSyncing: data.isSyncing,
+                    syncError: data.syncError,
+                    lastSyncDate: data.lastSyncDate,
+                    onTap: { Task { await services.data?.refreshWishlists() } }
+                )
             }
         }
     }

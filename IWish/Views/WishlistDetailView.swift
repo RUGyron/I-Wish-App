@@ -425,30 +425,15 @@ struct WishlistDetailView: View {
         }
     }
 
-    @ViewBuilder
     private var detailSyncSubtitle: some View {
-        if let data = services.data {
-            if data.isSyncing {
-                HStack(spacing: 3) {
-                    ProgressView()
-                        .scaleEffect(0.6)
-                    Text("Синхронизация...")
-                        .font(.system(size: 10))
-                }
-                .foregroundStyle(.secondary)
-            } else if data.syncError != nil {
-                Button {
-                    Task { await services.data?.refreshItems(for: wishlist.id.uuidString) }
-                } label: {
-                    HStack(spacing: 3) {
-                        Image(systemName: "exclamationmark.icloud")
-                            .font(.system(size: 9))
-                        Text("Ошибка синхры")
-                            .font(.system(size: 10))
-                    }
-                    .foregroundStyle(.orange)
-                }
-                .buttonStyle(.plain)
+        Group {
+            if let data = services.data {
+                SyncStatusBadge(
+                    isSyncing: data.isSyncing,
+                    syncError: data.syncError,
+                    lastSyncDate: data.lastSyncDate,
+                    onTap: { Task { await services.data?.refreshItems(for: wishlist.id.uuidString) } }
+                )
             }
         }
     }

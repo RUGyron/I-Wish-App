@@ -8,8 +8,15 @@ final class DataService {
     let modelContext: ModelContext
     let auth: AuthService
 
-    var isSyncing: Bool = false
+    var isSyncing: Bool = false {
+        didSet {
+            if oldValue == true && isSyncing == false && syncError == nil {
+                lastSyncDate = .now
+            }
+        }
+    }
     var syncError: String?
+    var lastSyncDate: Date?
 
     init(firestore: FirestoreService, modelContext: ModelContext, auth: AuthService) {
         self.firestore = firestore
