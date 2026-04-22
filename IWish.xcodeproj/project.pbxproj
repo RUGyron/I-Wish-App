@@ -8,6 +8,8 @@
 
 /* Begin PBXBuildFile section */
 		C90617942F9249AD005AC61C /* QRCode in Frameworks */ = {isa = PBXBuildFile; productRef = AA00CA022FA0000000000002 /* QRCode */; };
+		FB00CA012FB0000000000001 /* FirebaseAuth in Frameworks */ = {isa = PBXBuildFile; productRef = FB00CA032FB0000000000001 /* FirebaseAuth */; };
+		FB00CA022FB0000000000001 /* FirebaseFirestore in Frameworks */ = {isa = PBXBuildFile; productRef = FB00CA042FB0000000000001 /* FirebaseFirestore */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -57,6 +59,8 @@
 			buildActionMask = 2147483647;
 			files = (
 				C90617942F9249AD005AC61C /* QRCode in Frameworks */,
+				FB00CA012FB0000000000001 /* FirebaseAuth in Frameworks */,
+				FB00CA022FB0000000000001 /* FirebaseFirestore in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -109,6 +113,8 @@
 			name = IWish;
 			packageProductDependencies = (
 				AA00CA022FA0000000000002 /* QRCode */,
+				FB00CA032FB0000000000001 /* FirebaseAuth */,
+				FB00CA042FB0000000000001 /* FirebaseFirestore */,
 			);
 			productName = IWish;
 			productReference = C90615EF2F8D5AC1005AC61C /* IWish.app */;
@@ -168,6 +174,7 @@
 			minimizedProjectReferenceProxies = 1;
 			packageReferences = (
 				AA00CA012FA0000000000001 /* XCRemoteSwiftPackageReference "QRCode" */,
+				FB00CA002FB0000000000001 /* XCRemoteSwiftPackageReference "firebase-ios-sdk" */,
 			);
 			preferredProjectObjectVersion = 77;
 			productRefGroup = C90615F02F8D5AC1005AC61C /* Products */;
@@ -501,6 +508,14 @@
 				minimumVersion = 22.0.0;
 			};
 		};
+		FB00CA002FB0000000000001 /* XCRemoteSwiftPackageReference "firebase-ios-sdk" */ = {
+			isa = XCRemoteSwiftPackageReference;
+			repositoryURL = "https://github.com/firebase/firebase-ios-sdk";
+			requirement = {
+				kind = upToNextMajorVersion;
+				minimumVersion = 11.0.0;
+			};
+		};
 /* End XCRemoteSwiftPackageReference section */
 
 /* Begin XCSwiftPackageProductDependency section */
@@ -508,6 +523,16 @@
 			isa = XCSwiftPackageProductDependency;
 			package = AA00CA012FA0000000000001 /* XCRemoteSwiftPackageReference "QRCode" */;
 			productName = QRCode;
+		};
+		FB00CA032FB0000000000001 /* FirebaseAuth */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = FB00CA002FB0000000000001 /* XCRemoteSwiftPackageReference "firebase-ios-sdk" */;
+			productName = FirebaseAuth;
+		};
+		FB00CA042FB0000000000001 /* FirebaseFirestore */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = FB00CA002FB0000000000001 /* XCRemoteSwiftPackageReference "firebase-ios-sdk" */;
+			productName = FirebaseFirestore;
 		};
 /* End XCSwiftPackageProductDependency section */
 	};
