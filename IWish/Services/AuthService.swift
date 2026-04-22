@@ -23,10 +23,12 @@ final class AuthService: NSObject {
 
     override init() {
         super.init()
+        // Restore saved name from first Apple sign-in
+        userName = UserDefaults.standard.string(forKey: "auth_userName")
         if let user = Auth.auth().currentUser, !user.isAnonymous {
             _uid = user.uid
             _isAppleSignedIn = true
-            print("[Auth] Restored Apple user: \(user.uid)")
+            print("[Auth] Restored Apple user: \(user.uid), name: \(userName ?? "nil")")
             Task { await refreshToken() }
         } else {
             print("[Auth] No signed-in user, will show Sign in with Apple")
@@ -113,11 +115,13 @@ final class AuthService: NSObject {
             _isAppleSignedIn = true
             print("[Auth] Apple sign-in OK, uid: \(_uid ?? "nil")")
 
-            // Extract name
+            // Extract name (Apple only sends it on FIRST sign-in ever)
             if let givenName = credential.fullName?.givenName {
-                userName = [givenName, credential.fullName?.familyName]
+                let name = [givenName, credential.fullName?.familyName]
                     .compactMap { $0 }
                     .joined(separator: " ")
+                userName = name
+                UserDefaults.standard.set(name, forKey: "auth_userName")
             }
 
         case .failure(let error):
