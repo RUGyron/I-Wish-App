@@ -7,13 +7,16 @@ import CryptoKit
 @MainActor
 final class AuthService: NSObject {
     var userName: String?
-    var isAuthenticated: Bool { _idToken != nil }
+    /// True only after Sign in with Apple (not anonymous)
+    var isAuthenticated: Bool { _isAppleSignedIn }
+    var hasToken: Bool { _idToken != nil }
     var uid: String? { _uid }
     var currentUser: User? { Auth.auth().currentUser }
 
     private var _uid: String?
     private var _idToken: String?
     private var _refreshToken: String?
+    private var _isAppleSignedIn: Bool = false
     private var currentNonce: String?
 
     private static let apiKey = "AIzaSyBifbBfRvO47M7mZnxJ55QZSqeelqPeSMs"
@@ -143,8 +146,9 @@ final class AuthService: NSObject {
                 authResult = try await Auth.auth().signIn(with: firebaseCredential)
             }
             _uid = authResult.user.uid
-            // Refresh token from SDK
             _idToken = try? await authResult.user.getIDToken()
+            _isAppleSignedIn = true
+            print("[Auth] Apple sign-in OK, uid: \(_uid ?? "nil")")
 
             // Extract name
             if let givenName = credential.fullName?.givenName {
