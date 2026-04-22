@@ -27,9 +27,23 @@ final class AuthService: NSObject {
         do {
             let result = try await Auth.auth().signInAnonymously()
             currentUser = result.user
+            print("[Auth] Anonymous sign-in OK, uid: \(result.user.uid)")
         } catch {
             print("[Auth] Anonymous sign-in failed: \(error)")
         }
+    }
+
+    /// Ensures we have an authenticated user (anonymous or Apple). Waits up to 5s.
+    func ensureAuth() async -> Bool {
+        if currentUser != nil { return true }
+        // Wait for in-flight anonymous sign-in
+        for _ in 0..<10 {
+            try? await Task.sleep(for: .milliseconds(500))
+            if currentUser != nil { return true }
+        }
+        // Try once more
+        await signInAnonymously()
+        return currentUser != nil
     }
 
     // Sign in with Apple -- returns (credential, nonce) for Firebase

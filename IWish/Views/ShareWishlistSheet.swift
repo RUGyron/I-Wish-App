@@ -74,6 +74,10 @@ struct ShareWishlistSheet: View {
                     selectedTTL = settings.defaultInviteTTL
                 }
                 Task {
+                    guard await services.auth.ensureAuth() else {
+                        toast.error("Не удалось авторизоваться")
+                        return
+                    }
                     await shareManager.generateShare(
                         for: wishlist,
                         role: selectedRole,
