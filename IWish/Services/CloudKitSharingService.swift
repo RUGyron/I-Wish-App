@@ -1,7 +1,5 @@
 import CloudKit
-import CoreData
 import Foundation
-import SwiftData
 
 @Observable
 final class CloudKitSharingService {
@@ -9,7 +7,7 @@ final class CloudKitSharingService {
     // MARK: - Types
 
     struct ShareLinkInfo {
-        let ckShareURL: URL
+        let wishlistID: String
         let wishlistName: String
         let wishlistEmoji: String?
         let ownerName: String?
@@ -17,17 +15,37 @@ final class CloudKitSharingService {
         let itemCount: Int
     }
 
+    struct SharedWishlistInfo {
+        let wishlistID: String
+        let name: String
+        let coverEmoji: String?
+        let ownerRecordID: String
+        let ownerName: String?
+        let members: [(recordID: String, role: String)]
+        let items: [SharedItemInfo]
+    }
+
+    struct SharedItemInfo {
+        let itemID: String
+        let name: String
+        let tier: String
+        let price: Double?
+        let currency: String
+        let url: String?
+        let coverEmoji: String?
+        let sortIndex: Double
+        let isArchived: Bool
+    }
+
     enum SharingError: LocalizedError {
         case invalidShareURL
         case shareLinkNotFound
-        case wishlistRecordNotFound
-        case shareCreationFailed(Error)
-        case metadataFetchFailed(Error)
-        case acceptFailed(Error)
-        case persistentContainerNotFound
-        case sharedStoreNotFound
+        case wishlistNotFound
         case saveFailed(Error)
         case deleteFailed(Error)
+        case fetchFailed(Error)
+        case joinFailed(Error)
+        case recordConflict
 
         var errorDescription: String? {
             switch self {
@@ -35,29 +53,29 @@ final class CloudKitSharingService {
                 return "Ссылка на шаринг недействительна."
             case .shareLinkNotFound:
                 return "Приглашение не найдено или истекло."
-            case .wishlistRecordNotFound:
-                return "Список не найден в CloudKit. Дождитесь синхронизации и попробуйте снова."
-            case .shareCreationFailed(let error):
-                return "Не удалось создать приглашение: \(error.localizedDescription)"
-            case .metadataFetchFailed(let error):
-                return "Не удалось получить метаданные шаринга: \(error.localizedDescription)"
-            case .acceptFailed(let error):
-                return "Не удалось принять приглашение: \(error.localizedDescription)"
-            case .persistentContainerNotFound:
-                return "Внутренняя ошибка: не удалось получить доступ к хранилищу."
-            case .sharedStoreNotFound:
-                return "Внутренняя ошибка: shared store не найден."
+            case .wishlistNotFound:
+                return "Список не найден."
             case .saveFailed(let error):
-                return "Не удалось сохранить ссылку: \(error.localizedDescription)"
+                return "Не удалось сохранить: \(error.localizedDescription)"
             case .deleteFailed(let error):
-                return "Не удалось удалить ссылку: \(error.localizedDescription)"
+                return "Не удалось удалить: \(error.localizedDescription)"
+            case .fetchFailed(let error):
+                return "Не удалось загрузить: \(error.localizedDescription)"
+            case .joinFailed(let error):
+                return "Не удалось присоединиться: \(error.localizedDescription)"
+            case .recordConflict:
+                return "Конфликт записи. Попробуйте ещё раз."
             }
         }
     }
 
-    // MARK: - Private
+    // MARK: - Record Types
 
-    private static let recordType = "ShareLink"
+    private static let shareLinkRecordType = "ShareLink"
+    private static let sharedWishlistRecordType = "SharedWishlist"
+    private static let sharedItemRecordType = "SharedItem"
+
+    // MARK: - Properties
 
     private nonisolated let container = CKContainer(
         identifier: ModelContainerFactory.cloudKitContainerID
@@ -67,115 +85,428 @@ final class CloudKitSharingService {
         container.publicCloudDatabase
     }
 
-    private nonisolated var privateDB: CKDatabase {
-        container.privateCloudDatabase
-    }
+    // MARK: - Publish Wishlist
 
-    /// The default SwiftData CloudKit zone
-    private static let swiftDataZoneName = "com.apple.coredata.cloudkit.zone"
-
-    // MARK: - CKShare: Create real share for a Wishlist
-
-    /// Creates a real CKShare in the private DB for the given wishlist UUID.
-    /// Returns the CKShare URL that can be used by receivers to accept the share.
-    nonisolated func createCKShare(
-        for wishlistID: UUID,
-        role: ShareRole
-    ) async throws -> URL {
-        let zone = CKRecordZone(zoneName: Self.swiftDataZoneName)
-
-        // 1. Find the CD_Wishlist record in the private DB
-        let rootRecord = try await fetchWishlistRecord(wishlistID: wishlistID, in: zone)
-
-        // 2. Check if there's already a share for this record and delete it
-        if let existingShareRef = rootRecord.share {
-            try? await deleteExistingShare(existingShareRef, in: zone)
-            // Re-fetch after deletion so the record's share ref is cleared
-            // (CKModifyRecordsOperation might have updated the server)
-        }
-
-        // 3. Create a new CKShare rooted on this record
-        let share = CKShare(rootRecord: rootRecord)
-        share[CKShare.SystemFieldKey.title] = rootRecord["CD_name"] as? String ?? "Wishlist"
-
-        // "Anyone with the link" — public permission for URL-based join
-        switch role {
-        case .editor:
-            share.publicPermission = .readWrite
-        case .viewer:
-            share.publicPermission = .readOnly
-        }
-
-        // 4. Save the share + updated root record together
-        let (saveResults, _) = try await privateDB.modifyRecords(
-            saving: [share, rootRecord],
-            deleting: [],
-            savePolicy: .changedKeys
-        )
-
-        // Check save results for errors
-        for (_, result) in saveResults {
-            _ = try result.get()
-        }
-
-        // 5. Return the share URL
-        guard let shareURL = share.url else {
-            throw SharingError.invalidShareURL
-        }
-
-        return shareURL
-    }
-
-    /// Fetches the CD_Wishlist CKRecord from the private DB by Wishlist UUID.
-    private nonisolated func fetchWishlistRecord(
-        wishlistID: UUID,
-        in zone: CKRecordZone
-    ) async throws -> CKRecord {
-        let predicate = NSPredicate(format: "CD_id == %@", wishlistID.uuidString)
-        let query = CKQuery(recordType: "CD_Wishlist", predicate: predicate)
-
-        let (results, _) = try await privateDB.records(
-            matching: query,
-            inZoneWith: zone.zoneID,
-            resultsLimit: 1
-        )
-
-        guard let (_, result) = results.first else {
-            throw SharingError.wishlistRecordNotFound
-        }
-
-        return try result.get()
-    }
-
-    /// Deletes an existing CKShare so we can create a fresh one.
-    private nonisolated func deleteExistingShare(
-        _ shareRef: CKRecord.Reference,
-        in zone: CKRecordZone
+    /// Creates SharedWishlist + SharedItem records in PublicDB.
+    nonisolated func publishWishlist(
+        id wishlistID: String,
+        name: String,
+        emoji: String?,
+        ownerRecordID: String,
+        ownerName: String?,
+        items: [SharedItemInfo],
+        role: String
     ) async throws {
-        try await privateDB.modifyRecords(
-            saving: [],
-            deleting: [shareRef.recordID]
+        // 1. Build SharedWishlist record
+        let wishlistRecordID = CKRecord.ID(recordName: wishlistID)
+        let wishlistRecord = CKRecord(
+            recordType: Self.sharedWishlistRecordType,
+            recordID: wishlistRecordID
+        )
+        wishlistRecord["wishlistID"] = wishlistID as CKRecordValue
+        wishlistRecord["name"] = name as CKRecordValue
+        wishlistRecord["coverEmoji"] = (emoji ?? "") as CKRecordValue
+        wishlistRecord["ownerRecordID"] = ownerRecordID as CKRecordValue
+        wishlistRecord["ownerName"] = (ownerName ?? "") as CKRecordValue
+        wishlistRecord["memberRecordIDs"] = [ownerRecordID] as CKRecordValue
+        wishlistRecord["memberRoles"] = [role] as CKRecordValue
+        wishlistRecord["updatedAt"] = Date.now as CKRecordValue
+
+        // 2. Build SharedItem records
+        var recordsToSave: [CKRecord] = [wishlistRecord]
+
+        for item in items {
+            let itemRecordID = CKRecord.ID(recordName: item.itemID)
+            let itemRecord = CKRecord(
+                recordType: Self.sharedItemRecordType,
+                recordID: itemRecordID
+            )
+            itemRecord["itemID"] = item.itemID as CKRecordValue
+            itemRecord["wishlistID"] = wishlistID as CKRecordValue
+            itemRecord["name"] = item.name as CKRecordValue
+            itemRecord["tier"] = item.tier as CKRecordValue
+            if let price = item.price {
+                itemRecord["price"] = price as CKRecordValue
+            }
+            itemRecord["currency"] = item.currency as CKRecordValue
+            itemRecord["url"] = (item.url ?? "") as CKRecordValue
+            itemRecord["coverEmoji"] = (item.coverEmoji ?? "") as CKRecordValue
+            itemRecord["sortIndex"] = item.sortIndex as CKRecordValue
+            itemRecord["isArchived"] = (item.isArchived ? 1 : 0) as CKRecordValue
+            itemRecord["updatedAt"] = Date.now as CKRecordValue
+
+            recordsToSave.append(itemRecord)
+        }
+
+        // 3. Save all records
+        do {
+            let (saveResults, _) = try await publicDB.modifyRecords(
+                saving: recordsToSave,
+                deleting: [],
+                savePolicy: .allKeys
+            )
+            for (_, result) in saveResults {
+                _ = try result.get()
+            }
+        } catch {
+            throw SharingError.saveFailed(error)
+        }
+    }
+
+    // MARK: - Fetch Shared Wishlist
+
+    /// Fetches a SharedWishlist and its SharedItems from PublicDB.
+    nonisolated func fetchSharedWishlist(
+        wishlistID: String
+    ) async throws -> SharedWishlistInfo {
+        // 1. Fetch the SharedWishlist record by recordName
+        let wishlistRecordID = CKRecord.ID(recordName: wishlistID)
+        let wishlistRecord: CKRecord
+        do {
+            wishlistRecord = try await publicDB.record(for: wishlistRecordID)
+        } catch {
+            throw SharingError.wishlistNotFound
+        }
+
+        // 2. Fetch all SharedItems for this wishlistID
+        let predicate = NSPredicate(format: "wishlistID == %@", wishlistID)
+        let query = CKQuery(recordType: Self.sharedItemRecordType, predicate: predicate)
+        query.sortDescriptors = [NSSortDescriptor(key: "sortIndex", ascending: true)]
+
+        var allItems: [SharedItemInfo] = []
+        var cursor: CKQueryOperation.Cursor?
+
+        let (firstResults, firstCursor) = try await publicDB.records(matching: query)
+        for (_, result) in firstResults {
+            if let record = try? result.get() {
+                allItems.append(sharedItemInfo(from: record))
+            }
+        }
+        cursor = firstCursor
+
+        while let activeCursor = cursor {
+            let (moreResults, nextCursor) = try await publicDB.records(
+                continuingMatchFrom: activeCursor
+            )
+            for (_, result) in moreResults {
+                if let record = try? result.get() {
+                    allItems.append(sharedItemInfo(from: record))
+                }
+            }
+            cursor = nextCursor
+        }
+
+        // 3. Build members array
+        let memberIDs = wishlistRecord["memberRecordIDs"] as? [String] ?? []
+        let memberRoles = wishlistRecord["memberRoles"] as? [String] ?? []
+
+        var members: [(recordID: String, role: String)] = []
+        for i in 0..<memberIDs.count {
+            let role = i < memberRoles.count ? memberRoles[i] : "viewer"
+            members.append((recordID: memberIDs[i], role: role))
+        }
+
+        let name = wishlistRecord["name"] as? String ?? ""
+        let emoji = wishlistRecord["coverEmoji"] as? String
+        let ownerRecordID = wishlistRecord["ownerRecordID"] as? String ?? ""
+        let ownerName = wishlistRecord["ownerName"] as? String
+
+        return SharedWishlistInfo(
+            wishlistID: wishlistID,
+            name: name,
+            coverEmoji: emoji?.isEmpty == true ? nil : emoji,
+            ownerRecordID: ownerRecordID,
+            ownerName: ownerName?.isEmpty == true ? nil : ownerName,
+            members: members,
+            items: allItems
         )
     }
 
-    /// Deletes the CKShare associated with a wishlist (for revocation).
-    nonisolated func deleteCKShare(for wishlistID: UUID) async throws {
-        let zone = CKRecordZone(zoneName: Self.swiftDataZoneName)
+    // MARK: - Join Wishlist
 
-        let rootRecord = try await fetchWishlistRecord(wishlistID: wishlistID, in: zone)
-        guard let shareRef = rootRecord.share else { return }
+    /// Adds userRecordID to memberRecordIDs array of the SharedWishlist.
+    nonisolated func joinWishlist(
+        wishlistID: String,
+        userRecordID: String,
+        role: String = "viewer"
+    ) async throws {
+        try await retryOnConflict { [self] in
+            let recordID = CKRecord.ID(recordName: wishlistID)
+            let record: CKRecord
+            do {
+                record = try await publicDB.record(for: recordID)
+            } catch {
+                throw SharingError.wishlistNotFound
+            }
 
-        try await privateDB.modifyRecords(
-            saving: [],
-            deleting: [shareRef.recordID]
-        )
+            var memberIDs = record["memberRecordIDs"] as? [String] ?? []
+            var memberRoles = record["memberRoles"] as? [String] ?? []
+
+            // Already a member — no-op
+            if memberIDs.contains(userRecordID) { return }
+
+            memberIDs.append(userRecordID)
+            memberRoles.append(role)
+
+            record["memberRecordIDs"] = memberIDs as CKRecordValue
+            record["memberRoles"] = memberRoles as CKRecordValue
+            record["updatedAt"] = Date.now as CKRecordValue
+
+            do {
+                let (saveResults, _) = try await publicDB.modifyRecords(
+                    saving: [record],
+                    deleting: [],
+                    savePolicy: .changedKeys
+                )
+                for (_, result) in saveResults {
+                    _ = try result.get()
+                }
+            } catch {
+                throw SharingError.joinFailed(error)
+            }
+        }
     }
 
-    // MARK: - Public DB: Create ShareLink
+    // MARK: - Update Shared Items
+
+    /// Updates SharedItem records in PublicDB (creates new ones, updates existing).
+    nonisolated func updateSharedItems(
+        wishlistID: String,
+        items: [SharedItemInfo]
+    ) async throws {
+        // 1. Fetch existing SharedItems for this wishlist
+        let predicate = NSPredicate(format: "wishlistID == %@", wishlistID)
+        let query = CKQuery(recordType: Self.sharedItemRecordType, predicate: predicate)
+
+        var existingRecordIDs: [CKRecord.ID] = []
+        let (results, _) = try await publicDB.records(matching: query)
+        for (recordID, _) in results {
+            existingRecordIDs.append(recordID)
+        }
+
+        // 2. Build set of new item IDs
+        let newItemIDs = Set(items.map(\.itemID))
+
+        // 3. Determine which existing records to delete (no longer in items list)
+        let recordIDsToDelete = existingRecordIDs.filter { !newItemIDs.contains($0.recordName) }
+
+        // 4. Build records to save
+        var recordsToSave: [CKRecord] = []
+        for item in items {
+            let itemRecordID = CKRecord.ID(recordName: item.itemID)
+            let itemRecord = CKRecord(
+                recordType: Self.sharedItemRecordType,
+                recordID: itemRecordID
+            )
+            itemRecord["itemID"] = item.itemID as CKRecordValue
+            itemRecord["wishlistID"] = wishlistID as CKRecordValue
+            itemRecord["name"] = item.name as CKRecordValue
+            itemRecord["tier"] = item.tier as CKRecordValue
+            if let price = item.price {
+                itemRecord["price"] = price as CKRecordValue
+            }
+            itemRecord["currency"] = item.currency as CKRecordValue
+            itemRecord["url"] = (item.url ?? "") as CKRecordValue
+            itemRecord["coverEmoji"] = (item.coverEmoji ?? "") as CKRecordValue
+            itemRecord["sortIndex"] = item.sortIndex as CKRecordValue
+            itemRecord["isArchived"] = (item.isArchived ? 1 : 0) as CKRecordValue
+            itemRecord["updatedAt"] = Date.now as CKRecordValue
+
+            recordsToSave.append(itemRecord)
+        }
+
+        // 5. Save + delete in one batch
+        do {
+            let (saveResults, _) = try await publicDB.modifyRecords(
+                saving: recordsToSave,
+                deleting: recordIDsToDelete,
+                savePolicy: .allKeys
+            )
+            for (_, result) in saveResults {
+                _ = try result.get()
+            }
+        } catch {
+            throw SharingError.saveFailed(error)
+        }
+    }
+
+    // MARK: - Fetch My Shared Wishlists
+
+    /// Returns all SharedWishlists where userRecordID is in memberRecordIDs.
+    nonisolated func fetchMySharedWishlists(
+        userRecordID: String
+    ) async throws -> [SharedWishlistInfo] {
+        let predicate = NSPredicate(
+            format: "memberRecordIDs CONTAINS %@",
+            userRecordID
+        )
+        let query = CKQuery(
+            recordType: Self.sharedWishlistRecordType,
+            predicate: predicate
+        )
+
+        var wishlistRecords: [CKRecord] = []
+        var cursor: CKQueryOperation.Cursor?
+
+        let (firstResults, firstCursor) = try await publicDB.records(matching: query)
+        for (_, result) in firstResults {
+            if let record = try? result.get() {
+                wishlistRecords.append(record)
+            }
+        }
+        cursor = firstCursor
+
+        while let activeCursor = cursor {
+            let (moreResults, nextCursor) = try await publicDB.records(
+                continuingMatchFrom: activeCursor
+            )
+            for (_, result) in moreResults {
+                if let record = try? result.get() {
+                    wishlistRecords.append(record)
+                }
+            }
+            cursor = nextCursor
+        }
+
+        // For each wishlist, fetch its items
+        var results: [SharedWishlistInfo] = []
+        for wishlistRecord in wishlistRecords {
+            let wID = wishlistRecord["wishlistID"] as? String ?? wishlistRecord.recordID.recordName
+
+            // Fetch items
+            let itemPredicate = NSPredicate(format: "wishlistID == %@", wID)
+            let itemQuery = CKQuery(recordType: Self.sharedItemRecordType, predicate: itemPredicate)
+            itemQuery.sortDescriptors = [NSSortDescriptor(key: "sortIndex", ascending: true)]
+
+            var items: [SharedItemInfo] = []
+            let (itemResults, _) = try await publicDB.records(matching: itemQuery)
+            for (_, result) in itemResults {
+                if let record = try? result.get() {
+                    items.append(sharedItemInfo(from: record))
+                }
+            }
+
+            // Build members
+            let memberIDs = wishlistRecord["memberRecordIDs"] as? [String] ?? []
+            let memberRoles = wishlistRecord["memberRoles"] as? [String] ?? []
+
+            var members: [(recordID: String, role: String)] = []
+            for i in 0..<memberIDs.count {
+                let role = i < memberRoles.count ? memberRoles[i] : "viewer"
+                members.append((recordID: memberIDs[i], role: role))
+            }
+
+            let name = wishlistRecord["name"] as? String ?? ""
+            let emoji = wishlistRecord["coverEmoji"] as? String
+            let ownerRecordID = wishlistRecord["ownerRecordID"] as? String ?? ""
+            let ownerName = wishlistRecord["ownerName"] as? String
+
+            results.append(SharedWishlistInfo(
+                wishlistID: wID,
+                name: name,
+                coverEmoji: emoji?.isEmpty == true ? nil : emoji,
+                ownerRecordID: ownerRecordID,
+                ownerName: ownerName?.isEmpty == true ? nil : ownerName,
+                members: members,
+                items: items
+            ))
+        }
+
+        return results
+    }
+
+    // MARK: - Remove From Shared Wishlist
+
+    /// Removes a member from the SharedWishlist's memberRecordIDs array.
+    nonisolated func removeFromSharedWishlist(
+        wishlistID: String,
+        userRecordID: String
+    ) async throws {
+        try await retryOnConflict { [self] in
+            let recordID = CKRecord.ID(recordName: wishlistID)
+            let record: CKRecord
+            do {
+                record = try await publicDB.record(for: recordID)
+            } catch {
+                throw SharingError.wishlistNotFound
+            }
+
+            var memberIDs = record["memberRecordIDs"] as? [String] ?? []
+            var memberRoles = record["memberRoles"] as? [String] ?? []
+
+            guard let index = memberIDs.firstIndex(of: userRecordID) else { return }
+
+            memberIDs.remove(at: index)
+            if index < memberRoles.count {
+                memberRoles.remove(at: index)
+            }
+
+            record["memberRecordIDs"] = memberIDs as CKRecordValue
+            record["memberRoles"] = memberRoles as CKRecordValue
+            record["updatedAt"] = Date.now as CKRecordValue
+
+            do {
+                let (saveResults, _) = try await publicDB.modifyRecords(
+                    saving: [record],
+                    deleting: [],
+                    savePolicy: .changedKeys
+                )
+                for (_, result) in saveResults {
+                    _ = try result.get()
+                }
+            } catch {
+                throw SharingError.saveFailed(error)
+            }
+        }
+    }
+
+    // MARK: - Delete Shared Wishlist
+
+    /// Deletes the SharedWishlist + all its SharedItems from PublicDB.
+    nonisolated func deleteSharedWishlist(wishlistID: String) async throws {
+        // 1. Collect item record IDs
+        let predicate = NSPredicate(format: "wishlistID == %@", wishlistID)
+        let query = CKQuery(recordType: Self.sharedItemRecordType, predicate: predicate)
+
+        var recordIDsToDelete: [CKRecord.ID] = []
+
+        var cursor: CKQueryOperation.Cursor?
+        let (firstResults, firstCursor) = try await publicDB.records(matching: query)
+        for (recordID, _) in firstResults {
+            recordIDsToDelete.append(recordID)
+        }
+        cursor = firstCursor
+
+        while let activeCursor = cursor {
+            let (moreResults, nextCursor) = try await publicDB.records(
+                continuingMatchFrom: activeCursor
+            )
+            for (recordID, _) in moreResults {
+                recordIDsToDelete.append(recordID)
+            }
+            cursor = nextCursor
+        }
+
+        // 2. Add the wishlist record itself
+        let wishlistRecordID = CKRecord.ID(recordName: wishlistID)
+        recordIDsToDelete.append(wishlistRecordID)
+
+        // 3. Delete all in one batch
+        do {
+            try await publicDB.modifyRecords(
+                saving: [],
+                deleting: recordIDsToDelete
+            )
+        } catch {
+            throw SharingError.deleteFailed(error)
+        }
+    }
+
+    // MARK: - ShareLink CRUD (Public DB)
 
     nonisolated func createShareLink(
         shortID: String,
-        ckShareURL: URL,
+        wishlistID: String,
         wishlistName: String,
         wishlistEmoji: String?,
         ownerName: String?,
@@ -184,9 +515,9 @@ final class CloudKitSharingService {
         expiresAt: Date
     ) async throws {
         let recordID = CKRecord.ID(recordName: shortID)
-        let record = CKRecord(recordType: Self.recordType, recordID: recordID)
+        let record = CKRecord(recordType: Self.shareLinkRecordType, recordID: recordID)
         record["shortID"] = shortID as CKRecordValue
-        record["ckShareURL"] = ckShareURL.absoluteString as CKRecordValue
+        record["wishlistID"] = wishlistID as CKRecordValue
         record["wishlistName"] = wishlistName as CKRecordValue
         record["wishlistEmoji"] = (wishlistEmoji ?? "") as CKRecordValue
         record["ownerName"] = (ownerName ?? "") as CKRecordValue
@@ -201,11 +532,9 @@ final class CloudKitSharingService {
         }
     }
 
-    // MARK: - Public DB: Resolve ShareLink by shortID
-
     nonisolated func resolveShareLink(shortID: String) async throws -> ShareLinkInfo? {
         let predicate = NSPredicate(format: "shortID == %@", shortID)
-        let query = CKQuery(recordType: Self.recordType, predicate: predicate)
+        let query = CKQuery(recordType: Self.shareLinkRecordType, predicate: predicate)
 
         let (results, _) = try await publicDB.records(matching: query, resultsLimit: 1)
 
@@ -215,17 +544,11 @@ final class CloudKitSharingService {
 
         // Check expiration
         if let expiresAt = record["expiresAt"] as? Date, expiresAt < Date.now {
-            // Expired — best-effort delete, return nil
             try? await publicDB.deleteRecord(withID: record.recordID)
             return nil
         }
 
-        guard let urlString = record["ckShareURL"] as? String,
-              let url = URL(string: urlString)
-        else {
-            return nil
-        }
-
+        let wishlistID = record["wishlistID"] as? String ?? ""
         let wishlistName = record["wishlistName"] as? String ?? ""
         let emoji = record["wishlistEmoji"] as? String
         let owner = record["ownerName"] as? String
@@ -233,7 +556,7 @@ final class CloudKitSharingService {
         let count = record["itemCount"] as? Int64 ?? 0
 
         return ShareLinkInfo(
-            ckShareURL: url,
+            wishlistID: wishlistID,
             wishlistName: wishlistName,
             wishlistEmoji: emoji?.isEmpty == true ? nil : emoji,
             ownerName: owner?.isEmpty == true ? nil : owner,
@@ -241,8 +564,6 @@ final class CloudKitSharingService {
             itemCount: Int(count)
         )
     }
-
-    // MARK: - Public DB: Delete ShareLink by shortID
 
     nonisolated func deleteShareLink(shortID: String) async throws {
         let recordID = CKRecord.ID(recordName: shortID)
@@ -253,12 +574,10 @@ final class CloudKitSharingService {
         }
     }
 
-    // MARK: - Delete expired ShareLinks (TTL rotation)
-
     nonisolated func deleteExpiredShareLinks() async {
         do {
             let predicate = NSPredicate(format: "expiresAt < %@", Date.now as NSDate)
-            let query = CKQuery(recordType: Self.recordType, predicate: predicate)
+            let query = CKQuery(recordType: Self.shareLinkRecordType, predicate: predicate)
 
             let (results, _) = try await publicDB.records(matching: query)
 
@@ -271,193 +590,52 @@ final class CloudKitSharingService {
                 deleting: recordIDs
             )
         } catch {
-            // Best-effort — silently ignore
+            // Best-effort -- silently ignore
         }
-    }
-
-    // MARK: - CKShare: Fetch Participants
-
-    struct ParticipantInfo {
-        let name: String?
-        let role: CKShare.ParticipantRole
-        let acceptance: CKShare.ParticipantAcceptanceStatus
-    }
-
-    /// Fetches real CKShare participants for a given wishlist UUID.
-    /// Returns empty array if no share exists or on any error.
-    nonisolated func fetchParticipants(for wishlistID: UUID) async -> [ParticipantInfo] {
-        let zone = CKRecordZone(zoneName: Self.swiftDataZoneName)
-
-        do {
-            // 1. Fetch the CD_Wishlist record
-            let rootRecord = try await fetchWishlistRecord(wishlistID: wishlistID, in: zone)
-
-            // 2. Check for .share reference
-            guard let shareRef = rootRecord.share else { return [] }
-
-            // 3. Fetch the CKShare record itself
-            let shareRecord = try await privateDB.record(for: shareRef.recordID)
-            guard let share = shareRecord as? CKShare else { return [] }
-
-            // 4. Map participants (skip the owner)
-            var result: [ParticipantInfo] = []
-            for participant in share.participants {
-                if participant.role == .owner { continue }
-
-                // Try to resolve the display name via userIdentity
-                var displayName: String? = nil
-                if let nameComponents = participant.userIdentity.nameComponents {
-                    let formatter = PersonNameComponentsFormatter()
-                    let formatted = formatter.string(from: nameComponents)
-                    if !formatted.isEmpty {
-                        displayName = formatted
-                    }
-                }
-
-                // Fallback: try discoverUserIdentity for the participant's userRecordID
-                if displayName == nil, let userRecordID = participant.userIdentity.userRecordID {
-                    let identity: CKUserIdentity? = await withCheckedContinuation { cont in
-                        container.discoverUserIdentity(withUserRecordID: userRecordID) { identity, _ in
-                            cont.resume(returning: identity)
-                        }
-                    }
-                    if let nameComponents = identity?.nameComponents {
-                        let formatter = PersonNameComponentsFormatter()
-                        let formatted = formatter.string(from: nameComponents)
-                        if !formatted.isEmpty {
-                            displayName = formatted
-                        }
-                    }
-                }
-
-                result.append(ParticipantInfo(
-                    name: displayName,
-                    role: participant.role,
-                    acceptance: participant.acceptanceStatus
-                ))
-            }
-
-            return result
-        } catch {
-            return []
-        }
-    }
-
-    // MARK: - CKShare: Accept
-
-    nonisolated func acceptShare(from url: URL) async throws {
-        let metadata = try await fetchShareMetadata(from: url)
-        try await acceptShareMetadata(metadata)
-    }
-
-    /// Full accept: CK-level accept + NSPersistentCloudKitContainer zone mirroring.
-    /// This ensures SwiftData discovers the shared records immediately.
-    nonisolated func acceptShare(from url: URL, modelContainer: ModelContainer) async throws {
-        let metadata = try await fetchShareMetadata(from: url)
-
-        // 1. Accept at CloudKit level
-        try await acceptShareMetadata(metadata)
-
-        // 2. Tell the underlying NSPersistentCloudKitContainer to mirror shared zone
-        let persistentContainer = try extractPersistentContainer(from: modelContainer)
-
-        // The last store is typically the shared store (.automatic creates private + shared)
-        let stores = persistentContainer.persistentStoreCoordinator.persistentStores
-        guard let sharedStore = stores.last else {
-            throw SharingError.sharedStoreNotFound
-        }
-
-        try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<Void, Error>) in
-            persistentContainer.acceptShareInvitations(from: [metadata], into: sharedStore) { _, error in
-                if let error {
-                    continuation.resume(throwing: SharingError.acceptFailed(error))
-                } else {
-                    continuation.resume()
-                }
-            }
-        }
-    }
-
-    // MARK: - ModelContainer → NSPersistentCloudKitContainer (reflection)
-
-    private nonisolated func extractPersistentContainer(
-        from modelContainer: ModelContainer
-    ) throws -> NSPersistentCloudKitContainer {
-        // SwiftData wraps NSPersistentCloudKitContainer internally.
-        // Walk the mirror tree to find it.
-        func findContainer(in subject: Any, depth: Int = 0) -> NSPersistentCloudKitContainer? {
-            if let container = subject as? NSPersistentCloudKitContainer { return container }
-            guard depth < 4 else { return nil }
-            for child in Mirror(reflecting: subject).children {
-                if let found = findContainer(in: child.value, depth: depth + 1) {
-                    return found
-                }
-            }
-            return nil
-        }
-
-        if let container = findContainer(in: modelContainer) {
-            return container
-        }
-        throw SharingError.persistentContainerNotFound
     }
 
     // MARK: - Private Helpers
 
-    private nonisolated func fetchShareMetadata(
-        from url: URL
-    ) async throws -> CKShare.Metadata {
-        try await withCheckedThrowingContinuation { continuation in
-            let op = CKFetchShareMetadataOperation(shareURLs: [url])
-            op.shouldFetchRootRecord = false
+    private nonisolated func sharedItemInfo(from record: CKRecord) -> SharedItemInfo {
+        let itemID = record["itemID"] as? String ?? record.recordID.recordName
+        let name = record["name"] as? String ?? ""
+        let tier = record["tier"] as? String ?? "idea"
+        let price = record["price"] as? Double
+        let currency = record["currency"] as? String ?? "RUB"
+        let url = record["url"] as? String
+        let coverEmoji = record["coverEmoji"] as? String
+        let sortIndex = record["sortIndex"] as? Double ?? 0
+        let isArchived = (record["isArchived"] as? Int64 ?? 0) != 0
 
-            nonisolated(unsafe) var fetchedMetadata: CKShare.Metadata?
-            nonisolated(unsafe) var perShareError: Error?
-
-            op.perShareMetadataResultBlock = { _, result in
-                switch result {
-                case .success(let metadata):
-                    fetchedMetadata = metadata
-                case .failure(let error):
-                    perShareError = error
-                }
-            }
-
-            op.fetchShareMetadataResultBlock = { result in
-                switch result {
-                case .success:
-                    if let metadata = fetchedMetadata {
-                        continuation.resume(returning: metadata)
-                    } else if let error = perShareError {
-                        continuation.resume(throwing: SharingError.metadataFetchFailed(error))
-                    } else {
-                        continuation.resume(throwing: SharingError.invalidShareURL)
-                    }
-                case .failure(let error):
-                    continuation.resume(throwing: SharingError.metadataFetchFailed(error))
-                }
-            }
-
-            container.add(op)
-        }
+        return SharedItemInfo(
+            itemID: itemID,
+            name: name,
+            tier: tier,
+            price: price,
+            currency: currency,
+            url: url?.isEmpty == true ? nil : url,
+            coverEmoji: coverEmoji?.isEmpty == true ? nil : coverEmoji,
+            sortIndex: sortIndex,
+            isArchived: isArchived
+        )
     }
 
-    private nonisolated func acceptShareMetadata(
-        _ metadata: CKShare.Metadata
+    /// Retries an operation up to 3 times on CKError.serverRecordChanged (conflict).
+    private nonisolated func retryOnConflict(
+        maxAttempts: Int = 3,
+        operation: @Sendable () async throws -> Void
     ) async throws {
-        try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<Void, Error>) in
-            let op = CKAcceptSharesOperation(shareMetadatas: [metadata])
-
-            op.acceptSharesResultBlock = { result in
-                switch result {
-                case .success:
-                    continuation.resume()
-                case .failure(let error):
-                    continuation.resume(throwing: SharingError.acceptFailed(error))
+        for attempt in 1...maxAttempts {
+            do {
+                try await operation()
+                return
+            } catch let error as CKError where error.code == .serverRecordChanged {
+                if attempt == maxAttempts {
+                    throw SharingError.recordConflict
                 }
+                // Brief pause before retry
+                try await Task.sleep(for: .milliseconds(200 * attempt))
             }
-
-            container.add(op)
         }
     }
 }

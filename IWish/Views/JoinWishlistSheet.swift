@@ -2,6 +2,7 @@ import SwiftUI
 import SwiftData
 import AVFoundation
 import AudioToolbox
+import CloudKit
 
 struct JoinWishlistSheet: View {
     @Environment(\.dismiss) private var dismiss
@@ -167,11 +168,55 @@ struct JoinWishlistSheet: View {
         guard let info = resolvedInfo else { return }
         Task {
             do {
-                // Full accept: CK-level + NSPersistentCloudKitContainer zone mirroring
-                try await services.sharing.acceptShare(
-                    from: info.ckShareURL,
-                    modelContainer: context.container
+                let ckContainer = CKContainer(
+                    identifier: ModelContainerFactory.cloudKitContainerID
                 )
+
+                // 1. Get receiver's userRecordID
+                let userRecordID = try await withCheckedThrowingContinuation { (cont: CheckedContinuation<CKRecord.ID, Error>) in
+                    ckContainer.fetchUserRecordID { recordID, error in
+                        if let recordID { cont.resume(returning: recordID) }
+                        else { cont.resume(throwing: error ?? CKError(.internalError)) }
+                    }
+                }
+
+                // 2. Join: add our userRecordID to SharedWishlist.memberRecordIDs
+                try await services.sharing.joinWishlist(
+                    wishlistID: info.wishlistID,
+                    userRecordID: userRecordID.recordName,
+                    role: info.role
+                )
+
+                // 3. Fetch SharedWishlist + SharedItems from PublicDB
+                let sharedData = try await services.sharing.fetchSharedWishlist(
+                    wishlistID: info.wishlistID
+                )
+
+                // 4. Create local Wishlist + Items in SwiftData
+                let wishlist = Wishlist(
+                    name: sharedData.name,
+                    coverEmoji: sharedData.coverEmoji,
+                    ownerRecordID: sharedData.ownerRecordID,
+                    isShared: true
+                )
+                context.insert(wishlist)
+
+                for sharedItem in sharedData.items {
+                    let item = Item(
+                        name: sharedItem.name,
+                        tier: ItemTier(rawValue: sharedItem.tier) ?? .maybe,
+                        sortIndex: sharedItem.sortIndex,
+                        currency: sharedItem.currency,
+                        price: sharedItem.price,
+                        url: sharedItem.url,
+                        coverEmoji: sharedItem.coverEmoji
+                    )
+                    item.isArchived = sharedItem.isArchived
+                    item.wishlist = wishlist
+                    context.insert(item)
+                }
+
+                try context.save()
 
                 showingInvitePreview = false
                 toast.success("Присоединились к «\(info.wishlistName)»")

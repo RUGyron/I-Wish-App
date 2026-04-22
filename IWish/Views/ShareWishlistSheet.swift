@@ -78,8 +78,7 @@ struct ShareWishlistSheet: View {
                         for: wishlist,
                         role: selectedRole,
                         ttl: selectedTTL,
-                        ownerName: services.userProfile.userName,
-                        container: modelContext.container
+                        ownerName: services.userProfile.userName
                     )
                 }
             }
@@ -89,8 +88,7 @@ struct ShareWishlistSheet: View {
                         for: wishlist,
                         role: selectedRole,
                         ttl: selectedTTL,
-                        ownerName: services.userProfile.userName,
-                        container: modelContext.container
+                        ownerName: services.userProfile.userName
                     )
                 }
             }
@@ -100,8 +98,7 @@ struct ShareWishlistSheet: View {
                         for: wishlist,
                         role: selectedRole,
                         ttl: selectedTTL,
-                        ownerName: services.userProfile.userName,
-                        container: modelContext.container
+                        ownerName: services.userProfile.userName
                     )
                 }
             }

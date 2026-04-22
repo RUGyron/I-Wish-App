@@ -31,17 +31,28 @@ final class ShareManager {
     private static let linkDomain = "https://rugyron.github.io/I-Wish-App"
     private let sharingService = CloudKitSharingService()
 
+    private let ckContainer = CKContainer(
+        identifier: ModelContainerFactory.cloudKitContainerID
+    )
+
     func generateShare(
         for wishlist: Wishlist,
         role: ShareRole,
         ttl: InviteTTL,
-        ownerName: String?,
-        container: ModelContainer
+        ownerName: String?
     ) async {
         isLoading = true
         error = nil
 
         do {
+            // 1. Get owner's userRecordID
+            let ownerRecordID = try await withCheckedThrowingContinuation { (cont: CheckedContinuation<CKRecord.ID, Error>) in
+                ckContainer.fetchUserRecordID { recordID, error in
+                    if let recordID { cont.resume(returning: recordID) }
+                    else { cont.resume(throwing: error ?? CKError(.internalError)) }
+                }
+            }
+
             let newShortID = String(
                 wishlist.id.uuidString
                     .replacingOccurrences(of: "-", with: "")
@@ -52,24 +63,41 @@ final class ShareManager {
             // Always delete existing ShareLink before creating new one
             try? await sharingService.deleteShareLink(shortID: newShortID)
 
-            // 1. Create a REAL CKShare in the private DB
-            let ckShareURL = try await sharingService.createCKShare(
-                for: wishlist.id,
-                role: role
+            // 2. Publish wishlist + items to PublicDB
+            let localItems = (wishlist.items ?? []).filter { !$0.isArchived }
+            let sharedItems = localItems.map { item in
+                CloudKitSharingService.SharedItemInfo(
+                    itemID: item.id.uuidString,
+                    name: item.name,
+                    tier: item.tier.rawValue,
+                    price: item.price,
+                    currency: item.currency,
+                    url: item.url,
+                    coverEmoji: item.coverEmoji,
+                    sortIndex: item.sortIndex,
+                    isArchived: item.isArchived
+                )
+            }
+            try await sharingService.publishWishlist(
+                id: wishlist.id.uuidString,
+                name: wishlist.name,
+                emoji: wishlist.coverEmoji,
+                ownerRecordID: ownerRecordID.recordName,
+                ownerName: ownerName,
+                items: sharedItems,
+                role: role.rawValue
             )
 
-            let itemCount = (wishlist.items ?? []).filter { !$0.isArchived }.count
+            let itemCount = localItems.count
             let expiry = ttl.duration.map { Date.now.addingTimeInterval($0) }
             let effectiveExpiry = expiry ?? Date.distantFuture
 
-            // 2. Store the real CKShare URL in PublicDB ShareLink
-            //    The user-facing URL (for QR) still goes through GitHub Pages,
-            //    but the ShareLink record now holds the real ckShareURL for accept flow.
+            // 3. Create ShareLink in PublicDB for QR/link resolution
             let userURL = URL(string: "\(Self.linkDomain)/j/\(newShortID)")!
 
             try await sharingService.createShareLink(
                 shortID: newShortID,
-                ckShareURL: ckShareURL,
+                wishlistID: wishlist.id.uuidString,
                 wishlistName: wishlist.name,
                 wishlistEmoji: wishlist.coverEmoji,
                 ownerName: ownerName,
@@ -78,12 +106,14 @@ final class ShareManager {
                 expiresAt: effectiveExpiry
             )
 
+            // 4. Update local state
             self.shareURL = userURL
             self.expiresAt = expiry
             self.shortID = newShortID
             self.wishlistID = wishlist.id
             self.wishlistRef = wishlist
 
+            // 5. Mark wishlist as shared
             wishlist.isShared = true
             wishlist.updatedAt = .now
         } catch {
@@ -93,16 +123,16 @@ final class ShareManager {
         isLoading = false
     }
 
-    /// Wishlist ID to track for CKShare cleanup on revoke
+    /// Wishlist ID to track for cleanup on revoke
     private var wishlistID: UUID?
     private var wishlistRef: Wishlist?
 
     func revokeAll() async {
-        // Delete CKShare from private DB
+        // Delete SharedWishlist + SharedItems from PublicDB
         if let wid = wishlistID {
-            try? await sharingService.deleteCKShare(for: wid)
+            try? await sharingService.deleteSharedWishlist(wishlistID: wid.uuidString)
         }
-        // Delete ShareLink from public DB
+        // Delete ShareLink from PublicDB
         if let shortID {
             try? await sharingService.deleteShareLink(shortID: shortID)
         }

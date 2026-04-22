@@ -1,3 +1,4 @@
+import CloudKit
 import SwiftUI
 import SwiftData
 
@@ -9,6 +10,7 @@ struct HomeView: View {
     @State private var showingSettings = false
     @State private var showingJoin = false
     @State private var sharingWishlist: Wishlist?
+    @State private var sharedWishlists: [CloudKitSharingService.SharedWishlistInfo] = []
 
     // MARK: - Debug
 
@@ -46,12 +48,16 @@ struct HomeView: View {
         )
     }
 
+    private var hasAnyWishlists: Bool {
+        !activeWishlists.isEmpty || !sharedWishlists.isEmpty
+    }
+
     var body: some View {
         Group {
-            if activeWishlists.isEmpty {
-                emptyState
-            } else {
+            if hasAnyWishlists {
                 wishlistList
+            } else {
+                emptyState
             }
         }
         .navigationTitle("Вишлисты")
@@ -107,6 +113,9 @@ struct HomeView: View {
         }
         .onAppear {
             services.userProfile.requestDiscoverability()
+        }
+        .task {
+            await fetchSharedWishlists()
         }
         .onReceive(NotificationCenter.default.publisher(for: .didReceiveShareLink)) { _ in
             showingJoin = true
@@ -252,6 +261,18 @@ struct HomeView: View {
                             }
                         }
                     }
+
+                    // Shared wishlists from PublicDB (not owned locally)
+                    ForEach(sharedWishlists, id: \.wishlistID) { info in
+                        NavigationLink {
+                            if let local = localWishlist(for: info) {
+                                WishlistDetailView(wishlist: local)
+                            }
+                        } label: {
+                            sharedWishlistTile(info)
+                        }
+                        .buttonStyle(.plain)
+                    }
                 }
                 .padding(.horizontal, 16)
             }
@@ -320,6 +341,145 @@ struct HomeView: View {
                         .foregroundStyle(.white.opacity(0.8))
                 } else {
                     Text(String(format: NSLocalizedString("%lld желаний", comment: ""), activeItems.count))
+                        .font(.caption2)
+                        .foregroundStyle(.white.opacity(0.8))
+                }
+            }
+            .padding(10)
+        }
+        .aspectRatio(1, contentMode: .fit)
+        .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
+        .titaniumBorder(cornerRadius: 16)
+    }
+
+    // MARK: - Shared Wishlists
+
+    private func fetchSharedWishlists() async {
+        do {
+            let recordID = try await withCheckedThrowingContinuation { (cont: CheckedContinuation<CKRecord.ID, Error>) in
+                CKContainer(identifier: ModelContainerFactory.cloudKitContainerID).fetchUserRecordID { id, error in
+                    if let id { cont.resume(returning: id) }
+                    else { cont.resume(throwing: error ?? CKError(.internalError)) }
+                }
+            }
+
+            let fetched = try await services.sharing.fetchMySharedWishlists(
+                userRecordID: recordID.recordName
+            )
+
+            // Filter out wishlists that already exist locally (owned by us)
+            let localIDs = Set(activeWishlists.map(\.id.uuidString))
+            sharedWishlists = fetched.filter { !localIDs.contains($0.wishlistID) }
+
+            // Ensure each shared wishlist has a local copy for WishlistDetailView
+            for info in sharedWishlists {
+                ensureLocalCopy(for: info)
+            }
+        } catch {
+            sharedWishlists = []
+        }
+    }
+
+    /// Creates a local Wishlist in SwiftData if one doesn't exist for this shared wishlist.
+    private func ensureLocalCopy(for info: CloudKitSharingService.SharedWishlistInfo) {
+        guard let uuid = UUID(uuidString: info.wishlistID) else { return }
+
+        // Check if local copy already exists
+        let existing = wishlists.first { $0.id == uuid }
+        if existing != nil { return }
+
+        let local = Wishlist(
+            name: info.name,
+            coverEmoji: info.coverEmoji,
+            ownerRecordID: info.ownerRecordID,
+            isShared: true
+        )
+        // Override the auto-generated UUID with the shared one
+        local.id = uuid
+        context.insert(local)
+
+        // Create local items from shared items
+        for (idx, sharedItem) in info.items.enumerated() {
+            let tier: ItemTier
+            switch sharedItem.tier {
+            case "must": tier = .must
+            case "maybe": tier = .maybe
+            default: tier = .idea
+            }
+            let item = Item(
+                name: sharedItem.name,
+                tier: tier,
+                currency: sharedItem.currency,
+                price: sharedItem.price,
+                url: sharedItem.url
+            )
+            item.coverEmoji = sharedItem.coverEmoji
+            item.sortIndex = sharedItem.sortIndex
+            item.isArchived = sharedItem.isArchived
+            item.wishlist = local
+            if let itemUUID = UUID(uuidString: sharedItem.itemID) {
+                item.id = itemUUID
+            }
+            context.insert(item)
+        }
+
+        try? context.save()
+    }
+
+    /// Finds local Wishlist matching a SharedWishlistInfo by UUID.
+    private func localWishlist(for info: CloudKitSharingService.SharedWishlistInfo) -> Wishlist? {
+        guard let uuid = UUID(uuidString: info.wishlistID) else { return nil }
+        return wishlists.first { $0.id == uuid }
+    }
+
+    private func sharedWishlistTile(_ info: CloudKitSharingService.SharedWishlistInfo) -> some View {
+        let itemCount = info.items.filter { !$0.isArchived }.count
+        let tileUUID = UUID(uuidString: info.wishlistID) ?? UUID()
+        let colors = DefaultCoverGenerator.colors(for: tileUUID)
+
+        return ZStack(alignment: .bottomLeading) {
+            ZStack {
+                MeshGradient(
+                    width: 3, height: 3,
+                    points: [
+                        .init(0, 0),   .init(0.5, 0),   .init(1, 0),
+                        .init(0, 0.5), .init(0.5, 0.5), .init(1, 0.5),
+                        .init(0, 1),   .init(0.5, 1),   .init(1, 1),
+                    ],
+                    colors: [
+                        colors[0], colors[1], colors[2],
+                        colors[1], colors[2], colors[0],
+                        colors[2], colors[0], colors[1],
+                    ]
+                )
+                if let emoji = info.coverEmoji {
+                    Text(emoji).font(.system(size: 48))
+                }
+            }
+
+            LinearGradient(
+                colors: [.clear, .black.opacity(0.6)],
+                startPoint: .top,
+                endPoint: .bottom
+            )
+
+            VStack(alignment: .leading, spacing: 2) {
+                HStack(spacing: 4) {
+                    Text(info.name)
+                        .font(.subheadline)
+                        .fontWeight(.semibold)
+                        .foregroundStyle(.white)
+                        .lineLimit(2)
+                    Image(systemName: "person.2.fill")
+                        .font(.caption2)
+                        .foregroundStyle(.white.opacity(0.8))
+                }
+                if let ownerName = info.ownerName {
+                    Text(ownerName)
+                        .font(.caption2)
+                        .foregroundStyle(.white.opacity(0.8))
+                } else {
+                    Text(String(format: NSLocalizedString("%lld желаний", comment: ""), itemCount))
                         .font(.caption2)
                         .foregroundStyle(.white.opacity(0.8))
                 }

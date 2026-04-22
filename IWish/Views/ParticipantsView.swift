@@ -1,4 +1,3 @@
-import CloudKit
 import SwiftUI
 import SwiftData
 
@@ -8,7 +7,7 @@ struct ParticipantsView: View {
     let wishlist: Wishlist
     var onShareRequested: (() -> Void)? = nil
 
-    @State private var participants: [CloudKitSharingService.ParticipantInfo] = []
+    @State private var members: [(recordID: String, role: String)] = []
     @State private var isLoading = true
 
     var body: some View {
@@ -44,7 +43,7 @@ struct ParticipantsView: View {
                     Text("Владелец")
                 }
 
-                // Participants
+                // Members
                 Section {
                     if isLoading {
                         HStack {
@@ -53,7 +52,7 @@ struct ParticipantsView: View {
                                 .padding(.vertical, 24)
                             Spacer()
                         }
-                    } else if participants.isEmpty {
+                    } else if members.isEmpty {
                         VStack(spacing: 12) {
                             Image(systemName: "person.2")
                                 .font(.system(size: 32))
@@ -72,26 +71,23 @@ struct ParticipantsView: View {
                         .frame(maxWidth: .infinity)
                         .padding(.vertical, 24)
                     } else {
-                        ForEach(Array(participants.enumerated()), id: \.offset) { _, participant in
+                        ForEach(Array(members.enumerated()), id: \.offset) { _, member in
                             HStack(spacing: 12) {
-                                Image(systemName: participantIcon(for: participant.acceptance))
+                                Image(systemName: "person.fill.checkmark")
                                     .font(.title3)
-                                    .foregroundStyle(participantColor(for: participant.acceptance))
+                                    .foregroundStyle(.green)
                                     .frame(width: 36, height: 36)
-                                    .background(participantColor(for: participant.acceptance).opacity(0.15))
+                                    .background(.green.opacity(0.15))
                                     .clipShape(Circle())
 
                                 VStack(alignment: .leading, spacing: 2) {
                                     HStack(spacing: 4) {
-                                        Text(participant.name ?? "Участник")
+                                        Text("Участник")
                                             .font(.body.weight(.medium))
-                                        Text(roleBadge(for: participant.role))
+                                        Text(roleBadge(for: member.role))
                                             .font(.caption)
                                             .foregroundStyle(.secondary)
                                     }
-                                    Text(acceptanceLabel(for: participant.acceptance))
-                                        .font(.caption)
-                                        .foregroundStyle(.secondary)
                                 }
 
                                 Spacer()
@@ -127,7 +123,15 @@ struct ParticipantsView: View {
                 }
             }
             .task {
-                participants = await services.sharing.fetchParticipants(for: wishlist.id)
+                do {
+                    let info = try await services.sharing.fetchSharedWishlist(
+                        wishlistID: wishlist.id.uuidString
+                    )
+                    // Filter out the owner — they're shown in the owner section
+                    members = info.members.filter { $0.recordID != info.ownerRecordID }
+                } catch {
+                    members = []
+                }
                 isLoading = false
             }
         }
@@ -136,39 +140,8 @@ struct ParticipantsView: View {
 
     // MARK: - Helpers
 
-    private func roleBadge(for role: CKShare.ParticipantRole) -> String {
-        switch role {
-        case .privateUser: return "(редактор)"
-        case .publicUser: return "(зритель)"
-        default: return ""
-        }
-    }
-
-    private func acceptanceLabel(for status: CKShare.ParticipantAcceptanceStatus) -> String {
-        switch status {
-        case .accepted: return "Принял приглашение"
-        case .pending: return "Ожидает подтверждения"
-        case .removed: return "Удалён"
-        default: return "Неизвестно"
-        }
-    }
-
-    private func participantIcon(for status: CKShare.ParticipantAcceptanceStatus) -> String {
-        switch status {
-        case .accepted: return "person.fill.checkmark"
-        case .pending: return "person.fill.questionmark"
-        case .removed: return "person.fill.xmark"
-        default: return "person.fill"
-        }
-    }
-
-    private func participantColor(for status: CKShare.ParticipantAcceptanceStatus) -> Color {
-        switch status {
-        case .accepted: return .green
-        case .pending: return .orange
-        case .removed: return .red
-        default: return .gray
-        }
+    private func roleBadge(for role: String) -> String {
+        role == "editor" ? "(редактор)" : "(зритель)"
     }
 }
 
