@@ -2,8 +2,6 @@ import Foundation
 import SwiftData
 
 enum ModelContainerFactory {
-    static let cloudKitContainerID = "iCloud.RUGyron.IWish"
-
     static func makeProductionContainer() -> ModelContainer {
         let schema = Schema([
             Wishlist.self,
@@ -14,7 +12,7 @@ enum ModelContainerFactory {
             schema: schema,
             isStoredInMemoryOnly: false,
             allowsSave: true,
-            cloudKitDatabase: .automatic
+            cloudKitDatabase: .none
         )
         do {
             return try ModelContainer(for: schema, configurations: [config])

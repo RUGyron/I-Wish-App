@@ -25,7 +25,7 @@ struct ParticipantsView: View {
 
                         VStack(alignment: .leading, spacing: 2) {
                             HStack(spacing: 4) {
-                                Text(services.userProfile.userName ?? "Вы")
+                                Text(services.auth.userName ?? "Вы")
                                     .font(.body.weight(.medium))
                                 Text("(владелец)")
                                     .font(.caption)

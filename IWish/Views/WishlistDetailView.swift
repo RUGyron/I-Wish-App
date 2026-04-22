@@ -65,13 +65,6 @@ struct WishlistDetailView: View {
         collapsedTiersRaw = set.joined(separator: ",")
     }
 
-    private var syncShouldForceShow: Bool {
-        switch services.syncStatus.state {
-        case .syncing, .error, .offline: return true
-        default: return false
-        }
-    }
-
     private var totalActivePrice: Double {
         activeItems.compactMap(\.price).reduce(0, +)
     }
@@ -121,13 +114,7 @@ struct WishlistDetailView: View {
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {
             ToolbarItem(placement: .principal) {
-                VStack(spacing: 2) {
-                    Text("Желания").font(.headline)
-                    if syncShouldForceShow || services.syncStatus.hasEverSynced {
-                        syncSubtitle
-                    }
-                }
-                .animation(.easeInOut(duration: 0.25), value: services.syncStatus.state)
+                Text("Желания").font(.headline)
             }
 
             ToolbarItem(placement: .topBarTrailing) {
@@ -270,44 +257,6 @@ struct WishlistDetailView: View {
             guard let sharedID = wishlist.sharedWishlistID else { return }
             itemsListener = services.firestore.listenToItems(wishlistID: sharedID) { remoteItems in
                 mergeRemoteItems(remoteItems)
-            }
-        }
-        .overlay {
-            if wishlist.isShared && !services.syncStatus.hasEverSynced {
-                sharedSyncGate
-            }
-        }
-    }
-
-    // MARK: - Shared Sync Gate
-
-    private var sharedSyncGate: some View {
-        ZStack {
-            Rectangle()
-                .fill(.ultraThinMaterial)
-                .ignoresSafeArea()
-            VStack(spacing: 16) {
-                ProgressView()
-                    .scaleEffect(1.5)
-                Text("Загрузка данных...")
-                    .font(.headline)
-                Text("Синхронизируемся с iCloud, чтобы показать актуальный список.")
-                    .font(.subheadline)
-                    .foregroundStyle(.secondary)
-                    .multilineTextAlignment(.center)
-                    .padding(.horizontal, 32)
-
-                if case .error = services.syncStatus.state {
-                    Button("Попробовать снова") {
-                        services.syncStatus.retry(context: context)
-                    }
-                    .buttonStyle(.bordered)
-                }
-                if case .offline = services.syncStatus.state {
-                    Label("Нет подключения к сети", systemImage: "wifi.slash")
-                        .font(.caption)
-                        .foregroundStyle(.orange)
-                }
             }
         }
     }
@@ -617,52 +566,6 @@ struct WishlistDetailView: View {
                 Image(systemName: "clock")
                 Text(String(format: NSLocalizedString("%lld дней", comment: ""), days))
             }
-        }
-    }
-
-    // MARK: - Sync Subtitle (navbar)
-
-    @ViewBuilder
-    private var syncSubtitle: some View {
-        let state = services.syncStatus.state
-        let isError: Bool = {
-            switch state {
-            case .error, .offline: return true
-            default: return false
-            }
-        }()
-
-        HStack(spacing: 3) {
-            Image(systemName: syncIcon)
-                .font(.system(size: 9))
-            Text(syncLabel)
-                .font(.system(size: 10))
-        }
-        .foregroundStyle(isError ? .orange : .secondary)
-        .onTapGesture {
-            if isError {
-                services.syncStatus.retry(context: context)
-            }
-        }
-    }
-
-    private var syncIcon: String {
-        switch services.syncStatus.state {
-        case .idle: return "icloud"
-        case .syncing: return "arrow.triangle.2.circlepath"
-        case .synced: return "checkmark.icloud"
-        case .offline: return "icloud.slash"
-        case .error: return "exclamationmark.icloud"
-        }
-    }
-
-    private var syncLabel: String {
-        switch services.syncStatus.state {
-        case .idle: return "iCloud"
-        case .syncing: return "Синхронизация..."
-        case .synced: return "iCloud"
-        case .offline: return "Нет сети"
-        case .error: return "Ошибка"
         }
     }
 

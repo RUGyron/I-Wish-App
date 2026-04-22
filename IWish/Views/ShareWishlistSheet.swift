@@ -79,7 +79,7 @@ struct ShareWishlistSheet: View {
                         role: selectedRole,
                         ttl: selectedTTL,
                         ownerUID: services.auth.uid ?? "",
-                        ownerName: services.auth.userName ?? services.userProfile.userName
+                        ownerName: services.auth.userName ?? "Вы"
                     )
                 }
             }
@@ -90,7 +90,7 @@ struct ShareWishlistSheet: View {
                         role: selectedRole,
                         ttl: selectedTTL,
                         ownerUID: services.auth.uid ?? "",
-                        ownerName: services.auth.userName ?? services.userProfile.userName
+                        ownerName: services.auth.userName ?? "Вы"
                     )
                 }
             }
@@ -101,7 +101,7 @@ struct ShareWishlistSheet: View {
                         role: selectedRole,
                         ttl: selectedTTL,
                         ownerUID: services.auth.uid ?? "",
-                        ownerName: services.auth.userName ?? services.userProfile.userName
+                        ownerName: services.auth.userName ?? "Вы"
                     )
                 }
             }

@@ -4,8 +4,7 @@ import SwiftData
 @Model
 final class AppSettings {
     /// Singleton — всегда один instance в БД. Инвариант поддерживается
-    /// `loadOrCreate(in:)`, а не schema constraint (CloudKit mirror
-    /// не поддерживает `@Attribute(.unique)`).
+    /// `loadOrCreate(in:)`.
     var id: UUID = UUID()
     var themeModeRaw: String = "system"
     var defaultCurrency: String = "RUB"

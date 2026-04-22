@@ -25,26 +25,8 @@ struct HomeView: View {
         return wishlists.filter { !($0.isArchived) }
     }
 
-    private var syncShouldForceShow: Bool {
-        switch services.syncStatus.state {
-        case .syncing, .error, .offline: return true
-        default: return false
-        }
-    }
-
     private var totalItems: Int {
         activeWishlists.reduce(0) { $0 + ($1.items ?? []).filter { !$0.isArchived }.count }
-    }
-
-    private var showDiscoverabilitySheet: Binding<Bool> {
-        Binding(
-            get: { services.userProfile.discoverabilityStatus == .askingCustom },
-            set: { newValue in
-                if !newValue && services.userProfile.discoverabilityStatus == .askingCustom {
-                    services.userProfile.declineCustomDialog()
-                }
-            }
-        )
     }
 
     private var hasAnyWishlists: Bool {
@@ -63,13 +45,7 @@ struct HomeView: View {
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {
             ToolbarItem(placement: .principal) {
-                VStack(spacing: 2) {
-                    homeNavTitle
-                    if syncShouldForceShow || services.syncStatus.hasEverSynced {
-                        syncSubtitle
-                    }
-                }
-                .animation(.easeInOut(duration: 0.25), value: services.syncStatus.state)
+                homeNavTitle
             }
             ToolbarItem(placement: .topBarLeading) {
                 Button {
@@ -102,16 +78,6 @@ struct HomeView: View {
         .sheet(item: $sharingWishlist) { wishlist in
             ShareWishlistSheet(wishlist: wishlist)
                 .applyTheme()
-        }
-        .sheet(isPresented: showDiscoverabilitySheet) {
-            DiscoverabilitySheet(
-                onAllow: { services.userProfile.confirmCustomDialog() },
-                onDeny: { services.userProfile.declineCustomDialog() }
-            )
-            .applyTheme()
-        }
-        .onAppear {
-            services.userProfile.requestDiscoverability()
         }
         .task {
             await fetchSharedWishlists()
@@ -496,75 +462,6 @@ struct HomeView: View {
         formatter.currencyCode = currency
         formatter.maximumFractionDigits = 0
         return formatter.string(from: NSNumber(value: price)) ?? "\(Int(price)) \(currency)"
-    }
-
-    // MARK: - Sync Subtitle (in navbar)
-
-    @ViewBuilder
-    private var syncSubtitle: some View {
-        let state = services.syncStatus.state
-        let isError: Bool = {
-            switch state {
-            case .error, .offline: return true
-            default: return false
-            }
-        }()
-
-        HStack(spacing: 3) {
-            Image(systemName: syncIcon)
-                .font(.system(size: 9))
-            Text(syncLabel)
-                .font(.system(size: 10))
-        }
-        .foregroundStyle(isError ? .orange : .secondary)
-        .onTapGesture {
-            if isError {
-                services.syncStatus.retry(context: context)
-            }
-        }
-    }
-
-    private var syncIcon: String {
-        switch services.syncStatus.state {
-        case .idle: return "icloud"
-        case .syncing: return "arrow.triangle.2.circlepath"
-        case .synced: return "checkmark.icloud"
-        case .offline: return "icloud.slash"
-        case .error: return "exclamationmark.icloud"
-        }
-    }
-
-    private var syncLabel: String {
-        switch services.syncStatus.state {
-        case .idle: return "iCloud"
-        case .syncing: return "Синхронизация..."
-        case .synced: return "iCloud"
-        case .offline: return "Нет сети"
-        case .error: return "Ошибка"
-        }
-    }
-
-    // MARK: - Sync Badge (scrolls with list)
-
-    @ViewBuilder
-    private var syncBadgeRow: some View {
-        let denied = services.userProfile.discoverabilityStatus == .denied
-        let isError: Bool = {
-            switch services.syncStatus.state {
-            case .error, .offline: return true
-            default: return false
-            }
-        }()
-
-        HStack {
-            Spacer()
-            SyncStatusBadge(
-                state: denied ? .idle : services.syncStatus.state,
-                onTap: isError ? { services.syncStatus.retry(context: context) } : nil
-            )
-            Spacer()
-        }
-        .padding(.vertical, 4)
     }
 
     // MARK: - FAB

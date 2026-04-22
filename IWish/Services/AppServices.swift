@@ -4,8 +4,6 @@ import FirebaseAuth
 @MainActor
 final class AppServices {
     static let shared = AppServices()
-    let syncStatus = SyncStatusService()
-    let userProfile = UserProfileService()
     let auth = AuthService()
     let firestore = FirestoreService()
 }
