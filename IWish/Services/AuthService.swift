@@ -6,44 +6,108 @@ import CryptoKit
 @Observable
 @MainActor
 final class AuthService: NSObject {
-    var currentUser: User? // Firebase Auth User
     var userName: String?
-    var isAuthenticated: Bool { currentUser != nil && !currentUser!.isAnonymous }
-    var isAnonymous: Bool { currentUser?.isAnonymous ?? true }
-    var uid: String? { currentUser?.uid }
+    var isAuthenticated: Bool { _idToken != nil }
+    var uid: String? { _uid }
+    var currentUser: User? { Auth.auth().currentUser }
 
+    private var _uid: String?
+    private var _idToken: String?
+    private var _refreshToken: String?
     private var currentNonce: String?
+
+    private static let apiKey = "AIzaSyBifbBfRvO47M7mZnxJ55QZSqeelqPeSMs"
 
     override init() {
         super.init()
-        currentUser = Auth.auth().currentUser
-        if currentUser == nil {
-            // Auto sign-in anonymously
-            Task { await signInAnonymously() }
+        // Restore from Firebase SDK cache
+        if let user = Auth.auth().currentUser {
+            _uid = user.uid
+            print("[Auth] Restored cached user: \(user.uid)")
+            Task { await refreshToken() }
+        } else {
+            Task { await signInAnonymouslyREST() }
         }
     }
 
-    func signInAnonymously() async {
+    /// Anonymous sign-in via Firebase REST API (bypasses gRPC)
+    func signInAnonymouslyREST() async {
+        let url = URL(string: "https://identitytoolkit.googleapis.com/v1/accounts:signUp?key=\(Self.apiKey)")!
+        var request = URLRequest(url: url)
+        request.httpMethod = "POST"
+        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        request.httpBody = try? JSONSerialization.data(withJSONObject: ["returnSecureToken": true])
+
         do {
-            let result = try await Auth.auth().signInAnonymously()
-            currentUser = result.user
-            print("[Auth] Anonymous sign-in OK, uid: \(result.user.uid)")
+            let (data, _) = try await URLSession.shared.data(for: request)
+            guard let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+                  let idToken = json["idToken"] as? String,
+                  let refreshToken = json["refreshToken"] as? String,
+                  let localId = json["localId"] as? String else {
+                print("[Auth] REST sign-up: bad response")
+                return
+            }
+            _uid = localId
+            _idToken = idToken
+            _refreshToken = refreshToken
+            print("[Auth] Anonymous sign-in OK (REST), uid: \(localId)")
+
+            // Also sign in SDK so getIDToken works for other Firebase services
+            let credential = EmailAuthProvider.credential(withEmail: "", password: "")
+            // Actually, sign in SDK with custom token — not possible without server
+            // Just use our REST token directly
         } catch {
-            print("[Auth] Anonymous sign-in failed: \(error)")
+            print("[Auth] REST anonymous sign-in failed: \(error)")
         }
     }
 
-    /// Ensures we have an authenticated user (anonymous or Apple). Waits up to 5s.
+    /// Get a valid ID token (refreshes if needed)
+    func getIDToken() async -> String? {
+        // Try SDK first
+        if let user = Auth.auth().currentUser {
+            if let token = try? await user.getIDToken() {
+                _idToken = token
+                return token
+            }
+        }
+        // Fall back to REST token
+        if let token = _idToken { return token }
+        // Try refresh
+        await refreshToken()
+        return _idToken
+    }
+
+    private func refreshToken() async {
+        guard let refreshToken = _refreshToken else { return }
+        let url = URL(string: "https://securetoken.googleapis.com/v1/token?key=\(Self.apiKey)")!
+        var request = URLRequest(url: url)
+        request.httpMethod = "POST"
+        request.setValue("application/x-www-form-urlencoded", forHTTPHeaderField: "Content-Type")
+        request.httpBody = "grant_type=refresh_token&refresh_token=\(refreshToken)".data(using: .utf8)
+
+        do {
+            let (data, _) = try await URLSession.shared.data(for: request)
+            guard let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+                  let idToken = json["id_token"] as? String,
+                  let newRefresh = json["refresh_token"] as? String,
+                  let userId = json["user_id"] as? String else { return }
+            _uid = userId
+            _idToken = idToken
+            _refreshToken = newRefresh
+        } catch {
+            print("[Auth] Token refresh failed: \(error)")
+        }
+    }
+
+    /// Ensures we have an authenticated user. Waits up to 5s.
     func ensureAuth() async -> Bool {
-        if currentUser != nil { return true }
-        // Wait for in-flight anonymous sign-in
+        if _idToken != nil { return true }
         for _ in 0..<10 {
             try? await Task.sleep(for: .milliseconds(500))
-            if currentUser != nil { return true }
+            if _idToken != nil { return true }
         }
-        // Try once more
-        await signInAnonymously()
-        return currentUser != nil
+        await signInAnonymouslyREST()
+        return _idToken != nil
     }
 
     // Sign in with Apple -- returns (credential, nonce) for Firebase
@@ -72,14 +136,15 @@ final class AuthService: NSObject {
                 fullName: credential.fullName
             )
 
-            if let user = currentUser, user.isAnonymous {
-                // Link anonymous account with Apple
-                let result = try await user.link(with: firebaseCredential)
-                currentUser = result.user
+            let authResult: AuthDataResult
+            if let user = Auth.auth().currentUser, user.isAnonymous {
+                authResult = try await user.link(with: firebaseCredential)
             } else {
-                let result = try await Auth.auth().signIn(with: firebaseCredential)
-                currentUser = result.user
+                authResult = try await Auth.auth().signIn(with: firebaseCredential)
             }
+            _uid = authResult.user.uid
+            // Refresh token from SDK
+            _idToken = try? await authResult.user.getIDToken()
 
             // Extract name
             if let givenName = credential.fullName?.givenName {
@@ -95,7 +160,9 @@ final class AuthService: NSObject {
 
     func signOut() throws {
         try Auth.auth().signOut()
-        currentUser = nil
+        _uid = nil
+        _idToken = nil
+        _refreshToken = nil
         userName = nil
     }
 

@@ -62,10 +62,16 @@ final class FirestoreService {
     // MARK: - Auth
 
     private func getAuthToken() async throws -> String {
-        guard let user = Auth.auth().currentUser else {
-            throw FirestoreError.notAuthenticated
+        // Try REST-based token first (works through VPN)
+        if let token = await AppServices.shared.auth.getIDToken() {
+            return token
         }
-        return try await user.getIDToken()
+        // Fallback: SDK
+        if let user = Auth.auth().currentUser,
+           let token = try? await user.getIDToken() {
+            return token
+        }
+        throw FirestoreError.notAuthenticated
     }
 
     // MARK: - HTTP helpers
