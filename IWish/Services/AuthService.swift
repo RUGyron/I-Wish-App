@@ -115,29 +115,42 @@ final class AuthService: NSObject {
             _isAppleSignedIn = true
             print("[Auth] Apple sign-in OK, uid: \(_uid ?? "nil")")
 
-            // Extract name (Apple only sends it on FIRST sign-in ever)
+            // Extract name — Apple only sends it on FIRST sign-in ever
+            var resolvedName: String?
+
+            // 1. Try Apple credential
             if let givenName = credential.fullName?.givenName {
-                let name = [givenName, credential.fullName?.familyName]
+                resolvedName = [givenName, credential.fullName?.familyName]
                     .compactMap { $0 }
                     .joined(separator: " ")
-                userName = name
-                UserDefaults.standard.set(name, forKey: "auth_userName")
+            }
 
-                // Save profile to Firestore via REST API
-                Task {
-                    let fields: [String: Any] = [
-                        "name": ["stringValue": name],
-                        "uid": ["stringValue": authResult.user.uid]
-                    ]
-                    let url = URL(string: "https://firestore.googleapis.com/v1/projects/rewardpierwebpush/databases/(default)/documents/users/\(authResult.user.uid)")!
-                    var req = URLRequest(url: url)
-                    req.httpMethod = "PATCH"
-                    req.setValue("Bearer \(self._idToken ?? "")", forHTTPHeaderField: "Authorization")
-                    req.setValue("application/json", forHTTPHeaderField: "Content-Type")
-                    req.httpBody = try? JSONSerialization.data(withJSONObject: ["fields": fields])
-                    _ = try? await URLSession.shared.data(for: req)
+            // 2. Try Firebase displayName
+            if resolvedName == nil, let dn = authResult.user.displayName, !dn.isEmpty {
+                resolvedName = dn
+            }
+
+            // 3. Try Firestore users/{uid} doc
+            if resolvedName == nil, let token = _idToken {
+                resolvedName = await fetchNameFromFirestore(uid: authResult.user.uid, token: token)
+            }
+
+            // 4. Try UserDefaults
+            if resolvedName == nil {
+                resolvedName = UserDefaults.standard.string(forKey: "auth_userName")
+            }
+
+            // 5. Try email as last resort
+            if resolvedName == nil {
+                if let email = authResult.user.email, !email.isEmpty {
+                    resolvedName = email.components(separatedBy: "@").first
                 }
             }
+
+            let finalName = resolvedName ?? "Пользователь"
+            userName = finalName
+            UserDefaults.standard.set(finalName, forKey: "auth_userName")
+            saveProfileToFirestore(uid: authResult.user.uid, name: finalName)
 
         case .failure(let error):
             throw error
@@ -162,6 +175,35 @@ final class AuthService: NSObject {
             case .notAuthenticated: return "Необходимо войти через Apple ID"
             }
         }
+    }
+
+    private func saveProfileToFirestore(uid: String, name: String) {
+        Task {
+            let fields: [String: Any] = [
+                "name": ["stringValue": name],
+                "uid": ["stringValue": uid]
+            ]
+            let url = URL(string: "https://firestore.googleapis.com/v1/projects/rewardpierwebpush/databases/(default)/documents/users/\(uid)")!
+            var req = URLRequest(url: url)
+            req.httpMethod = "PATCH"
+            req.setValue("Bearer \(self._idToken ?? "")", forHTTPHeaderField: "Authorization")
+            req.setValue("application/json", forHTTPHeaderField: "Content-Type")
+            req.httpBody = try? JSONSerialization.data(withJSONObject: ["fields": fields])
+            _ = try? await URLSession.shared.data(for: req)
+        }
+    }
+
+    private func fetchNameFromFirestore(uid: String, token: String) async -> String? {
+        let url = URL(string: "https://firestore.googleapis.com/v1/projects/rewardpierwebpush/databases/(default)/documents/users/\(uid)")!
+        var req = URLRequest(url: url)
+        req.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
+        guard let (data, _) = try? await URLSession.shared.data(for: req),
+              let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+              let fields = json["fields"] as? [String: Any],
+              let nameField = fields["name"] as? [String: Any],
+              let name = nameField["stringValue"] as? String,
+              !name.isEmpty else { return nil }
+        return name
     }
 
     // MARK: - Helpers
