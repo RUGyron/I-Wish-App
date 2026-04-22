@@ -41,6 +41,7 @@ final class ShareManager {
         error = nil
 
         do {
+            print("[Share] Starting generateShare, ownerUID: \(ownerUID)")
             let newShortID = String(
                 wishlist.id.uuidString
                     .replacingOccurrences(of: "-", with: "")
@@ -103,7 +104,9 @@ final class ShareManager {
             wishlist.isShared = true
             wishlist.sharedWishlistID = wishlist.id.uuidString
             wishlist.updatedAt = .now
+            print("[Share] SUCCESS — shareURL: \(userURL)")
         } catch {
+            print("[Share] FAILED: \(error)")
             self.error = error.localizedDescription
         }
 

@@ -1,6 +1,7 @@
 import SwiftUI
 import SwiftData
 import QRCode
+import AuthenticationServices
 
 struct ShareWishlistSheet: View {
     @Environment(\.dismiss) private var dismiss
@@ -15,6 +16,7 @@ struct ShareWishlistSheet: View {
     @State private var selectedRole: ShareRole = .editor
     @State private var selectedTTL: InviteTTL = .minutes15
     @State private var showingShareSheet = false
+    @State private var showingAppleSignIn = false
     @State private var copied = false
 
     var body: some View {
@@ -78,6 +80,11 @@ struct ShareWishlistSheet: View {
                         toast.error("Не удалось авторизоваться")
                         return
                     }
+                    // Require Sign in with Apple before sharing
+                    if !services.auth.isAuthenticated {
+                        showingAppleSignIn = true
+                        return
+                    }
                     await shareManager.generateShare(
                         for: wishlist,
                         role: selectedRole,
@@ -114,6 +121,27 @@ struct ShareWishlistSheet: View {
             }
         }
         .applyTheme()
+        .sheet(isPresented: $showingAppleSignIn) {
+            SignInWithAppleSheet { result in
+                showingAppleSignIn = false
+                Task {
+                    do {
+                        try await services.auth.handleSignInWithApple(result: result)
+                        // Now generate share with real identity
+                        await shareManager.generateShare(
+                            for: wishlist,
+                            role: selectedRole,
+                            ttl: selectedTTL,
+                            ownerUID: services.auth.uid ?? "",
+                            ownerName: services.auth.userName ?? "Вы"
+                        )
+                    } catch {
+                        toast.error("Не удалось войти через Apple")
+                    }
+                }
+            }
+            .presentationDetents([.medium])
+        }
     }
 
     // MARK: - QR
