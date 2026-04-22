@@ -1,9 +1,11 @@
 import SwiftUI
+import SwiftData
 import AVFoundation
 import AudioToolbox
 
 struct JoinWishlistSheet: View {
     @Environment(\.dismiss) private var dismiss
+    @Environment(\.modelContext) private var context
     @Environment(\.appServices) private var services
     @Environment(\.toast) private var toast
     @State private var showingScanner = false
@@ -166,13 +168,26 @@ struct JoinWishlistSheet: View {
         Task {
             do {
                 try await services.sharing.acceptShare(from: info.ckShareURL)
+
+                // Create local wishlist so it appears immediately.
+                // SwiftData + CKAcceptSharesOperation doesn't auto-mirror
+                // the shared zone; the local record serves as a placeholder
+                // until full NSPersistentCloudKitContainer integration.
+                let wishlist = Wishlist(
+                    name: info.wishlistName,
+                    coverEmoji: info.wishlistEmoji,
+                    isShared: true
+                )
+                context.insert(wishlist)
+                try? context.save()
+
                 showingInvitePreview = false
                 toast.success("Присоединились к «\(info.wishlistName)»")
-                try? await Task.sleep(for: .seconds(1.0))
+                try? await Task.sleep(for: .seconds(0.5))
                 dismiss()
             } catch {
                 showingInvitePreview = false
-                toast.error("Не удалось присоединиться")
+                toast.error("Не удалось присоединиться: \(error.localizedDescription)")
             }
         }
     }
