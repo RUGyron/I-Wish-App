@@ -23,15 +23,41 @@ final class AuthService: NSObject {
 
     override init() {
         super.init()
-        // Restore saved name from first Apple sign-in
         userName = UserDefaults.standard.string(forKey: "auth_userName")
         if let user = Auth.auth().currentUser, !user.isAnonymous {
             _uid = user.uid
-            _isAppleSignedIn = true
-            print("[Auth] Restored Apple user: \(user.uid), name: \(userName ?? "nil")")
-            Task { await refreshToken() }
+            print("[Auth] Found Keychain session: \(user.uid), verifying with Firestore...")
+            Task { await verifyAndRestore(uid: user.uid) }
         } else {
-            print("[Auth] No signed-in user, will show Sign in with Apple")
+            print("[Auth] No session, will show Sign in with Apple")
+        }
+    }
+
+    /// Verify user exists in Firestore. If not — sign out.
+    private func verifyAndRestore(uid: String) async {
+        await refreshToken()
+        guard let token = _idToken else {
+            // Can't verify — sign out to be safe
+            try? Auth.auth().signOut()
+            _uid = nil
+            _isAppleSignedIn = false
+            return
+        }
+        if let name = await fetchNameFromFirestore(uid: uid, token: token) {
+            // User exists in Firestore — restore session
+            userName = name
+            UserDefaults.standard.set(name, forKey: "auth_userName")
+            _isAppleSignedIn = true
+            print("[Auth] Verified: \(uid), name: \(name)")
+        } else {
+            // User NOT in Firestore — invalid session, sign out
+            print("[Auth] User \(uid) not found in Firestore, signing out")
+            try? Auth.auth().signOut()
+            _uid = nil
+            _idToken = nil
+            _isAppleSignedIn = false
+            userName = nil
+            UserDefaults.standard.removeObject(forKey: "auth_userName")
         }
     }
 
