@@ -1,5 +1,7 @@
 import CloudKit
+import CoreData
 import Foundation
+import SwiftData
 
 @Observable
 final class CloudKitSharingService {
@@ -22,6 +24,8 @@ final class CloudKitSharingService {
         case shareCreationFailed(Error)
         case metadataFetchFailed(Error)
         case acceptFailed(Error)
+        case persistentContainerNotFound
+        case sharedStoreNotFound
         case saveFailed(Error)
         case deleteFailed(Error)
 
@@ -39,6 +43,10 @@ final class CloudKitSharingService {
                 return "Не удалось получить метаданные шаринга: \(error.localizedDescription)"
             case .acceptFailed(let error):
                 return "Не удалось принять приглашение: \(error.localizedDescription)"
+            case .persistentContainerNotFound:
+                return "Внутренняя ошибка: не удалось получить доступ к хранилищу."
+            case .sharedStoreNotFound:
+                return "Внутренняя ошибка: shared store не найден."
             case .saveFailed(let error):
                 return "Не удалось сохранить ссылку: \(error.localizedDescription)"
             case .deleteFailed(let error):
@@ -340,6 +348,58 @@ final class CloudKitSharingService {
     nonisolated func acceptShare(from url: URL) async throws {
         let metadata = try await fetchShareMetadata(from: url)
         try await acceptShareMetadata(metadata)
+    }
+
+    /// Full accept: CK-level accept + NSPersistentCloudKitContainer zone mirroring.
+    /// This ensures SwiftData discovers the shared records immediately.
+    nonisolated func acceptShare(from url: URL, modelContainer: ModelContainer) async throws {
+        let metadata = try await fetchShareMetadata(from: url)
+
+        // 1. Accept at CloudKit level
+        try await acceptShareMetadata(metadata)
+
+        // 2. Tell the underlying NSPersistentCloudKitContainer to mirror shared zone
+        let persistentContainer = try extractPersistentContainer(from: modelContainer)
+
+        // The last store is typically the shared store (.automatic creates private + shared)
+        let stores = persistentContainer.persistentStoreCoordinator.persistentStores
+        guard let sharedStore = stores.last else {
+            throw SharingError.sharedStoreNotFound
+        }
+
+        try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<Void, Error>) in
+            persistentContainer.acceptShareInvitations(from: [metadata], into: sharedStore) { _, error in
+                if let error {
+                    continuation.resume(throwing: SharingError.acceptFailed(error))
+                } else {
+                    continuation.resume()
+                }
+            }
+        }
+    }
+
+    // MARK: - ModelContainer → NSPersistentCloudKitContainer (reflection)
+
+    private nonisolated func extractPersistentContainer(
+        from modelContainer: ModelContainer
+    ) throws -> NSPersistentCloudKitContainer {
+        // SwiftData wraps NSPersistentCloudKitContainer internally.
+        // Walk the mirror tree to find it.
+        func findContainer(in subject: Any, depth: Int = 0) -> NSPersistentCloudKitContainer? {
+            if let container = subject as? NSPersistentCloudKitContainer { return container }
+            guard depth < 4 else { return nil }
+            for child in Mirror(reflecting: subject).children {
+                if let found = findContainer(in: child.value, depth: depth + 1) {
+                    return found
+                }
+            }
+            return nil
+        }
+
+        if let container = findContainer(in: modelContainer) {
+            return container
+        }
+        throw SharingError.persistentContainerNotFound
     }
 
     // MARK: - Private Helpers
