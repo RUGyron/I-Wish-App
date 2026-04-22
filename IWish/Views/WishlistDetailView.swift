@@ -350,17 +350,6 @@ struct WishlistDetailView: View {
                 emoji: wishlist.coverEmoji
             )
             .frame(width: 64, height: 64)
-            #if DEBUG
-            .onTapGesture { debugItemMode = (debugItemMode + 1) % 3 }
-            .overlay(alignment: .topTrailing) {
-                if debugItemMode != 0 {
-                    Circle()
-                        .fill(debugItemMode == 1 ? Color.red : Color.green)
-                        .frame(width: 10, height: 10)
-                        .offset(x: 3, y: -3)
-                }
-            }
-            #endif
 
             VStack(alignment: .leading, spacing: 4) {
                 Text(wishlist.name)

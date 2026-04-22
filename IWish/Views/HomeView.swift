@@ -119,16 +119,8 @@ struct HomeView: View {
 
     // MARK: - Debug
 
-    @ViewBuilder
     private var homeNavTitle: some View {
-        #if DEBUG
-        Text("Вишлисты")
-            .font(.headline)
-            .foregroundStyle(debugListMode == 0 ? Color.primary : debugListMode == 1 ? Color.red : Color.green)
-            .onTapGesture { cycleDebugListMode() }
-        #else
         Text("Вишлисты").font(.headline)
-        #endif
     }
 
     // MARK: - Debug Helpers

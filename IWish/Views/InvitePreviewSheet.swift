@@ -40,7 +40,7 @@ struct InvitePreviewSheet: View {
                     Text(info.wishlistName)
                         .font(.title2.weight(.semibold))
                         .multilineTextAlignment(.center)
-                        .padding(.top, 4)
+                        .padding(.top, 20)
 
                     // Info card
                     VStack(alignment: .leading, spacing: 14) {
@@ -78,6 +78,7 @@ struct InvitePreviewSheet: View {
 
                     // Accept button
                     Button {
+                        guard !isAccepting else { return }
                         isAccepting = true
                         error = nil
                         onAccept()
@@ -86,6 +87,7 @@ struct InvitePreviewSheet: View {
                             if isAccepting {
                                 ProgressView()
                                     .tint(.white)
+                                    .scaleEffect(1.2)
                             } else {
                                 Text("Принять приглашение")
                             }
@@ -95,7 +97,6 @@ struct InvitePreviewSheet: View {
                     .buttonStyle(.borderedProminent)
                     .controlSize(.large)
                     .tint(brand)
-                    .disabled(isAccepting)
 
                     // Decline button
                     Button {
@@ -132,21 +133,29 @@ struct InvitePreviewSheet: View {
             Text(emoji)
                 .font(.system(size: 72))
         } else {
-            ZStack {
-                Circle()
-                    .fill(
-                        LinearGradient(
-                            colors: [brand.opacity(0.25), brand.opacity(0.45)],
-                            startPoint: .topLeading,
-                            endPoint: .bottomTrailing
-                        )
-                    )
-                    .frame(width: 110, height: 110)
+            let seed = info.wishlistName.hashValue
+            let hue1 = Double(abs(seed) % 360) / 360.0
+            let hue2 = Double(abs(seed &* 31) % 360) / 360.0
+            let hue3 = Double(abs(seed &* 97) % 360) / 360.0
+            let c1 = Color(hue: hue1, saturation: 0.4, brightness: 0.95)
+            let c2 = Color(hue: hue2, saturation: 0.45, brightness: 0.9)
+            let c3 = Color(hue: hue3, saturation: 0.35, brightness: 0.98)
 
-                Image(systemName: "gift.fill")
-                    .font(.system(size: 48))
-                    .foregroundStyle(brand)
-            }
+            MeshGradient(
+                width: 3, height: 3,
+                points: [
+                    [0, 0], [0.5, 0], [1, 0],
+                    [0, 0.5], [0.5, 0.5], [1, 0.5],
+                    [0, 1], [0.5, 1], [1, 1]
+                ],
+                colors: [
+                    c1, c2, c3,
+                    c2, c3, c1,
+                    c3, c1, c2
+                ]
+            )
+            .frame(width: 110, height: 110)
+            .clipShape(RoundedRectangle(cornerRadius: 24, style: .continuous))
         }
     }
 
