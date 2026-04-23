@@ -15,11 +15,19 @@ enum DefaultCoverGenerator {
 
     static var paletteCount: Int { palettes.count }
 
+    /// Стабильный хеш строки — одинаковый на всех устройствах и запусках.
+    /// Swift .hashValue нестабилен (random seed per process).
+    static func stableHash(_ string: String) -> Int {
+        var hash: UInt64 = 5381
+        for byte in string.utf8 {
+            hash = ((hash << 5) &+ hash) &+ UInt64(byte) // djb2
+        }
+        return Int(hash & 0x7FFFFFFFFFFFFFFF)
+    }
+
     /// Детерминированный индекс палитры по UUID. Стабильный между запусками.
     static func paletteIndex(for id: UUID) -> Int {
-        let bytes = withUnsafeBytes(of: id.uuid) { Data($0) }
-        let sum = bytes.reduce(into: 0) { $0 = ($0 &+ Int($1)) }
-        return abs(sum) % palettes.count
+        abs(stableHash(id.uuidString)) % palettes.count
     }
 
     /// Возвращает 3 цвета для данного UUID.

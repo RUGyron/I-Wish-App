@@ -40,8 +40,8 @@ struct DefaultCoverView: View {
             if let seed = gradientSeed, seed != 0 {
                 return DefaultCoverGenerator.colors(forSeed: seed)
             }
-            // Fallback: derive seed from UUID hashValue for consistency
-            return DefaultCoverGenerator.colors(forSeed: id.hashValue)
+            // Fallback: deterministic hash from UUID string (stable across devices)
+            return DefaultCoverGenerator.colors(forSeed: DefaultCoverGenerator.stableHash(id.uuidString))
         }()
         return MeshGradient(
             width: 3,

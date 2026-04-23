@@ -39,6 +39,6 @@ final class Wishlist {
         self.isShared = isShared
         self.isArchived = isArchived
         self.sharedWishlistID = sharedWishlistID
-        self.gradientSeed = gradientSeed ?? UUID().hashValue
+        self.gradientSeed = gradientSeed ?? DefaultCoverGenerator.stableHash(self.id.uuidString)
     }
 }

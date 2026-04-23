@@ -42,13 +42,13 @@ final class DataService {
 
     func createWishlist(name: String, emoji: String?) async throws -> Wishlist {
         let currentUID = try uid
-        let seed = UUID().hashValue
-
         let wishlist = Wishlist(
             name: name,
             coverEmoji: emoji,
-            gradientSeed: seed
+            gradientSeed: 0 // will be set below
         )
+        let seed = DefaultCoverGenerator.stableHash(wishlist.id.uuidString)
+        wishlist.gradientSeed = seed
         let wishlistID = wishlist.id.uuidString
 
         // Firestore first

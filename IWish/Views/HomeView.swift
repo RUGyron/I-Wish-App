@@ -266,7 +266,7 @@ struct HomeView: View {
                         .clipped()
                 }
             } else {
-                let colors = DefaultCoverGenerator.colors(forSeed: wishlist.gradientSeed != 0 ? wishlist.gradientSeed : wishlist.id.hashValue)
+                let colors = DefaultCoverGenerator.colors(forSeed: wishlist.gradientSeed != 0 ? wishlist.gradientSeed : DefaultCoverGenerator.stableHash(wishlist.id.uuidString))
                 ZStack {
                     MeshGradient(
                         width: 3, height: 3,
