@@ -261,28 +261,30 @@ struct WishlistDetailView: View {
         .task {
             await services.data?.refreshItems(for: wishlist.id.uuidString)
         }
-        .refreshable {
-            await services.data?.refreshItems(for: wishlist.id.uuidString)
-        }
     }
 
     // MARK: - Empty State
 
     private var emptyState: some View {
-        VStack(spacing: 12) {
-            Image(systemName: "list.bullet")
-                .font(.system(size: 40))
-                .foregroundStyle(.tint)
-            Text("Список пуст")
-                .font(.title3)
-            Text("Добавь первое желание.")
-                .font(.subheadline)
-                .foregroundStyle(.secondary)
+        ScrollView {
+            VStack(spacing: 16) {
+                wishlistHeaderRow
+
+                VStack(spacing: 12) {
+                    Image(systemName: "list.bullet")
+                        .font(.system(size: 40))
+                        .foregroundStyle(.tint)
+                    Text("Список пуст")
+                        .font(.title3)
+                    Text("Добавь первое желание.")
+                        .font(.subheadline)
+                        .foregroundStyle(.secondary)
+                }
+                .padding(.top, 40)
+            }
+            .padding(.bottom, 80)
         }
-        .padding()
-        .padding(.bottom, 60)
-        .frame(maxWidth: .infinity, maxHeight: .infinity)
-        .background(Theme.background)
+        .warmBackground()
     }
 
 
@@ -431,7 +433,6 @@ struct WishlistDetailView: View {
                 SyncStatusBadge(
                     isSyncing: data.isSyncing,
                     syncError: data.syncError,
-                    lastSyncDate: data.lastSyncDate,
                     onTap: { Task { await services.data?.refreshItems(for: wishlist.id.uuidString) } }
                 )
             }

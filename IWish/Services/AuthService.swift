@@ -33,32 +33,20 @@ final class AuthService: NSObject {
         }
     }
 
-    /// Verify user exists in Firestore. If not — sign out.
+    /// Restore session. Trust Firebase SDK + UserDefaults.
+    /// Only verify Firestore if we have no cached name (first launch after sign-in).
     private func verifyAndRestore(uid: String) async {
+        _isAppleSignedIn = true
         await refreshToken()
-        guard let token = _idToken else {
-            // Can't verify — sign out to be safe
-            try? Auth.auth().signOut()
-            _uid = nil
-            _isAppleSignedIn = false
-            return
+
+        // Try to update name from Firestore (best-effort, don't sign out on failure)
+        if let token = _idToken, userName == nil || userName == "Пользователь" {
+            if let name = await fetchNameFromFirestore(uid: uid, token: token) {
+                userName = name
+                UserDefaults.standard.set(name, forKey: "auth_userName")
+            }
         }
-        if let name = await fetchNameFromFirestore(uid: uid, token: token) {
-            // User exists in Firestore — restore session
-            userName = name
-            UserDefaults.standard.set(name, forKey: "auth_userName")
-            _isAppleSignedIn = true
-            print("[Auth] Verified: \(uid), name: \(name)")
-        } else {
-            // User NOT in Firestore — invalid session, sign out
-            print("[Auth] User \(uid) not found in Firestore, signing out")
-            try? Auth.auth().signOut()
-            _uid = nil
-            _idToken = nil
-            _isAppleSignedIn = false
-            userName = nil
-            UserDefaults.standard.removeObject(forKey: "auth_userName")
-        }
+        print("[Auth] Restored: \(uid), name: \(userName ?? "nil")")
     }
 
     /// Get a valid ID token (refreshes if needed)

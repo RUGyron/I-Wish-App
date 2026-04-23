@@ -3,7 +3,7 @@ import AuthenticationServices
 
 struct SignInWithAppleSheet: View {
     let onComplete: (Result<ASAuthorization, Error>) -> Void
-    @Environment(\.dismiss) private var dismiss
+    @Environment(\.colorScheme) private var colorScheme
 
     var body: some View {
         VStack(spacing: 24) {
@@ -30,7 +30,7 @@ struct SignInWithAppleSheet: View {
             } onCompletion: { result in
                 onComplete(result)
             }
-            .signInWithAppleButtonStyle(.black)
+            .signInWithAppleButtonStyle(colorScheme == .dark ? .white : .black)
             .frame(height: 50)
             .padding(.horizontal, 32)
 

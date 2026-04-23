@@ -3,18 +3,26 @@ import SwiftUI
 struct SyncStatusBadge: View {
     let isSyncing: Bool
     let syncError: String?
-    let lastSyncDate: Date?
     var onTap: (() -> Void)? = nil
 
     @State private var rotationDegrees: Double = 0
-    @State private var showCheckmark = false
 
     var body: some View {
         HStack(spacing: 4) {
-            Image(systemName: iconName)
-                .font(.caption2)
-                .foregroundStyle(iconColor)
-                .rotationEffect(.degrees(rotationDegrees))
+            Group {
+                if isSyncing {
+                    // Only arrows rotate, not cloud
+                    Image(systemName: "arrow.triangle.2.circlepath")
+                        .rotationEffect(.degrees(rotationDegrees))
+                } else if syncError != nil {
+                    Image(systemName: "exclamationmark.icloud")
+                } else {
+                    Image(systemName: "checkmark.icloud")
+                }
+            }
+            .font(.caption2)
+            .foregroundStyle(iconColor)
+
             Text(label)
                 .font(.caption2)
                 .foregroundStyle(.secondary)
@@ -22,59 +30,39 @@ struct SyncStatusBadge: View {
         .padding(.horizontal, 8)
         .padding(.vertical, 4)
         .background(.ultraThinMaterial, in: Capsule())
+        .animation(.easeInOut(duration: 0.25), value: isSyncing)
+        .animation(.easeInOut(duration: 0.25), value: syncError == nil)
+        .contentTransition(.interpolate)
         .onTapGesture {
-            if let onTap {
-                withAnimation(.linear(duration: 0.6)) {
-                    rotationDegrees += 360
-                }
-                onTap()
-            }
+            onTap?()
         }
         .onChange(of: isSyncing) { _, syncing in
             if syncing {
-                withAnimation(.linear(duration: 0.6).repeatForever(autoreverses: false)) {
-                    rotationDegrees += 360
-                }
+                startSpinning()
             } else {
-                withAnimation(.default) {
+                withAnimation(.easeOut(duration: 0.3)) {
                     rotationDegrees = 0
-                }
-                // Show checkmark briefly after sync completes
-                if syncError == nil {
-                    showCheckmark = true
-                    Task { @MainActor in
-                        try? await Task.sleep(for: .seconds(2))
-                        withAnimation { showCheckmark = false }
-                    }
                 }
             }
         }
     }
 
-    private var iconName: String {
-        if isSyncing { return "arrow.triangle.2.circlepath" }
-        if syncError != nil { return "exclamationmark.icloud" }
-        if showCheckmark { return "checkmark.icloud" }
-        return "icloud"
+    private func startSpinning() {
+        rotationDegrees = 0
+        withAnimation(.linear(duration: 0.8).repeatForever(autoreverses: false)) {
+            rotationDegrees = 360
+        }
     }
 
     private var iconColor: Color {
-        if isSyncing { return .accentColor }
+        if isSyncing { return .secondary }
         if syncError != nil { return .orange }
-        if showCheckmark { return .green }
         return .secondary
     }
 
     private var label: String {
         if isSyncing { return "Синхронизация..." }
-        if syncError != nil { return "Ошибка синхры" }
-        if showCheckmark { return "Только что" }
-        if let date = lastSyncDate {
-            if Date.now.timeIntervalSince(date) < 10 { return "Только что" }
-            let fmt = RelativeDateTimeFormatter()
-            fmt.unitsStyle = .short
-            return fmt.localizedString(for: date, relativeTo: .now)
-        }
-        return "iCloud"
+        if syncError != nil { return "Ошибка" }
+        return "Синхронизировано"
     }
 }

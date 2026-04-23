@@ -106,7 +106,6 @@ struct HomeView: View {
                 SyncStatusBadge(
                     isSyncing: data.isSyncing,
                     syncError: data.syncError,
-                    lastSyncDate: data.lastSyncDate,
                     onTap: { Task { await services.data?.refreshWishlists() } }
                 )
             }
