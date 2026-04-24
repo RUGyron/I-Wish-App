@@ -13,6 +13,8 @@ final class DataService {
 
     var isSyncing: Bool = false
     var syncError: String?
+    /// Block polling while a mutation is in progress
+    var isMutating: Bool = false
 
     init(firestore: FirestoreService, modelContext: ModelContext, auth: AuthService) {
         self.firestore = firestore
@@ -61,8 +63,10 @@ final class DataService {
         let wishlistID = wishlist.id.uuidString
 
         // Firestore first
+        isMutating = true
         isSyncing = true
         syncError = nil
+        defer { isMutating = false }
         do {
             try await firestore.createPersonalWishlist(
                 uid: currentUID,
@@ -86,8 +90,10 @@ final class DataService {
     func updateWishlist(id: String, name: String, emoji: String?) async throws {
         let currentUID = try uid
 
+        isMutating = true
         isSyncing = true
         syncError = nil
+        defer { isMutating = false }
 
         // Find local wishlist
         guard let uuid = UUID(uuidString: id) else { throw FirestoreService.FirestoreError.notFound }
@@ -124,37 +130,38 @@ final class DataService {
     func deleteWishlist(id: String) async throws {
         let currentUID = try uid
 
+        isMutating = true  // Block polling
         isSyncing = true
         syncError = nil
+        defer { isMutating = false }
+
+        defer {
+            isMutating = false
+            isSyncing = false
+        }
 
         guard let uuid = UUID(uuidString: id) else { throw FirestoreService.FirestoreError.notFound }
         let descriptor = FetchDescriptor<Wishlist>(predicate: #Predicate { $0.id == uuid })
         guard let wishlist = try modelContext.fetch(descriptor).first else {
-            isSyncing = false
             throw FirestoreService.FirestoreError.notFound
         }
 
-        do {
-            if wishlistIsShared(wishlist), let sharedID = wishlist.sharedWishlistID {
-                let isOwner = wishlist.ownerRecordID == currentUID || wishlist.ownerRecordID == nil
-                dsLog.info("deleteWishlist: shared=\(sharedID), uid=\(currentUID), ownerRecordID=\(wishlist.ownerRecordID ?? "nil"), isOwner=\(isOwner)")
-                if isOwner {
-                    try await firestore.deleteSharedWishlistFull(wishlistID: sharedID)
-                } else {
-                    try await firestore.leaveWishlist(wishlistID: sharedID, userUID: currentUID)
-                }
+        // 1. Delete from Firestore FIRST
+        if wishlistIsShared(wishlist), let sharedID = wishlist.sharedWishlistID {
+            let isOwner = wishlist.ownerRecordID == currentUID || wishlist.ownerRecordID == nil
+            dsLog.info("deleteWishlist: shared=\(sharedID), uid=\(currentUID), ownerRecordID=\(wishlist.ownerRecordID ?? "nil"), isOwner=\(isOwner)")
+            if isOwner {
+                try await firestore.deleteSharedWishlistFull(wishlistID: sharedID)
             } else {
-                try await firestore.deletePersonalWishlist(uid: currentUID, wishlistID: id)
+                try await firestore.leaveWishlist(wishlistID: sharedID, userUID: currentUID)
             }
-        } catch {
-            print("[DataService] deleteWishlist error: \(error)")
-            isSyncing = false
-            throw error
+        } else {
+            try await firestore.deletePersonalWishlist(uid: currentUID, wishlistID: id)
         }
 
+        // 2. Only delete locally AFTER Firestore confirmed
         modelContext.delete(wishlist)
         try? modelContext.save()
-        isSyncing = false
     }
 
     // MARK: - Items
@@ -211,8 +218,10 @@ final class DataService {
     func updateItem(id: String, wishlistID: String, name: String, tier: ItemTier, price: Double?, currency: String, url: String?, emoji: String?, sortIndex: Double, isArchived: Bool, descriptionText: String? = nil, coverImageData: Data? = nil, probationEndAt: Date? = nil) async throws {
         let currentUID = try uid
 
+        isMutating = true
         isSyncing = true
         syncError = nil
+        defer { isMutating = false }
 
         guard let itemUUID = UUID(uuidString: id) else { throw FirestoreService.FirestoreError.notFound }
         let descriptor = FetchDescriptor<Item>(predicate: #Predicate { $0.id == itemUUID })
@@ -256,8 +265,10 @@ final class DataService {
     func deleteItem(id: String, wishlistID: String) async throws {
         let currentUID = try uid
 
+        isMutating = true
         isSyncing = true
         syncError = nil
+        defer { isMutating = false }
 
         guard let itemUUID = UUID(uuidString: id) else { throw FirestoreService.FirestoreError.notFound }
         let descriptor = FetchDescriptor<Item>(predicate: #Predicate { $0.id == itemUUID })
@@ -290,8 +301,10 @@ final class DataService {
     func archiveItem(id: String, wishlistID: String) async throws {
         let currentUID = try uid
 
+        isMutating = true
         isSyncing = true
         syncError = nil
+        defer { isMutating = false }
 
         guard let itemUUID = UUID(uuidString: id) else { throw FirestoreService.FirestoreError.notFound }
         let descriptor = FetchDescriptor<Item>(predicate: #Predicate { $0.id == itemUUID })
@@ -326,6 +339,7 @@ final class DataService {
 
     func refreshWishlists() async {
         guard let currentUID = auth.uid else { return }
+        guard !isMutating else { return } // Skip polling during mutations
 
         isSyncing = true
         syncError = nil
@@ -472,6 +486,7 @@ final class DataService {
 
     func refreshItems(for wishlistID: String) async {
         guard let currentUID = auth.uid else { return }
+        guard !isMutating else { return }
 
         isSyncing = true
         syncError = nil
@@ -561,8 +576,10 @@ final class DataService {
     func shareWishlist(id: String, role: ShareRole, ttl: InviteTTL, ownerName: String?) async throws -> URL {
         let currentUID = try uid
 
+        isMutating = true
         isSyncing = true
         syncError = nil
+        defer { isMutating = false }
 
         guard let uuid = UUID(uuidString: id) else { throw FirestoreService.FirestoreError.notFound }
         let descriptor = FetchDescriptor<Wishlist>(predicate: #Predicate { $0.id == uuid })
@@ -646,8 +663,10 @@ final class DataService {
             throw AuthService.AuthError.notAuthenticated
         }
 
+        isMutating = true
         isSyncing = true
         syncError = nil
+        defer { isMutating = false }
 
         do {
             // 1. Resolve invite link
