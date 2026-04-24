@@ -7,6 +7,7 @@ import CryptoKit
 @MainActor
 final class AuthService: NSObject {
     var userName: String?
+    var isLoading: Bool = true
     /// True only after Sign in with Apple (not anonymous)
     var isAuthenticated: Bool { _isAppleSignedIn }
     var hasToken: Bool { _idToken != nil }
@@ -26,9 +27,13 @@ final class AuthService: NSObject {
         userName = UserDefaults.standard.string(forKey: "auth_userName")
         if let user = Auth.auth().currentUser, !user.isAnonymous {
             _uid = user.uid
-            print("[Auth] Found Keychain session: \(user.uid), verifying with Firestore...")
-            Task { await verifyAndRestore(uid: user.uid) }
+            print("[Auth] Found Keychain session: \(user.uid)")
+            Task {
+                await verifyAndRestore(uid: user.uid)
+                isLoading = false
+            }
         } else {
+            isLoading = false
             print("[Auth] No session, will show Sign in with Apple")
         }
     }

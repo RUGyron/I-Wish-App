@@ -10,7 +10,9 @@ struct RootView: View {
 
     var body: some View {
         Group {
-            if !services.auth.isAuthenticated {
+            if services.auth.isLoading {
+                splashView
+            } else if !services.auth.isAuthenticated {
                 signInView
             } else {
                 mainContent
@@ -40,6 +42,17 @@ struct RootView: View {
         .task {
             await services.data?.refreshWishlists()
         }
+    }
+
+    private var splashView: some View {
+        VStack(spacing: 16) {
+            Image(systemName: "gift.fill")
+                .font(.system(size: 48))
+                .foregroundStyle(.tint)
+            ProgressView()
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .background(Theme.background)
     }
 
     private var signInView: some View {

@@ -312,9 +312,9 @@ final class DataService {
             // 2. Fetch all local wishlists
             let localDescriptor = FetchDescriptor<Wishlist>()
             let allLocal = (try? modelContext.fetch(localDescriptor)) ?? []
-            let localByID = Dictionary(uniqueKeysWithValues: allLocal.compactMap { wl -> (String, Wishlist)? in
+            let localByID = Dictionary(allLocal.compactMap { wl -> (String, Wishlist)? in
                 (wl.id.uuidString, wl)
-            })
+            }, uniquingKeysWith: { _, new in new })
 
             let remoteIDs = Set(remote.map(\.id))
 
@@ -353,10 +353,23 @@ final class DataService {
 
             // Build a set of sharedWishlistIDs already present locally to prevent duplicates
             let allLocalRefreshed = (try? modelContext.fetch(FetchDescriptor<Wishlist>())) ?? []
-            let localBySharedID = Dictionary(uniqueKeysWithValues: allLocalRefreshed.compactMap { wl -> (String, Wishlist)? in
-                guard let sid = wl.sharedWishlistID else { return nil }
-                return (sid, wl)
-            })
+
+            // Deduplicate: if multiple local wishlists share the same sharedWishlistID, keep one and delete the rest
+            var localBySharedID: [String: Wishlist] = [:]
+            for wl in allLocalRefreshed {
+                guard let sid = wl.sharedWishlistID else { continue }
+                if let existing = localBySharedID[sid] {
+                    // Duplicate — delete the older one
+                    if wl.updatedAt > existing.updatedAt {
+                        modelContext.delete(existing)
+                        localBySharedID[sid] = wl
+                    } else {
+                        modelContext.delete(wl)
+                    }
+                } else {
+                    localBySharedID[sid] = wl
+                }
+            }
 
             // 5a. Delete shared wishlists not in memberships
             // Safety: only clean up if memberships fetch returned results or local has no shared wishlists
@@ -374,10 +387,10 @@ final class DataService {
                 if let info = try? await firestore.fetchSharedWishlist(wishlistID: membership.wishlistID) {
                     // Re-fetch local list after deletions
                     let currentLocal = (try? modelContext.fetch(FetchDescriptor<Wishlist>())) ?? []
-                    let currentBySharedID = Dictionary(uniqueKeysWithValues: currentLocal.compactMap { wl -> (String, Wishlist)? in
+                    let currentBySharedID = Dictionary(currentLocal.compactMap { wl -> (String, Wishlist)? in
                         guard let sid = wl.sharedWishlistID else { return nil }
                         return (sid, wl)
-                    })
+                    }, uniquingKeysWith: { _, new in new })
                     if let local = currentBySharedID[info.wishlistID] {
                         local.name = info.name
                         local.coverEmoji = info.coverEmoji
@@ -462,9 +475,9 @@ final class DataService {
 
     private func mergeItems(_ remoteItems: [FirestoreService.SharedItemInfo], into wishlist: Wishlist) {
         let localItems = wishlist.items ?? []
-        let localByID = Dictionary(uniqueKeysWithValues: localItems.compactMap { item -> (String, Item)? in
+        let localByID = Dictionary(localItems.compactMap { item -> (String, Item)? in
             (item.id.uuidString, item)
-        })
+        }, uniquingKeysWith: { _, new in new })
         let remoteIDs = Set(remoteItems.map(\.itemID))
 
         // Delete items that no longer exist remotely
