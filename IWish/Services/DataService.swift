@@ -13,8 +13,20 @@ final class DataService {
 
     var isSyncing: Bool = false
     var syncError: String?
-    /// Block polling while a mutation is in progress
-    var isMutating: Bool = false
+    /// Serializes all Firestore operations — no parallel mutations/polls
+    private var operationLock = false
+
+    /// Wait for any running operation to finish, then acquire lock
+    private func acquireLock() async {
+        while operationLock {
+            try? await Task.sleep(for: .milliseconds(100))
+        }
+        operationLock = true
+    }
+
+    private func releaseLock() {
+        operationLock = false
+    }
 
     init(firestore: FirestoreService, modelContext: ModelContext, auth: AuthService) {
         self.firestore = firestore
@@ -63,10 +75,10 @@ final class DataService {
         let wishlistID = wishlist.id.uuidString
 
         // Firestore first
-        isMutating = true
+        await acquireLock()
         isSyncing = true
         syncError = nil
-        defer { isMutating = false }
+        defer { releaseLock() }
         do {
             try await firestore.createPersonalWishlist(
                 uid: currentUID,
@@ -90,10 +102,10 @@ final class DataService {
     func updateWishlist(id: String, name: String, emoji: String?) async throws {
         let currentUID = try uid
 
-        isMutating = true
+        await acquireLock()
         isSyncing = true
         syncError = nil
-        defer { isMutating = false }
+        defer { releaseLock() }
 
         // Find local wishlist
         guard let uuid = UUID(uuidString: id) else { throw FirestoreService.FirestoreError.notFound }
@@ -130,13 +142,11 @@ final class DataService {
     func deleteWishlist(id: String) async throws {
         let currentUID = try uid
 
-        isMutating = true  // Block polling
+        await acquireLock()
         isSyncing = true
         syncError = nil
-        defer { isMutating = false }
-
         defer {
-            isMutating = false
+            releaseLock()
             isSyncing = false
         }
 
@@ -218,10 +228,10 @@ final class DataService {
     func updateItem(id: String, wishlistID: String, name: String, tier: ItemTier, price: Double?, currency: String, url: String?, emoji: String?, sortIndex: Double, isArchived: Bool, descriptionText: String? = nil, coverImageData: Data? = nil, probationEndAt: Date? = nil) async throws {
         let currentUID = try uid
 
-        isMutating = true
+        await acquireLock()
         isSyncing = true
         syncError = nil
-        defer { isMutating = false }
+        defer { releaseLock() }
 
         guard let itemUUID = UUID(uuidString: id) else { throw FirestoreService.FirestoreError.notFound }
         let descriptor = FetchDescriptor<Item>(predicate: #Predicate { $0.id == itemUUID })
@@ -265,10 +275,10 @@ final class DataService {
     func deleteItem(id: String, wishlistID: String) async throws {
         let currentUID = try uid
 
-        isMutating = true
+        await acquireLock()
         isSyncing = true
         syncError = nil
-        defer { isMutating = false }
+        defer { releaseLock() }
 
         guard let itemUUID = UUID(uuidString: id) else { throw FirestoreService.FirestoreError.notFound }
         let descriptor = FetchDescriptor<Item>(predicate: #Predicate { $0.id == itemUUID })
@@ -301,10 +311,10 @@ final class DataService {
     func archiveItem(id: String, wishlistID: String) async throws {
         let currentUID = try uid
 
-        isMutating = true
+        await acquireLock()
         isSyncing = true
         syncError = nil
-        defer { isMutating = false }
+        defer { releaseLock() }
 
         guard let itemUUID = UUID(uuidString: id) else { throw FirestoreService.FirestoreError.notFound }
         let descriptor = FetchDescriptor<Item>(predicate: #Predicate { $0.id == itemUUID })
@@ -339,7 +349,8 @@ final class DataService {
 
     func refreshWishlists() async {
         guard let currentUID = auth.uid else { return }
-        guard !isMutating else { return } // Skip polling during mutations
+        await acquireLock()
+        defer { releaseLock() }
 
         isSyncing = true
         syncError = nil
@@ -486,7 +497,8 @@ final class DataService {
 
     func refreshItems(for wishlistID: String) async {
         guard let currentUID = auth.uid else { return }
-        guard !isMutating else { return }
+        await acquireLock()
+        defer { releaseLock() }
 
         isSyncing = true
         syncError = nil
@@ -576,10 +588,10 @@ final class DataService {
     func shareWishlist(id: String, role: ShareRole, ttl: InviteTTL, ownerName: String?) async throws -> URL {
         let currentUID = try uid
 
-        isMutating = true
+        await acquireLock()
         isSyncing = true
         syncError = nil
-        defer { isMutating = false }
+        defer { releaseLock() }
 
         guard let uuid = UUID(uuidString: id) else { throw FirestoreService.FirestoreError.notFound }
         let descriptor = FetchDescriptor<Wishlist>(predicate: #Predicate { $0.id == uuid })
@@ -663,10 +675,10 @@ final class DataService {
             throw AuthService.AuthError.notAuthenticated
         }
 
-        isMutating = true
+        await acquireLock()
         isSyncing = true
         syncError = nil
-        defer { isMutating = false }
+        defer { releaseLock() }
 
         do {
             // 1. Resolve invite link
