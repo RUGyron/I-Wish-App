@@ -542,12 +542,9 @@ final class DataService {
         let remoteIDs = Set(remoteItems.map(\.itemID))
 
         // Delete items that no longer exist remotely
-        // Safety: if remote returned empty but local has items, assume network issue and skip deletion
-        if !remoteItems.isEmpty || localItems.isEmpty {
-            for local in localItems {
-                if !remoteIDs.contains(local.id.uuidString) {
-                    modelContext.delete(local)
-                }
+        for local in localItems {
+            if !remoteIDs.contains(local.id.uuidString) {
+                modelContext.delete(local)
             }
         }
 
