@@ -385,68 +385,29 @@ final class FirestoreService {
                 let _ = try? await request("DELETE", path: "memberships/\(docID)")
             }
         }
-    }
 
-    // MARK: - Publish Wishlist (legacy)
-
-    func publishWishlist(
-        id wishlistID: String,
-        name: String,
-        emoji: String?,
-        ownerUID: String,
-        ownerName: String?,
-        items: [SharedItemInfo]
-    ) async throws {
-        // 1. PATCH the wishlist document
-        let wishlistFields = toFields([
-            "name": name,
-            "coverEmoji": emoji ?? "",
-            "ownerUID": ownerUID,
-            "ownerName": ownerName ?? "",
-            "createdAt": Date() as Any,
-            "updatedAt": Date() as Any
-        ])
-        let _ = try await request("PATCH", path: "wishlists/\(wishlistID)", body: ["fields": wishlistFields])
-
-        // 2. Batch write all items
-        if !items.isEmpty {
-            var writes: [[String: Any]] = []
-            for item in items {
-                let itemFields = toFields([
-                    "name": item.name,
-                    "tier": item.tier,
-                    "price": item.price as Any?,
-                    "currency": item.currency,
-                    "url": item.url ?? "",
-                    "coverEmoji": item.coverEmoji ?? "",
-                    "sortIndex": item.sortIndex as Any,
-                    "isArchived": item.isArchived as Any,
-                    "updatedAt": Date() as Any
-                ])
-                writes.append([
-                    "update": [
-                        "name": fullDocName("wishlists/\(wishlistID)/items/\(item.itemID)"),
-                        "fields": itemFields
-                    ]
-                ])
+        // 3. Delete invite links referencing this wishlist
+        let inviteResults = try await runQuery(collectionId: "inviteLinks", field: "wishlistID", op: "EQUAL", value: wishlistID)
+        for entry in inviteResults {
+            if let doc = entry["document"] as? [String: Any], let name = doc["name"] as? String {
+                let docID = documentID(from: name)
+                let _ = try? await request("DELETE", path: "inviteLinks/\(docID)")
             }
-            let commitURL = "\(baseURL):commit"
-            let _ = try await request("POST", path: commitURL, body: ["writes": writes])
         }
     }
 
     // MARK: - Fetch Shared Wishlist
 
     func fetchSharedWishlist(wishlistID: String) async throws -> SharedWishlistInfo {
-        // 1. Get wishlist document
-        let doc = try await request("GET", path: "wishlists/\(wishlistID)")
+        // 1. Get wishlist document from shared_wishlists
+        let doc = try await request("GET", path: "shared_wishlists/\(wishlistID)")
         guard let fields = doc["fields"] as? [String: Any] else {
             throw FirestoreError.notFound
         }
         let data = parseFields(fields)
 
         // 2. List items subcollection
-        let itemsDocs = try await listDocuments(parentPath: "wishlists/\(wishlistID)/items")
+        let itemsDocs = try await listDocuments(parentPath: "shared_wishlists/\(wishlistID)/items")
         let items = itemsDocs.map { parseItemFromDoc($0) }.sorted { $0.sortIndex < $1.sortIndex }
 
         // 3. Query memberships where wishlistID == wishlistID
@@ -468,58 +429,6 @@ final class FirestoreService {
             members: members,
             items: items
         )
-    }
-
-    // MARK: - Update Items
-
-    func updateItems(wishlistID: String, items: [SharedItemInfo]) async throws {
-        // 1. Get existing item IDs to detect deletions
-        let existingDocs = try await listDocuments(parentPath: "wishlists/\(wishlistID)/items")
-        let existingIDs = Set(existingDocs.compactMap { doc -> String? in
-            guard let name = doc["name"] as? String else { return nil }
-            return documentID(from: name)
-        })
-        let newIDs = Set(items.map(\.itemID))
-
-        // 2. Build batch writes
-        var writes: [[String: Any]] = []
-
-        // Delete removed items
-        for existingID in existingIDs where !newIDs.contains(existingID) {
-            writes.append([
-                "delete": fullDocName("wishlists/\(wishlistID)/items/\(existingID)")
-            ])
-        }
-
-        // Upsert current items
-        for item in items {
-            let itemFields = toFields([
-                "name": item.name,
-                "tier": item.tier,
-                "price": item.price as Any?,
-                "currency": item.currency,
-                "url": item.url ?? "",
-                "coverEmoji": item.coverEmoji ?? "",
-                "sortIndex": item.sortIndex as Any,
-                "isArchived": item.isArchived as Any,
-                "updatedAt": Date() as Any
-            ])
-            writes.append([
-                "update": [
-                    "name": fullDocName("wishlists/\(wishlistID)/items/\(item.itemID)"),
-                    "fields": itemFields
-                ]
-            ])
-        }
-
-        if !writes.isEmpty {
-            let commitURL = "\(baseURL):commit"
-            let _ = try await request("POST", path: commitURL, body: ["writes": writes])
-        }
-
-        // 3. Update wishlist timestamp
-        let tsFields = toFields(["updatedAt": Date() as Any])
-        let _ = try await request("PATCH", path: "wishlists/\(wishlistID)?updateMask.fieldPaths=updatedAt", body: ["fields": tsFields])
     }
 
     // MARK: - Fetch My Shared Wishlists
@@ -635,39 +544,11 @@ final class FirestoreService {
         let _ = try await request("DELETE", path: "inviteLinks/\(shortID)")
     }
 
-    // MARK: - Fetch Items (replaces listenToItems)
+    // MARK: - Leave Wishlist
 
-    func fetchItems(wishlistID: String) async throws -> [SharedItemInfo] {
-        let docs = try await listDocuments(parentPath: "wishlists/\(wishlistID)/items")
-        return docs.map { parseItemFromDoc($0) }.sorted { $0.sortIndex < $1.sortIndex }
-    }
-
-    // MARK: - Delete
-
-    func deleteSharedWishlist(wishlistID: String) async throws {
-        // 1. Get all items and delete in a batch + the wishlist itself
-        let itemsDocs = try await listDocuments(parentPath: "wishlists/\(wishlistID)/items")
-        var writes: [[String: Any]] = []
-        for itemDoc in itemsDocs {
-            if let name = itemDoc["name"] as? String {
-                writes.append(["delete": name])
-            }
-        }
-        writes.append(["delete": fullDocName("wishlists/\(wishlistID)")])
-
-        if !writes.isEmpty {
-            let commitURL = "\(baseURL):commit"
-            let _ = try await request("POST", path: commitURL, body: ["writes": writes])
-        }
-
-        // 2. Delete memberships for this wishlist
-        let memberResults = try await runQuery(collectionId: "memberships", field: "wishlistID", op: "EQUAL", value: wishlistID)
-        for entry in memberResults {
-            if let doc = entry["document"] as? [String: Any], let name = doc["name"] as? String {
-                let docID = documentID(from: name)
-                let _ = try? await request("DELETE", path: "memberships/\(docID)")
-            }
-        }
+    func leaveWishlist(wishlistID: String, userUID: String) async throws {
+        let membershipID = "\(userUID)_\(wishlistID)"
+        let _ = try await request("DELETE", path: "memberships/\(membershipID)")
     }
 
     // MARK: - Private Query Helpers

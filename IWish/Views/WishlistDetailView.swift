@@ -48,6 +48,8 @@ struct WishlistDetailView: View {
     @State private var editMode: EditMode = .inactive
     @State private var sortSnapshot: [UUID: Double] = [:]
     @State private var pollTimer: Timer?
+    @State private var showingLeaveConfirmation = false
+    @State private var isCurrentUserOwner = true
     @AppStorage("collapsedTiers") private var collapsedTiersRaw: String = ""
 
     private var collapsedTiers: Set<String> {
@@ -198,10 +200,18 @@ struct WishlistDetailView: View {
 
                         Divider()
 
-                        Button(role: .destructive) {
-                            showingDeleteConfirmation = true
-                        } label: {
-                            Label("Удалить список", systemImage: "trash")
+                        if wishlist.isShared && !isCurrentUserOwner {
+                            Button(role: .destructive) {
+                                showingLeaveConfirmation = true
+                            } label: {
+                                Label("Покинуть список", systemImage: "rectangle.portrait.and.arrow.right")
+                            }
+                        } else {
+                            Button(role: .destructive) {
+                                showingDeleteConfirmation = true
+                            } label: {
+                                Label("Удалить список", systemImage: "trash")
+                            }
                         }
                     } label: {
                         Image(systemName: "ellipsis.circle")
@@ -245,6 +255,14 @@ struct WishlistDetailView: View {
                 }
             }
         }
+        .confirmationDialog("Покинуть «\(wishlist.name)»?", isPresented: $showingLeaveConfirmation, titleVisibility: .visible) {
+            Button("Покинуть список", role: .destructive) {
+                Task {
+                    try? await services.data?.deleteWishlist(id: wishlist.id.uuidString)
+                    dismiss()
+                }
+            }
+        }
         .onAppear {
             startPolling()
         }
@@ -260,6 +278,12 @@ struct WishlistDetailView: View {
         }
         .task {
             await services.data?.refreshItems(for: wishlist.id.uuidString)
+            // Check ownership for shared wishlists
+            if wishlist.isShared, let sharedID = wishlist.sharedWishlistID {
+                if let info = try? await services.firestore.fetchSharedWishlist(wishlistID: sharedID) {
+                    isCurrentUserOwner = info.ownerUID == services.auth.uid
+                }
+            }
         }
     }
 

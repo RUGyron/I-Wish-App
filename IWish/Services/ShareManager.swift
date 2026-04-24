@@ -67,10 +67,11 @@ final class ShareManager {
                     isArchived: item.isArchived
                 )
             }
-            try await firestore.publishWishlist(
-                id: wishlist.id.uuidString,
+            try await firestore.createSharedWishlist(
+                wishlistID: wishlist.id.uuidString,
                 name: wishlist.name,
                 emoji: wishlist.coverEmoji,
+                gradientSeed: wishlist.gradientSeed,
                 ownerUID: ownerUID,
                 ownerName: ownerName,
                 items: sharedItems
@@ -121,7 +122,7 @@ final class ShareManager {
     func revokeAll() async {
         // Delete shared wishlist + items from Firestore
         if let wid = wishlistID {
-            try? await firestore.deleteSharedWishlist(wishlistID: wid.uuidString)
+            try? await firestore.deleteSharedWishlistFull(wishlistID: wid.uuidString)
         }
         // Delete invite link from Firestore
         if let shortID {

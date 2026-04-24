@@ -31,6 +31,19 @@ final class DataService {
         wishlist.isShared && wishlist.sharedWishlistID != nil
     }
 
+    /// Verifies that the current user has editor role for a shared wishlist.
+    /// Owners always pass. Viewers get an error.
+    private func verifyEditorRole(wishlistID: String) async throws {
+        let currentUID = try uid
+        let memberships = try await firestore.fetchMyMemberships(userUID: currentUID)
+        if let membership = memberships.first(where: { $0.wishlistID == wishlistID }) {
+            guard membership.role == "editor" || membership.role == "owner" else {
+                throw FirestoreService.FirestoreError.requestFailed("Только редактор может изменять список")
+            }
+        }
+        // If no membership found, user is the owner — allow
+    }
+
     // MARK: - Wishlists
 
     func createWishlist(name: String, emoji: String?) async throws -> Wishlist {
@@ -84,7 +97,12 @@ final class DataService {
 
         do {
             if wishlistIsShared(wishlist), let sharedID = wishlist.sharedWishlistID {
-                // Update in shared_wishlists via direct PATCH
+                // Only the owner can rename a shared wishlist
+                let info = try await firestore.fetchSharedWishlist(wishlistID: sharedID)
+                guard info.ownerUID == currentUID else {
+                    isSyncing = false
+                    throw FirestoreService.FirestoreError.requestFailed("Только владелец может изменить название")
+                }
                 try await firestore.updateSharedWishlist(wishlistID: sharedID, name: name, emoji: emoji)
             } else {
                 try await firestore.updatePersonalWishlist(uid: currentUID, wishlistID: id, name: name, emoji: emoji)
@@ -117,7 +135,14 @@ final class DataService {
 
         do {
             if wishlistIsShared(wishlist), let sharedID = wishlist.sharedWishlistID {
-                try await firestore.deleteSharedWishlistFull(wishlistID: sharedID)
+                let info = try await firestore.fetchSharedWishlist(wishlistID: sharedID)
+                if info.ownerUID == currentUID {
+                    // Owner: delete everything (shared wishlist, items, memberships, invite links)
+                    try await firestore.deleteSharedWishlistFull(wishlistID: sharedID)
+                } else {
+                    // Member: just leave (delete own membership, keep shared wishlist for others)
+                    try await firestore.leaveWishlist(wishlistID: sharedID, userUID: currentUID)
+                }
             } else {
                 try await firestore.deletePersonalWishlist(uid: currentUID, wishlistID: id)
             }
@@ -166,6 +191,7 @@ final class DataService {
 
         do {
             if wishlistIsShared(wishlist), let sharedID = wishlist.sharedWishlistID {
+                try await verifyEditorRole(wishlistID: sharedID)
                 try await firestore.createSharedItem(wishlistID: sharedID, itemID: itemID, name: name, tier: tier.rawValue, price: price, currency: currency, url: url, emoji: emoji, sortIndex: sortIndex)
             } else {
                 try await firestore.createPersonalItem(uid: currentUID, wishlistID: wishlistID, itemID: itemID, name: name, tier: tier.rawValue, price: price, currency: currency, url: url, emoji: emoji, sortIndex: sortIndex)
@@ -202,6 +228,7 @@ final class DataService {
 
         do {
             if isShared, let sharedID {
+                try await verifyEditorRole(wishlistID: sharedID)
                 try await firestore.updateSharedItem(wishlistID: sharedID, itemID: id, name: name, tier: tier.rawValue, price: price, currency: currency, url: url, emoji: emoji, sortIndex: sortIndex, isArchived: isArchived)
             } else {
                 try await firestore.updatePersonalItem(uid: currentUID, wishlistID: wishlistID, itemID: id, name: name, tier: tier.rawValue, price: price, currency: currency, url: url, emoji: emoji, sortIndex: sortIndex, isArchived: isArchived)
@@ -247,6 +274,7 @@ final class DataService {
 
         do {
             if isShared, let sharedID {
+                try await verifyEditorRole(wishlistID: sharedID)
                 try await firestore.deleteSharedItem(wishlistID: sharedID, itemID: id)
             } else {
                 try await firestore.deletePersonalItem(uid: currentUID, wishlistID: wishlistID, itemID: id)
@@ -281,6 +309,7 @@ final class DataService {
 
         do {
             if isShared, let sharedID {
+                try await verifyEditorRole(wishlistID: sharedID)
                 try await firestore.updateSharedItem(wishlistID: sharedID, itemID: id, name: item.name, tier: item.tier.rawValue, price: item.price, currency: item.currency, url: item.url, emoji: item.coverEmoji, sortIndex: item.sortIndex, isArchived: true)
             } else {
                 try await firestore.updatePersonalItem(uid: currentUID, wishlistID: wishlistID, itemID: id, name: item.name, tier: item.tier.rawValue, price: item.price, currency: item.currency, url: item.url, emoji: item.coverEmoji, sortIndex: item.sortIndex, isArchived: true)
