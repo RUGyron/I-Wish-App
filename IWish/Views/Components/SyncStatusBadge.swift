@@ -16,6 +16,7 @@ struct SyncStatusBadge: View {
                     .foregroundStyle(iconColor)
             }
         }
+        .frame(width: 16, height: 16)
         .onTapGesture { onTap?() }
         .animation(.easeInOut(duration: 0.2), value: isSyncing)
         .animation(.easeInOut(duration: 0.2), value: syncError == nil)
