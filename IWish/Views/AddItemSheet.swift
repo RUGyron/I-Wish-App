@@ -25,6 +25,7 @@ struct AddItemSheet: View {
     @State private var urlStatus: URLPasteStatus = .idle
     @State private var isFetchingMetadata = false
     @State private var errorMessage: String?
+    @State private var isSaving = false
 
     // MARK: - Derived
 
@@ -66,7 +67,8 @@ struct AddItemSheet: View {
                 }
                 ToolbarItem(placement: .confirmationAction) {
                     Button("Готово") { save() }
-                        .disabled(!nameIsValid)
+                        .disabled(!nameIsValid || isSaving)
+                        .overlay { if isSaving { ProgressView().controlSize(.small) } }
                 }
             }
             .onAppear { prefillFromSettings() }
@@ -253,6 +255,8 @@ struct AddItemSheet: View {
     // MARK: - Save
 
     private func save() {
+        guard !isSaving else { return }
+
         let trimmedName = name.trimmingCharacters(in: .whitespaces)
         guard !trimmedName.isEmpty else { return }
 
@@ -268,6 +272,7 @@ struct AddItemSheet: View {
             ? Date.now.addingTimeInterval(Double(probationDays) * 86400)
             : nil
 
+        isSaving = true
         Task {
             do {
                 let item = try await services.data.addItem(
@@ -287,6 +292,7 @@ struct AddItemSheet: View {
             } catch {
                 errorMessage = error.localizedDescription
             }
+            isSaving = false
         }
     }
 

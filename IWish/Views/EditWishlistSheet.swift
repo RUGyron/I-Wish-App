@@ -5,12 +5,14 @@ struct EditWishlistSheet: View {
     @Environment(\.modelContext) private var context
     @Environment(\.dismiss) private var dismiss
     @Environment(\.appServices) private var services
+    @Environment(\.toast) private var toast
 
     let wishlist: Wishlist
 
     @State private var name: String = ""
     @State private var coverImageData: Data?
     @State private var coverEmoji: String?
+    @State private var isSaving = false
 
     var body: some View {
         NavigationStack {
@@ -41,7 +43,8 @@ struct EditWishlistSheet: View {
                 }
                 ToolbarItem(placement: .confirmationAction) {
                     Button("Сохранить") { save() }
-                        .disabled(name.trimmingCharacters(in: .whitespaces).isEmpty)
+                        .disabled(name.trimmingCharacters(in: .whitespaces).isEmpty || isSaving)
+                        .overlay { if isSaving { ProgressView().controlSize(.small) } }
                 }
             }
             .onAppear {
@@ -54,9 +57,12 @@ struct EditWishlistSheet: View {
     }
 
     private func save() {
+        guard !isSaving else { return }
+
         let trimmed = name.trimmingCharacters(in: .whitespaces)
         guard !trimmed.isEmpty else { return }
 
+        isSaving = true
         Task {
             do {
                 try await services.data.updateWishlist(id: wishlist.id.uuidString, name: trimmed, emoji: coverEmoji)
@@ -65,14 +71,9 @@ struct EditWishlistSheet: View {
                 try? context.save()
                 dismiss()
             } catch {
-                // Fallback: save locally if Firestore fails
-                wishlist.name = trimmed
-                wishlist.coverImageData = coverImageData
-                wishlist.coverEmoji = coverEmoji
-                wishlist.updatedAt = .now
-                try? context.save()
-                dismiss()
+                toast.error(error.localizedDescription)
             }
+            isSaving = false
         }
     }
 }

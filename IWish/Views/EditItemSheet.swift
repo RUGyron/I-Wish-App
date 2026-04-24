@@ -6,6 +6,7 @@ struct EditItemSheet: View {
     @Environment(\.modelContext) private var context
     @Environment(\.dismiss) private var dismiss
     @Environment(\.appServices) private var services
+    @Environment(\.toast) private var toast
 
     let item: Item
 
@@ -19,6 +20,7 @@ struct EditItemSheet: View {
     @State private var urlString: String = ""
     @State private var probationEnabled: Bool = false
     @State private var probationDays: Int = 30
+    @State private var isSaving = false
 
     var body: some View {
         NavigationStack {
@@ -90,7 +92,8 @@ struct EditItemSheet: View {
                 }
                 ToolbarItem(placement: .confirmationAction) {
                     Button("Сохранить") { save() }
-                        .disabled(name.trimmingCharacters(in: .whitespaces).isEmpty)
+                        .disabled(name.trimmingCharacters(in: .whitespaces).isEmpty || isSaving)
+                        .overlay { if isSaving { ProgressView().controlSize(.small) } }
                 }
             }
             .onAppear { prefill() }
@@ -124,11 +127,14 @@ struct EditItemSheet: View {
     }
 
     private func save() {
+        guard !isSaving else { return }
+
         let wishlistID = item.wishlist?.id.uuidString ?? ""
         let probEnd: Date? = probationEnabled
             ? Date.now.addingTimeInterval(Double(probationDays) * 86400)
             : nil
 
+        isSaving = true
         Task {
             do {
                 try await services.data.updateItem(
@@ -148,19 +154,9 @@ struct EditItemSheet: View {
                 )
                 dismiss()
             } catch {
-                // Fallback: save locally
-                item.name = name.trimmingCharacters(in: .whitespaces)
-                item.descriptionText = descriptionText.isEmpty ? nil : descriptionText
-                item.coverImageData = coverImageData
-                item.coverEmoji = coverEmoji
-                item.tier = tier
-                item.price = Double(priceString)
-                item.currency = currency
-                item.url = urlString.isEmpty ? nil : urlString
-                item.updatedAt = .now
-                try? context.save()
-                dismiss()
+                toast.error(error.localizedDescription)
             }
+            isSaving = false
         }
     }
 }

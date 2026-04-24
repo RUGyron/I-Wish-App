@@ -389,8 +389,8 @@ struct WishlistDetailView: View {
                     if !collapsedTiers.contains(tier.rawValue) {
                         ForEach(tierItems) { item in
                             itemRow(item)
-                                .itemContextMenu(item: item, context: context, editingItem: $editingItem, dataService: services.data, wishlistID: wishlist.id.uuidString)
-                                .itemSwipeActions(item: item, dataService: services.data, wishlistID: wishlist.id.uuidString)
+                                .itemContextMenu(item: item, context: context, editingItem: $editingItem, dataService: services.data, wishlistID: wishlist.id.uuidString, toast: toast)
+                                .itemSwipeActions(item: item, dataService: services.data, wishlistID: wishlist.id.uuidString, toast: toast)
                         }
                         .onMove { from, to in
                             reorderItems(in: tier, from: from, to: to)
@@ -445,18 +445,22 @@ struct WishlistDetailView: View {
         // Sync reordered items to Firestore
         for item in tierItems {
             Task {
-                try? await services.data?.updateItem(
-                    id: item.id.uuidString,
-                    wishlistID: wishlist.id.uuidString,
-                    name: item.name,
-                    tier: item.tier,
-                    price: item.price,
-                    currency: item.currency,
-                    url: item.url,
-                    emoji: item.coverEmoji,
-                    sortIndex: item.sortIndex,
-                    isArchived: item.isArchived
-                )
+                do {
+                    try await services.data?.updateItem(
+                        id: item.id.uuidString,
+                        wishlistID: wishlist.id.uuidString,
+                        name: item.name,
+                        tier: item.tier,
+                        price: item.price,
+                        currency: item.currency,
+                        url: item.url,
+                        emoji: item.coverEmoji,
+                        sortIndex: item.sortIndex,
+                        isArchived: item.isArchived
+                    )
+                } catch {
+                    toast.error(error.localizedDescription)
+                }
             }
         }
     }
@@ -482,8 +486,8 @@ struct WishlistDetailView: View {
         Section {
             ForEach(sorted) { item in
                 itemRow(item)
-                    .itemContextMenu(item: item, context: context, editingItem: $editingItem, dataService: services.data, wishlistID: wishlist.id.uuidString)
-                    .itemSwipeActions(item: item, dataService: services.data, wishlistID: wishlist.id.uuidString)
+                    .itemContextMenu(item: item, context: context, editingItem: $editingItem, dataService: services.data, wishlistID: wishlist.id.uuidString, toast: toast)
+                    .itemSwipeActions(item: item, dataService: services.data, wishlistID: wishlist.id.uuidString, toast: toast)
             }
         }
     }
@@ -643,7 +647,7 @@ struct WishlistDetailView: View {
 // MARK: - Context Menu & Swipe Actions
 
 private extension View {
-    func itemContextMenu(item: Item, context: ModelContext, editingItem: Binding<Item?>, dataService: DataService?, wishlistID: String) -> some View {
+    func itemContextMenu(item: Item, context: ModelContext, editingItem: Binding<Item?>, dataService: DataService?, wishlistID: String, toast: ToastManager) -> some View {
         self.contextMenu {
             Button {
                 editingItem.wrappedValue = item
@@ -663,18 +667,22 @@ private extension View {
                 ForEach(ItemTier.allCases) { tier in
                     Button {
                         Task {
-                            try? await dataService?.updateItem(
-                                id: item.id.uuidString,
-                                wishlistID: wishlistID,
-                                name: item.name,
-                                tier: tier,
-                                price: item.price,
-                                currency: item.currency,
-                                url: item.url,
-                                emoji: item.coverEmoji,
-                                sortIndex: item.sortIndex,
-                                isArchived: item.isArchived
-                            )
+                            do {
+                                try await dataService?.updateItem(
+                                    id: item.id.uuidString,
+                                    wishlistID: wishlistID,
+                                    name: item.name,
+                                    tier: tier,
+                                    price: item.price,
+                                    currency: item.currency,
+                                    url: item.url,
+                                    emoji: item.coverEmoji,
+                                    sortIndex: item.sortIndex,
+                                    isArchived: item.isArchived
+                                )
+                            } catch {
+                                toast.error(error.localizedDescription)
+                            }
                         }
                     } label: {
                         if item.tier == tier {
@@ -694,7 +702,11 @@ private extension View {
 
             Button {
                 Task {
-                    try? await dataService?.archiveItem(id: item.id.uuidString, wishlistID: wishlistID)
+                    do {
+                        try await dataService?.archiveItem(id: item.id.uuidString, wishlistID: wishlistID)
+                    } catch {
+                        toast.error(error.localizedDescription)
+                    }
                 }
             } label: {
                 Label("В архив", systemImage: "archivebox")
@@ -702,7 +714,11 @@ private extension View {
 
             Button(role: .destructive) {
                 Task {
-                    try? await dataService?.deleteItem(id: item.id.uuidString, wishlistID: wishlistID)
+                    do {
+                        try await dataService?.deleteItem(id: item.id.uuidString, wishlistID: wishlistID)
+                    } catch {
+                        toast.error(error.localizedDescription)
+                    }
                 }
             } label: {
                 Label("Удалить", systemImage: "trash")
@@ -710,11 +726,15 @@ private extension View {
         }
     }
 
-    func itemSwipeActions(item: Item, dataService: DataService?, wishlistID: String) -> some View {
+    func itemSwipeActions(item: Item, dataService: DataService?, wishlistID: String, toast: ToastManager) -> some View {
         self.swipeActions(edge: .trailing, allowsFullSwipe: false) {
             Button(role: .destructive) {
                 Task {
-                    try? await dataService?.deleteItem(id: item.id.uuidString, wishlistID: wishlistID)
+                    do {
+                        try await dataService?.deleteItem(id: item.id.uuidString, wishlistID: wishlistID)
+                    } catch {
+                        toast.error(error.localizedDescription)
+                    }
                 }
             } label: {
                 Label("Удалить", systemImage: "trash")
@@ -723,7 +743,11 @@ private extension View {
 
             Button {
                 Task {
-                    try? await dataService?.archiveItem(id: item.id.uuidString, wishlistID: wishlistID)
+                    do {
+                        try await dataService?.archiveItem(id: item.id.uuidString, wishlistID: wishlistID)
+                    } catch {
+                        toast.error(error.localizedDescription)
+                    }
                 }
             } label: {
                 Label("В архив", systemImage: "archivebox")

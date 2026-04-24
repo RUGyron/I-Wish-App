@@ -190,6 +190,7 @@ struct JoinWishlistSheet: View {
                 let wishlist = Wishlist(
                     name: sharedData.name,
                     coverEmoji: sharedData.coverEmoji,
+                    ownerRecordID: sharedData.ownerUID,
                     isShared: true,
                     sharedWishlistID: info.wishlistID,
                     gradientSeed: sharedData.gradientSeed

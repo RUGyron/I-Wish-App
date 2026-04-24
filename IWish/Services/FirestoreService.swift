@@ -374,7 +374,7 @@ final class FirestoreService {
         for itemDoc in itemsDocs {
             if let name = itemDoc["name"] as? String {
                 let itemID = documentID(from: name)
-                let _ = try? await request("DELETE", path: "shared_wishlists/\(wishlistID)/items/\(itemID)")
+                let _ = try await request("DELETE", path: "shared_wishlists/\(wishlistID)/items/\(itemID)")
             }
         }
 
@@ -395,7 +395,7 @@ final class FirestoreService {
             if let doc = entry["document"] as? [String: Any], let name = doc["name"] as? String {
                 let docID = documentID(from: name)
                 logger.info("[Firestore] Deleting membership: \(docID)")
-                let _ = try? await request("DELETE", path: "memberships/\(docID)")
+                let _ = try await request("DELETE", path: "memberships/\(docID)")
             }
         }
 
@@ -405,7 +405,7 @@ final class FirestoreService {
         for entry in inviteResults {
             if let doc = entry["document"] as? [String: Any], let name = doc["name"] as? String {
                 let docID = documentID(from: name)
-                let _ = try? await request("DELETE", path: "inviteLinks/\(docID)")
+                let _ = try await request("DELETE", path: "inviteLinks/\(docID)")
             }
         }
         logger.info("[Firestore] deleteSharedWishlistFull completed")

@@ -92,7 +92,7 @@ final class DataService {
         // Find local wishlist
         guard let uuid = UUID(uuidString: id) else { throw FirestoreService.FirestoreError.notFound }
         let descriptor = FetchDescriptor<Wishlist>(predicate: #Predicate { $0.id == uuid })
-        guard let wishlist = try? modelContext.fetch(descriptor).first else {
+        guard let wishlist = try modelContext.fetch(descriptor).first else {
             isSyncing = false
             throw FirestoreService.FirestoreError.notFound
         }
@@ -129,7 +129,7 @@ final class DataService {
 
         guard let uuid = UUID(uuidString: id) else { throw FirestoreService.FirestoreError.notFound }
         let descriptor = FetchDescriptor<Wishlist>(predicate: #Predicate { $0.id == uuid })
-        guard let wishlist = try? modelContext.fetch(descriptor).first else {
+        guard let wishlist = try modelContext.fetch(descriptor).first else {
             isSyncing = false
             throw FirestoreService.FirestoreError.notFound
         }
@@ -184,7 +184,7 @@ final class DataService {
         // Find the wishlist
         guard let uuid = UUID(uuidString: wishlistID) else { throw FirestoreService.FirestoreError.notFound }
         let descriptor = FetchDescriptor<Wishlist>(predicate: #Predicate { $0.id == uuid })
-        guard let wishlist = try? modelContext.fetch(descriptor).first else {
+        guard let wishlist = try modelContext.fetch(descriptor).first else {
             isSyncing = false
             throw FirestoreService.FirestoreError.notFound
         }
@@ -216,7 +216,7 @@ final class DataService {
 
         guard let itemUUID = UUID(uuidString: id) else { throw FirestoreService.FirestoreError.notFound }
         let descriptor = FetchDescriptor<Item>(predicate: #Predicate { $0.id == itemUUID })
-        guard let item = try? modelContext.fetch(descriptor).first else {
+        guard let item = try modelContext.fetch(descriptor).first else {
             isSyncing = false
             throw FirestoreService.FirestoreError.notFound
         }
@@ -261,7 +261,7 @@ final class DataService {
 
         guard let itemUUID = UUID(uuidString: id) else { throw FirestoreService.FirestoreError.notFound }
         let descriptor = FetchDescriptor<Item>(predicate: #Predicate { $0.id == itemUUID })
-        guard let item = try? modelContext.fetch(descriptor).first else {
+        guard let item = try modelContext.fetch(descriptor).first else {
             isSyncing = false
             throw FirestoreService.FirestoreError.notFound
         }
@@ -295,7 +295,7 @@ final class DataService {
 
         guard let itemUUID = UUID(uuidString: id) else { throw FirestoreService.FirestoreError.notFound }
         let descriptor = FetchDescriptor<Item>(predicate: #Predicate { $0.id == itemUUID })
-        guard let item = try? modelContext.fetch(descriptor).first else {
+        guard let item = try modelContext.fetch(descriptor).first else {
             isSyncing = false
             throw FirestoreService.FirestoreError.notFound
         }
@@ -566,7 +566,7 @@ final class DataService {
 
         guard let uuid = UUID(uuidString: id) else { throw FirestoreService.FirestoreError.notFound }
         let descriptor = FetchDescriptor<Wishlist>(predicate: #Predicate { $0.id == uuid })
-        guard let wishlist = try? modelContext.fetch(descriptor).first else {
+        guard let wishlist = try modelContext.fetch(descriptor).first else {
             isSyncing = false
             throw FirestoreService.FirestoreError.notFound
         }
@@ -623,17 +623,12 @@ final class DataService {
             // 3. Create owner membership
             try await firestore.joinWishlist(wishlistID: id, userUID: currentUID, role: "owner")
 
-            // 4. Mark local as shared FIRST (before any delete to prevent flicker)
-            // Then delete from personal collection in background
+            // 4. Mark local as shared (no personal delete — polling skips shared via !$0.isShared filter)
             wishlist.isShared = true
             wishlist.sharedWishlistID = id
             wishlist.ownerRecordID = currentUID
             wishlist.updatedAt = .now
             try? modelContext.save()
-
-            // Delete from personal collection AFTER local is marked shared
-            // (prevents flicker from polling seeing missing personal wishlist)
-            try? await firestore.deletePersonalWishlist(uid: currentUID, wishlistID: id)
 
             let url = URL(string: "https://rugyron.github.io/I-Wish-App/j/\(shortID)")!
             isSyncing = false
@@ -671,6 +666,7 @@ final class DataService {
             let wishlist = Wishlist(
                 name: sharedData.name,
                 coverEmoji: sharedData.coverEmoji,
+                ownerRecordID: sharedData.ownerUID,
                 isShared: true,
                 sharedWishlistID: info.wishlistID,
                 gradientSeed: sharedData.gradientSeed

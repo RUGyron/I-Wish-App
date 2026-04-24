@@ -105,6 +105,7 @@ final class ShareManager {
             // 4. Mark wishlist as shared
             wishlist.isShared = true
             wishlist.sharedWishlistID = wishlist.id.uuidString
+            wishlist.ownerRecordID = ownerUID
             wishlist.updatedAt = .now
             print("[Share] SUCCESS — shareURL: \(userURL)")
         } catch {

@@ -4,12 +4,14 @@ import SwiftData
 struct HomeView: View {
     @Environment(\.modelContext) private var context
     @Environment(\.appServices) private var services
+    @Environment(\.toast) private var toast
     @Query(sort: \Wishlist.createdAt, order: .reverse) private var wishlists: [Wishlist]
     @State private var showingAddSheet = false
     @State private var showingSettings = false
     @State private var showingJoin = false
     @State private var sharingWishlist: Wishlist?
     @State private var pollTimer: Timer?
+    @State private var deletingWishlistID: String?
 
     // MARK: - Debug
 
@@ -234,8 +236,15 @@ struct HomeView: View {
                             }
                             Divider()
                             Button(role: .destructive) {
+                                let wid = wishlist.id.uuidString
+                                deletingWishlistID = wid
                                 Task {
-                                    try? await services.data?.deleteWishlist(id: wishlist.id.uuidString)
+                                    do {
+                                        try await services.data?.deleteWishlist(id: wid)
+                                    } catch {
+                                        toast.error(error.localizedDescription)
+                                    }
+                                    deletingWishlistID = nil
                                 }
                             } label: {
                                 Label("Удалить", systemImage: "trash")

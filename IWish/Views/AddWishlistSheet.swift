@@ -11,6 +11,7 @@ struct AddWishlistSheet: View {
     @State private var coverImageData: Data?
     @State private var coverEmoji: String?
     @State private var errorMessage: String?
+    @State private var isSaving = false
 
     var body: some View {
         NavigationStack {
@@ -47,6 +48,8 @@ struct AddWishlistSheet: View {
                 }
                 ToolbarItem(placement: .confirmationAction) {
                     Button("Готово") { save() }
+                        .disabled(isSaving)
+                        .overlay { if isSaving { ProgressView().controlSize(.small) } }
                 }
             }
         }
@@ -83,6 +86,8 @@ struct AddWishlistSheet: View {
     }
 
     private func save() {
+        guard !isSaving else { return }
+
         let emptyCount = wishlists.filter { ($0.items ?? []).isEmpty }.count
         guard emptyCount < InputLimits.maxEmptyWishlists else {
             errorMessage = "У вас слишком много пустых списков. Сначала удалите или заполните их."
@@ -94,6 +99,7 @@ struct AddWishlistSheet: View {
             ? generateName()
             : trimmed
 
+        isSaving = true
         Task {
             do {
                 let wishlist = try await services.data.createWishlist(name: finalName, emoji: coverEmoji)
@@ -106,6 +112,7 @@ struct AddWishlistSheet: View {
             } catch {
                 errorMessage = error.localizedDescription
             }
+            isSaving = false
         }
     }
 }
