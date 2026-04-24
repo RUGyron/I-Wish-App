@@ -70,7 +70,6 @@ final class DataService {
             )
         } catch {
             isSyncing = false
-            syncError = error.localizedDescription
             throw error
         }
 
@@ -109,7 +108,6 @@ final class DataService {
             }
         } catch {
             isSyncing = false
-            syncError = error.localizedDescription
             throw error
         }
 
@@ -148,7 +146,6 @@ final class DataService {
             }
         } catch {
             isSyncing = false
-            syncError = error.localizedDescription
             throw error
         }
 
@@ -198,7 +195,6 @@ final class DataService {
             }
         } catch {
             isSyncing = false
-            syncError = error.localizedDescription
             throw error
         }
 
@@ -235,7 +231,6 @@ final class DataService {
             }
         } catch {
             isSyncing = false
-            syncError = error.localizedDescription
             throw error
         }
 
@@ -281,7 +276,6 @@ final class DataService {
             }
         } catch {
             isSyncing = false
-            syncError = error.localizedDescription
             throw error
         }
 
@@ -316,7 +310,6 @@ final class DataService {
             }
         } catch {
             isSyncing = false
-            syncError = error.localizedDescription
             throw error
         }
 
@@ -636,7 +629,6 @@ final class DataService {
             return url
         } catch {
             isSyncing = false
-            syncError = error.localizedDescription
             throw error
         }
     }
@@ -700,7 +692,6 @@ final class DataService {
             return info.wishlistID
         } catch {
             isSyncing = false
-            syncError = error.localizedDescription
             throw error
         }
     }

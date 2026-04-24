@@ -36,6 +36,7 @@ struct WishlistDetailView: View {
     @Environment(\.modelContext) private var context
     @Environment(\.dismiss) private var dismiss
     @Environment(\.appServices) private var services
+    @Environment(\.toast) private var toast
     let wishlist: Wishlist
     @State private var showingAddItem = false
     @State private var selectedSort: SortOption = .importance
@@ -250,16 +251,24 @@ struct WishlistDetailView: View {
         .confirmationDialog("Удалить «\(wishlist.name)»?", isPresented: $showingDeleteConfirmation, titleVisibility: .visible) {
             Button("Удалить список", role: .destructive) {
                 Task {
-                    try? await services.data?.deleteWishlist(id: wishlist.id.uuidString)
-                    dismiss()
+                    do {
+                        try await services.data?.deleteWishlist(id: wishlist.id.uuidString)
+                        dismiss()
+                    } catch {
+                        toast.error(error.localizedDescription)
+                    }
                 }
             }
         }
         .confirmationDialog("Покинуть «\(wishlist.name)»?", isPresented: $showingLeaveConfirmation, titleVisibility: .visible) {
             Button("Покинуть список", role: .destructive) {
                 Task {
-                    try? await services.data?.deleteWishlist(id: wishlist.id.uuidString)
-                    dismiss()
+                    do {
+                        try await services.data?.deleteWishlist(id: wishlist.id.uuidString)
+                        dismiss()
+                    } catch {
+                        toast.error(error.localizedDescription)
+                    }
                 }
             }
         }
