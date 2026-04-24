@@ -49,10 +49,10 @@ struct AddWishlistSheet: View {
                 ToolbarItem(placement: .confirmationAction) {
                     Button("Готово") { save() }
                         .disabled(isSaving)
-                        .overlay { if isSaving { ProgressView().controlSize(.small) } }
                 }
             }
         }
+        .loadingOverlay(isSaving)
         .alert("Не удалось создать", isPresented: .constant(errorMessage != nil)) {
             Button("OK", role: .cancel) { errorMessage = nil }
         } message: {

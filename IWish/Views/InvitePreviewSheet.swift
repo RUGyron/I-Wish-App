@@ -25,6 +25,7 @@ struct InvitePreviewSheet: View {
                 }
             }
         }
+        .loadingOverlay(isAccepting)
         .fontDesign(.rounded)
     }
 
@@ -152,23 +153,15 @@ struct InvitePreviewSheet: View {
             isAccepting = true
             onAccept()
         } label: {
-            ZStack {
-                // Always reserve space for text height
-                Text("Принять приглашение")
-                    .opacity(isAccepting ? 0 : 1)
-
-                if isAccepting {
-                    ProgressView()
-                        .tint(.white)
-                }
-            }
-            .font(.headline)
-            .foregroundStyle(.white)
-            .frame(maxWidth: .infinity)
-            .frame(height: 50)
-            .background(brand, in: RoundedRectangle(cornerRadius: 14, style: .continuous))
+            Text("Принять приглашение")
+                .font(.headline)
+                .foregroundStyle(.white)
+                .frame(maxWidth: .infinity)
+                .frame(height: 50)
+                .background(brand, in: RoundedRectangle(cornerRadius: 14, style: .continuous))
         }
         .buttonStyle(.plain)
+        .disabled(isAccepting)
     }
 
     // MARK: - Helpers

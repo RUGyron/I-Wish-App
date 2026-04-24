@@ -68,7 +68,6 @@ struct AddItemSheet: View {
                 ToolbarItem(placement: .confirmationAction) {
                     Button("Готово") { save() }
                         .disabled(!nameIsValid || isSaving)
-                        .overlay { if isSaving { ProgressView().controlSize(.small) } }
                 }
             }
             .onAppear { prefillFromSettings() }
@@ -82,6 +81,7 @@ struct AddItemSheet: View {
                 urlString = InputLimits.truncate(newValue, to: InputLimits.itemURL)
             }
         }
+        .loadingOverlay(isSaving)
         .alert("Не удалось добавить", isPresented: .constant(errorMessage != nil)) {
             Button("OK", role: .cancel) { errorMessage = nil }
         } message: {

@@ -94,6 +94,7 @@ struct ShareWishlistSheet: View {
                 if let msg = newError { toast.error(msg) }
             }
         }
+        .loadingOverlay(shareManager.isLoading)
         .applyTheme()
         .sheet(isPresented: $showingAppleSignIn) {
             SignInWithAppleSheet { result in

@@ -44,7 +44,6 @@ struct EditWishlistSheet: View {
                 ToolbarItem(placement: .confirmationAction) {
                     Button("Сохранить") { save() }
                         .disabled(name.trimmingCharacters(in: .whitespaces).isEmpty || isSaving)
-                        .overlay { if isSaving { ProgressView().controlSize(.small) } }
                 }
             }
             .onAppear {
@@ -53,6 +52,7 @@ struct EditWishlistSheet: View {
                 coverEmoji = wishlist.coverEmoji
             }
         }
+        .loadingOverlay(isSaving)
         .applyTheme()
     }
 

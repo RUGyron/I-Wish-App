@@ -12,6 +12,7 @@ struct HomeView: View {
     @State private var sharingWishlist: Wishlist?
     @State private var pollTimer: Timer?
     @State private var deletingWishlistID: String?
+    @State private var isPerformingAction = false
 
     // MARK: - Debug
 
@@ -93,6 +94,7 @@ struct HomeView: View {
         .onReceive(NotificationCenter.default.publisher(for: .didReceiveShareLink)) { _ in
             showingJoin = true
         }
+        .loadingOverlay(isPerformingAction)
         .overlay(alignment: .bottom) {
             addButton
                 .padding(.bottom, 24)
@@ -238,6 +240,7 @@ struct HomeView: View {
                             Button(role: .destructive) {
                                 let wid = wishlist.id.uuidString
                                 deletingWishlistID = wid
+                                isPerformingAction = true
                                 Task {
                                     do {
                                         try await services.data?.deleteWishlist(id: wid)
@@ -245,6 +248,7 @@ struct HomeView: View {
                                         toast.error(error.localizedDescription)
                                     }
                                     deletingWishlistID = nil
+                                    isPerformingAction = false
                                 }
                             } label: {
                                 Label("Удалить", systemImage: "trash")

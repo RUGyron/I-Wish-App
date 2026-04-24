@@ -51,6 +51,7 @@ struct WishlistDetailView: View {
     @State private var pollTimer: Timer?
     @State private var showingLeaveConfirmation = false
     @State private var isCurrentUserOwner = true
+    @State private var isPerformingAction = false
     @AppStorage("collapsedTiers") private var collapsedTiersRaw: String = ""
 
     private var collapsedTiers: Set<String> {
@@ -248,8 +249,10 @@ struct WishlistDetailView: View {
             EditWishlistSheet(wishlist: wishlist)
                 .applyTheme()
         }
+        .loadingOverlay(isPerformingAction)
         .confirmationDialog("Удалить «\(wishlist.name)»?", isPresented: $showingDeleteConfirmation, titleVisibility: .visible) {
             Button("Удалить список", role: .destructive) {
+                isPerformingAction = true
                 Task {
                     do {
                         try await services.data?.deleteWishlist(id: wishlist.id.uuidString)
@@ -257,11 +260,13 @@ struct WishlistDetailView: View {
                     } catch {
                         toast.error(error.localizedDescription)
                     }
+                    isPerformingAction = false
                 }
             }
         }
         .confirmationDialog("Покинуть «\(wishlist.name)»?", isPresented: $showingLeaveConfirmation, titleVisibility: .visible) {
             Button("Покинуть список", role: .destructive) {
+                isPerformingAction = true
                 Task {
                     do {
                         try await services.data?.deleteWishlist(id: wishlist.id.uuidString)
@@ -269,6 +274,7 @@ struct WishlistDetailView: View {
                     } catch {
                         toast.error(error.localizedDescription)
                     }
+                    isPerformingAction = false
                 }
             }
         }

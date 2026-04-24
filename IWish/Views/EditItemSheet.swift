@@ -93,7 +93,6 @@ struct EditItemSheet: View {
                 ToolbarItem(placement: .confirmationAction) {
                     Button("Сохранить") { save() }
                         .disabled(name.trimmingCharacters(in: .whitespaces).isEmpty || isSaving)
-                        .overlay { if isSaving { ProgressView().controlSize(.small) } }
                 }
             }
             .onAppear { prefill() }
@@ -107,6 +106,7 @@ struct EditItemSheet: View {
                 urlString = InputLimits.truncate(newValue, to: InputLimits.itemURL)
             }
         }
+        .loadingOverlay(isSaving)
         .applyTheme()
     }
 

@@ -20,6 +20,11 @@ struct JoinWishlistSheet: View {
         case joining
         case success(String)
         case error(String)
+
+        var isJoining: Bool {
+            if case .joining = self { return true }
+            return false
+        }
     }
 
     var body: some View {
@@ -80,6 +85,7 @@ struct JoinWishlistSheet: View {
                 .ignoresSafeArea(.all)
             }
         }
+        .loadingOverlay(joinStatus.isJoining)
         .applyTheme()
         .onAppear {
             if let url = initialURL {
@@ -98,15 +104,7 @@ struct JoinWishlistSheet: View {
 
     @ViewBuilder
     private var statusView: some View {
-        switch joinStatus {
-        case .idle:
-            EmptyView()
-        case .joining:
-            ProgressView("Подключение...")
-                .padding()
-        case .success, .error:
-            EmptyView()
-        }
+        EmptyView()
     }
 
     private func pasteAndJoin() {
