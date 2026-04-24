@@ -2,6 +2,7 @@ import SwiftUI
 
 struct InvitePreviewSheet: View {
     @Environment(\.dismiss) private var dismiss
+    @Environment(\.colorScheme) private var colorScheme
 
     let info: FirestoreService.ShareLinkInfo
     let onAccept: () -> Void
@@ -10,53 +11,84 @@ struct InvitePreviewSheet: View {
 
     private let brand = Color(red: 0.72, green: 0.38, blue: 0.06)
 
+    private var heroBg: Color {
+        colorScheme == .dark
+            ? Color(red: 0.15, green: 0.10, blue: 0.05)
+            : Color(red: 0.96, green: 0.92, blue: 0.85)
+    }
+
     var body: some View {
-        NavigationStack {
-            VStack(spacing: 0) {
-                heroSection
-                contentSection
+        VStack(spacing: 0) {
+            // Drag indicator
+            Capsule()
+                .fill(Color.secondary.opacity(0.3))
+                .frame(width: 36, height: 5)
+                .padding(.top, 8)
+
+            // Hero
+            ZStack {
+                heroBg
+                coverView
             }
-            .background(Theme.background)
-            .navigationTitle("Приглашение")
-            .navigationBarTitleDisplayMode(.inline)
-            .toolbar {
-                ToolbarItem(placement: .cancellationAction) {
-                    Button("Закрыть") { dismiss() }
-                }
+            .frame(height: 120)
+            .frame(maxWidth: .infinity)
+            .padding(.top, 12)
+
+            // Name
+            Text(info.wishlistName)
+                .font(.title3.weight(.bold))
+                .multilineTextAlignment(.center)
+                .padding(.top, 20)
+                .padding(.horizontal, 24)
+
+            // Info
+            infoCard
+                .padding(.top, 16)
+                .padding(.horizontal, 20)
+
+            Spacer(minLength: 20)
+
+            // Accept
+            Button {
+                guard !isAccepting else { return }
+                isAccepting = true
+                onAccept()
+            } label: {
+                Text("Принять приглашение")
+                    .font(.headline)
+                    .foregroundStyle(.white)
+                    .frame(maxWidth: .infinity, minHeight: 50)
+                    .background(brand, in: RoundedRectangle(cornerRadius: 14, style: .continuous))
             }
+            .buttonStyle(.plain)
+            .disabled(isAccepting)
+            .padding(.horizontal, 20)
+
+            // Decline
+            Button { dismiss() } label: {
+                Text("Отклонить")
+                    .font(.subheadline)
+                    .foregroundStyle(.secondary)
+            }
+            .buttonStyle(.plain)
+            .padding(.top, 10)
+            .padding(.bottom, 16)
         }
+        .background(Theme.background)
+        .presentationDetents([.medium])
+        .presentationDragIndicator(.hidden)
         .loadingOverlay(isAccepting)
         .fontDesign(.rounded)
     }
 
-    // MARK: - Hero
-
-    private var heroSection: some View {
-        ZStack {
-            // Warm amber gradient background
-            LinearGradient(
-                colors: [
-                    Color(red: 0.98, green: 0.93, blue: 0.84),
-                    Color(red: 0.93, green: 0.83, blue: 0.68)
-                ],
-                startPoint: .top,
-                endPoint: .bottom
-            )
-
-            // Cover: emoji or palette gradient (same as HomeView tiles)
-            coverView
-        }
-        .frame(maxWidth: .infinity)
-        .frame(height: 140)
-    }
+    // MARK: - Cover
 
     @ViewBuilder
     private var coverView: some View {
         if let emoji = info.wishlistEmoji, !emoji.isEmpty {
             Text(emoji)
-                .font(.system(size: 64))
+                .font(.system(size: 56))
         } else {
-            // Same palette as DefaultCoverGenerator — identical colors everywhere
             let colors = DefaultCoverGenerator.colors(forSeed: info.gradientSeed)
             MeshGradient(
                 width: 3, height: 3,
@@ -71,97 +103,43 @@ struct InvitePreviewSheet: View {
                     colors[2], colors[0], colors[1],
                 ]
             )
-            .frame(width: 80, height: 80)
-            .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
+            .frame(width: 72, height: 72)
+            .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
         }
     }
 
-    // MARK: - Content
-
-    private var contentSection: some View {
-        VStack(spacing: 0) {
-            // Wishlist name
-            Text(info.wishlistName)
-                .font(.title2.weight(.bold))
-                .multilineTextAlignment(.center)
-                .padding(.top, 28)
-                .padding(.horizontal, 24)
-
-            // Info card
-            infoCard
-                .padding(.top, 20)
-                .padding(.horizontal, 24)
-
-            Spacer(minLength: 24)
-
-            // Buttons
-            acceptButton
-                .padding(.horizontal, 24)
-
-            Button { dismiss() } label: {
-                Text("Отклонить")
-                    .font(.subheadline)
-                    .foregroundStyle(.secondary)
-            }
-            .buttonStyle(.plain)
-            .padding(.top, 12)
-            .padding(.bottom, 20)
-        }
-    }
+    // MARK: - Info Card
 
     private var infoCard: some View {
-        VStack(alignment: .leading, spacing: 12) {
+        VStack(alignment: .leading, spacing: 10) {
             if let owner = info.ownerName, !owner.isEmpty {
-                Label {
-                    Text("\(owner) приглашает тебя")
-                } icon: {
-                    Image(systemName: "person.fill")
-                        .foregroundStyle(brand)
-                }
+                row(icon: "person.fill", text: "\(owner) приглашает")
             }
-
-            Label {
-                Text("Роль: \(info.role == "editor" ? "Редактор" : "Только просмотр")")
-            } icon: {
-                Image(systemName: info.role == "editor" ? "pencil" : "eye")
-                    .foregroundStyle(brand)
-            }
-
+            row(
+                icon: info.role == "editor" ? "pencil" : "eye",
+                text: info.role == "editor" ? "Редактор" : "Только просмотр"
+            )
             if info.itemCount > 0 {
-                Label {
-                    Text("\(info.itemCount) \(wishWord(info.itemCount)) в списке")
-                } icon: {
-                    Image(systemName: "gift.fill")
-                        .foregroundStyle(brand)
-                }
+                row(icon: "gift.fill", text: "\(info.itemCount) \(wishWord(info.itemCount))")
             }
         }
-        .font(.body)
         .frame(maxWidth: .infinity, alignment: .leading)
-        .padding(16)
+        .padding(14)
         .background(
-            RoundedRectangle(cornerRadius: 16, style: .continuous)
+            RoundedRectangle(cornerRadius: 14, style: .continuous)
                 .fill(Color(.secondarySystemBackground))
         )
     }
 
-    // MARK: - Accept Button
-
-    private var acceptButton: some View {
-        Button {
-            guard !isAccepting else { return }
-            isAccepting = true
-            onAccept()
-        } label: {
-            Text("Принять приглашение")
-                .font(.headline)
-                .foregroundStyle(.white)
-                .frame(maxWidth: .infinity)
-                .frame(height: 50)
-                .background(brand, in: RoundedRectangle(cornerRadius: 14, style: .continuous))
+    private func row(icon: String, text: String) -> some View {
+        Label {
+            Text(text).font(.subheadline)
+        } icon: {
+            Image(systemName: icon)
+                .font(.subheadline)
+                .foregroundStyle(brand)
+                .frame(width: 20)
         }
-        .buttonStyle(.plain)
-        .disabled(isAccepting)
     }
 
     // MARK: - Helpers
