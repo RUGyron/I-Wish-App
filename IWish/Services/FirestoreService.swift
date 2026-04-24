@@ -376,8 +376,14 @@ final class FirestoreService {
         }
 
         // 2. Delete the wishlist document itself
-        print("[Firestore] Deleting wishlist doc")
-        let _ = try await request("DELETE", path: "shared_wishlists/\(wishlistID)")
+        print("[Firestore] Deleting wishlist doc: shared_wishlists/\(wishlistID)")
+        do {
+            let _ = try await request("DELETE", path: "shared_wishlists/\(wishlistID)")
+            print("[Firestore] Wishlist doc deleted OK")
+        } catch {
+            print("[Firestore] ERROR deleting wishlist doc: \(error)")
+            throw error
+        }
 
         // 3. Delete all memberships for this wishlist
         let memberResults = try await runQuery(collectionId: "memberships", field: "wishlistID", op: "EQUAL", value: wishlistID)

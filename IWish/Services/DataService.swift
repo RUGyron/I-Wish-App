@@ -622,14 +622,16 @@ final class DataService {
             // 3. Create owner membership
             try await firestore.joinWishlist(wishlistID: id, userUID: currentUID, role: "owner")
 
-            // 4. Delete from personal collection
-            try? await firestore.deletePersonalWishlist(uid: currentUID, wishlistID: id)
-
-            // 5. Update local SwiftData
+            // 4. Mark local as shared FIRST (before any delete to prevent flicker)
+            // Then delete from personal collection in background
             wishlist.isShared = true
             wishlist.sharedWishlistID = id
             wishlist.updatedAt = .now
             try? modelContext.save()
+
+            // Delete from personal collection AFTER local is marked shared
+            // (prevents flicker from polling seeing missing personal wishlist)
+            try? await firestore.deletePersonalWishlist(uid: currentUID, wishlistID: id)
 
             let url = URL(string: "https://rugyron.github.io/I-Wish-App/j/\(shortID)")!
             isSyncing = false
