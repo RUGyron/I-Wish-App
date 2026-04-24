@@ -302,6 +302,7 @@ struct WishlistDetailView: View {
         ScrollView {
             VStack(spacing: 16) {
                 wishlistHeaderRow
+                    .padding(.horizontal, 16)
 
                 VStack(spacing: 12) {
                     Image(systemName: "list.bullet")
