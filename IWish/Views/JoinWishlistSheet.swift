@@ -97,7 +97,6 @@ struct JoinWishlistSheet: View {
                 InvitePreviewSheet(info: info) {
                     acceptInvite()
                 }
-                .presentationDetents([.medium])
             }
         }
     }

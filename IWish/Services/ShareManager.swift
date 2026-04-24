@@ -102,11 +102,15 @@ final class ShareManager {
             self.wishlistID = wishlist.id
             self.wishlistRef = wishlist
 
-            // 4. Mark wishlist as shared
+            // 4. Create owner membership
+            try await firestore.joinWishlist(wishlistID: wishlist.id.uuidString, userUID: ownerUID, role: "owner")
+
+            // 5. Mark wishlist as shared locally
             wishlist.isShared = true
             wishlist.sharedWishlistID = wishlist.id.uuidString
             wishlist.ownerRecordID = ownerUID
             wishlist.updatedAt = .now
+
             print("[Share] SUCCESS — shareURL: \(userURL)")
         } catch {
             print("[Share] FAILED: \(error)")

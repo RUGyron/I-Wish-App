@@ -122,6 +122,10 @@ struct ShareWishlistSheet: View {
     // MARK: - Helpers
 
     private func generateShareNow() async {
+        // Acquire DataService lock to prevent polling during share
+        await services.data?.acquireLockPublic()
+        defer { services.data?.releaseLockPublic() }
+
         await shareManager.generateShare(
             for: wishlist,
             role: selectedRole,

@@ -11,42 +11,37 @@ struct InvitePreviewSheet: View {
 
     private let brand = Color(red: 0.72, green: 0.38, blue: 0.06)
 
-    private var heroBg: Color {
-        colorScheme == .dark
-            ? Color(red: 0.15, green: 0.10, blue: 0.05)
-            : Color(red: 0.96, green: 0.92, blue: 0.85)
-    }
-
     var body: some View {
-        VStack(spacing: 0) {
-            // Drag indicator
-            Capsule()
-                .fill(Color.secondary.opacity(0.3))
-                .frame(width: 36, height: 5)
-                .padding(.top, 8)
-
-            // Hero
-            ZStack {
-                heroBg
-                coverView
-            }
-            .frame(height: 120)
-            .frame(maxWidth: .infinity)
-            .padding(.top, 12)
+        VStack(spacing: 20) {
+            // Cover
+            coverView
+                .padding(.top, 24)
 
             // Name
             Text(info.wishlistName)
                 .font(.title3.weight(.bold))
                 .multilineTextAlignment(.center)
-                .padding(.top, 20)
                 .padding(.horizontal, 24)
 
-            // Info
-            infoCard
-                .padding(.top, 16)
-                .padding(.horizontal, 20)
+            // Info rows
+            VStack(alignment: .leading, spacing: 10) {
+                if let owner = info.ownerName, !owner.isEmpty {
+                    infoRow(icon: "person.fill", text: "\(owner) приглашает")
+                }
+                infoRow(
+                    icon: info.role == "editor" ? "pencil" : "eye",
+                    text: info.role == "editor" ? "Редактор" : "Только просмотр"
+                )
+                if info.itemCount > 0 {
+                    infoRow(icon: "gift.fill", text: "\(info.itemCount) \(wishWord(info.itemCount))")
+                }
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .padding(14)
+            .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 14, style: .continuous))
+            .padding(.horizontal, 20)
 
-            Spacer(minLength: 20)
+            Spacer()
 
             // Accept
             Button {
@@ -71,12 +66,10 @@ struct InvitePreviewSheet: View {
                     .foregroundStyle(.secondary)
             }
             .buttonStyle(.plain)
-            .padding(.top, 10)
             .padding(.bottom, 16)
         }
-        .background(Theme.background)
         .presentationDetents([.medium])
-        .presentationDragIndicator(.hidden)
+        .presentationDragIndicator(.visible)
         .loadingOverlay(isAccepting)
         .fontDesign(.rounded)
     }
@@ -88,6 +81,7 @@ struct InvitePreviewSheet: View {
         if let emoji = info.wishlistEmoji, !emoji.isEmpty {
             Text(emoji)
                 .font(.system(size: 56))
+                .frame(width: 80, height: 80)
         } else {
             let colors = DefaultCoverGenerator.colors(forSeed: info.gradientSeed)
             MeshGradient(
@@ -103,35 +97,14 @@ struct InvitePreviewSheet: View {
                     colors[2], colors[0], colors[1],
                 ]
             )
-            .frame(width: 72, height: 72)
-            .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
+            .frame(width: 80, height: 80)
+            .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
         }
     }
 
-    // MARK: - Info Card
+    // MARK: - Helpers
 
-    private var infoCard: some View {
-        VStack(alignment: .leading, spacing: 10) {
-            if let owner = info.ownerName, !owner.isEmpty {
-                row(icon: "person.fill", text: "\(owner) приглашает")
-            }
-            row(
-                icon: info.role == "editor" ? "pencil" : "eye",
-                text: info.role == "editor" ? "Редактор" : "Только просмотр"
-            )
-            if info.itemCount > 0 {
-                row(icon: "gift.fill", text: "\(info.itemCount) \(wishWord(info.itemCount))")
-            }
-        }
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .padding(14)
-        .background(
-            RoundedRectangle(cornerRadius: 14, style: .continuous)
-                .fill(Color(.secondarySystemBackground))
-        )
-    }
-
-    private func row(icon: String, text: String) -> some View {
+    private func infoRow(icon: String, text: String) -> some View {
         Label {
             Text(text).font(.subheadline)
         } icon: {
@@ -141,8 +114,6 @@ struct InvitePreviewSheet: View {
                 .frame(width: 20)
         }
     }
-
-    // MARK: - Helpers
 
     private func wishWord(_ count: Int) -> String {
         let mod10 = count % 10

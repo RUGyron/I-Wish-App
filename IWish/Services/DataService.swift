@@ -17,16 +17,20 @@ final class DataService {
     private var operationLock = false
 
     /// Wait for any running operation to finish, then acquire lock
-    private func acquireLock() async {
+    func acquireLock() async {
         while operationLock {
             try? await Task.sleep(for: .milliseconds(100))
         }
         operationLock = true
     }
 
-    private func releaseLock() {
+    func releaseLock() {
         operationLock = false
     }
+
+    /// Public wrappers for external callers (ShareManager)
+    func acquireLockPublic() async { await acquireLock() }
+    func releaseLockPublic() { releaseLock() }
 
     init(firestore: FirestoreService, modelContext: ModelContext, auth: AuthService) {
         self.firestore = firestore
