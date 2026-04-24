@@ -1,5 +1,8 @@
 import Foundation
 import SwiftData
+import os.log
+
+private let dsLog = Logger(subsystem: "RUGyron.IWish", category: "DataService")
 
 @Observable
 @MainActor
@@ -133,16 +136,12 @@ final class DataService {
 
         do {
             if wishlistIsShared(wishlist), let sharedID = wishlist.sharedWishlistID {
-                // Try to check ownership; if fetch fails (already deleted), just clean up locally
-                if let info = try? await firestore.fetchSharedWishlist(wishlistID: sharedID) {
-                    if info.ownerUID == currentUID {
-                        try await firestore.deleteSharedWishlistFull(wishlistID: sharedID)
-                    } else {
-                        try await firestore.leaveWishlist(wishlistID: sharedID, userUID: currentUID)
-                    }
+                let isOwner = wishlist.ownerRecordID == currentUID || wishlist.ownerRecordID == nil
+                dsLog.info("deleteWishlist: shared=\(sharedID), uid=\(currentUID), ownerRecordID=\(wishlist.ownerRecordID ?? "nil"), isOwner=\(isOwner)")
+                if isOwner {
+                    try await firestore.deleteSharedWishlistFull(wishlistID: sharedID)
                 } else {
-                    // Shared wishlist already gone from Firestore — clean up membership
-                    try? await firestore.leaveWishlist(wishlistID: sharedID, userUID: currentUID)
+                    try await firestore.leaveWishlist(wishlistID: sharedID, userUID: currentUID)
                 }
             } else {
                 try await firestore.deletePersonalWishlist(uid: currentUID, wishlistID: id)
@@ -424,6 +423,7 @@ final class DataService {
                         local.name = info.name
                         local.coverEmoji = info.coverEmoji
                         local.gradientSeed = info.gradientSeed
+                        local.ownerRecordID = info.ownerUID
                         local.isShared = true
                         local.sharedWishlistID = info.wishlistID
                         local.updatedAt = .now
@@ -431,6 +431,7 @@ final class DataService {
                         let newWL = Wishlist(
                             name: info.name,
                             coverEmoji: info.coverEmoji,
+                            ownerRecordID: info.ownerUID,
                             isShared: true,
                             sharedWishlistID: info.wishlistID,
                             gradientSeed: info.gradientSeed
@@ -626,6 +627,7 @@ final class DataService {
             // Then delete from personal collection in background
             wishlist.isShared = true
             wishlist.sharedWishlistID = id
+            wishlist.ownerRecordID = currentUID
             wishlist.updatedAt = .now
             try? modelContext.save()
 

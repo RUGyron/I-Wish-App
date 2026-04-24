@@ -1,5 +1,8 @@
 import Foundation
 import FirebaseAuth
+import os.log
+
+private let logger = Logger(subsystem: "RUGyron.IWish", category: "Firestore")
 
 @Observable
 final class FirestoreService {
@@ -363,11 +366,11 @@ final class FirestoreService {
     }
 
     func deleteSharedWishlistFull(wishlistID: String) async throws {
-        print("[Firestore] deleteSharedWishlistFull: \(wishlistID)")
+        logger.info("[Firestore] deleteSharedWishlistFull: \(wishlistID)")
 
         // 1. Delete items subcollection
         let itemsDocs = try await listDocuments(parentPath: "shared_wishlists/\(wishlistID)/items")
-        print("[Firestore] Found \(itemsDocs.count) items to delete")
+        logger.info("[Firestore] Found \(itemsDocs.count) items to delete")
         for itemDoc in itemsDocs {
             if let name = itemDoc["name"] as? String {
                 let itemID = documentID(from: name)
@@ -376,36 +379,36 @@ final class FirestoreService {
         }
 
         // 2. Delete the wishlist document itself
-        print("[Firestore] Deleting wishlist doc: shared_wishlists/\(wishlistID)")
+        logger.info("[Firestore] Deleting wishlist doc: shared_wishlists/\(wishlistID)")
         do {
             let _ = try await request("DELETE", path: "shared_wishlists/\(wishlistID)")
-            print("[Firestore] Wishlist doc deleted OK")
+            logger.info("[Firestore] Wishlist doc deleted OK")
         } catch {
-            print("[Firestore] ERROR deleting wishlist doc: \(error)")
+            logger.info("[Firestore] ERROR deleting wishlist doc: \(error)")
             throw error
         }
 
         // 3. Delete all memberships for this wishlist
         let memberResults = try await runQuery(collectionId: "memberships", field: "wishlistID", op: "EQUAL", value: wishlistID)
-        print("[Firestore] Found \(memberResults.count) memberships to delete")
+        logger.info("[Firestore] Found \(memberResults.count) memberships to delete")
         for entry in memberResults {
             if let doc = entry["document"] as? [String: Any], let name = doc["name"] as? String {
                 let docID = documentID(from: name)
-                print("[Firestore] Deleting membership: \(docID)")
+                logger.info("[Firestore] Deleting membership: \(docID)")
                 let _ = try? await request("DELETE", path: "memberships/\(docID)")
             }
         }
 
         // 4. Delete invite links referencing this wishlist
         let inviteResults = try await runQuery(collectionId: "inviteLinks", field: "wishlistID", op: "EQUAL", value: wishlistID)
-        print("[Firestore] Found \(inviteResults.count) invite links to delete")
+        logger.info("[Firestore] Found \(inviteResults.count) invite links to delete")
         for entry in inviteResults {
             if let doc = entry["document"] as? [String: Any], let name = doc["name"] as? String {
                 let docID = documentID(from: name)
                 let _ = try? await request("DELETE", path: "inviteLinks/\(docID)")
             }
         }
-        print("[Firestore] deleteSharedWishlistFull completed")
+        logger.info("[Firestore] deleteSharedWishlistFull completed")
     }
 
     // MARK: - Fetch Shared Wishlist
