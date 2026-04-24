@@ -345,13 +345,10 @@ final class DataService {
             let remoteIDs = Set(remote.map(\.id))
 
             // 3. Delete local wishlists not in remote (only personal, non-shared)
-            // Safety: if remote returned empty but local has data, assume network issue and skip deletion
             let localPersonal = allLocal.filter { !$0.isShared }
-            if !remote.isEmpty || localPersonal.isEmpty {
-                for local in localPersonal {
-                    if !remoteIDs.contains(local.id.uuidString) {
-                        modelContext.delete(local)
-                    }
+            for local in localPersonal {
+                if !remoteIDs.contains(local.id.uuidString) {
+                    modelContext.delete(local)
                 }
             }
 
@@ -398,14 +395,11 @@ final class DataService {
             }
 
             // 5a. Delete shared wishlists not in memberships
-            // Safety: only clean up if memberships fetch returned results or local has no shared wishlists
             let remoteMembershipIDs = Set(memberships.map(\.wishlistID))
             let localShared = allLocalRefreshed.filter { $0.isShared }
-            if !memberships.isEmpty || localShared.isEmpty {
-                for local in localShared {
-                    if let sid = local.sharedWishlistID, !remoteMembershipIDs.contains(sid) {
-                        modelContext.delete(local)
-                    }
+            for local in localShared {
+                if let sid = local.sharedWishlistID, !remoteMembershipIDs.contains(sid) {
+                    modelContext.delete(local)
                 }
             }
 
