@@ -100,8 +100,7 @@ struct HomeView: View {
     // MARK: - Debug
 
     private var homeNavTitle: some View {
-        VStack(spacing: 1) {
-            Text("Вишлисты").font(.headline)
+        HStack(spacing: 6) {
             if let data = services.data {
                 SyncStatusBadge(
                     isSyncing: data.isSyncing,
@@ -109,6 +108,7 @@ struct HomeView: View {
                     onTap: { Task { await services.data?.refreshWishlists() } }
                 )
             }
+            Text("Вишлисты").font(.headline)
         }
     }
 

@@ -133,18 +133,22 @@ final class DataService {
 
         do {
             if wishlistIsShared(wishlist), let sharedID = wishlist.sharedWishlistID {
-                let info = try await firestore.fetchSharedWishlist(wishlistID: sharedID)
-                if info.ownerUID == currentUID {
-                    // Owner: delete everything (shared wishlist, items, memberships, invite links)
-                    try await firestore.deleteSharedWishlistFull(wishlistID: sharedID)
+                // Try to check ownership; if fetch fails (already deleted), just clean up locally
+                if let info = try? await firestore.fetchSharedWishlist(wishlistID: sharedID) {
+                    if info.ownerUID == currentUID {
+                        try await firestore.deleteSharedWishlistFull(wishlistID: sharedID)
+                    } else {
+                        try await firestore.leaveWishlist(wishlistID: sharedID, userUID: currentUID)
+                    }
                 } else {
-                    // Member: just leave (delete own membership, keep shared wishlist for others)
-                    try await firestore.leaveWishlist(wishlistID: sharedID, userUID: currentUID)
+                    // Shared wishlist already gone from Firestore — clean up membership
+                    try? await firestore.leaveWishlist(wishlistID: sharedID, userUID: currentUID)
                 }
             } else {
                 try await firestore.deletePersonalWishlist(uid: currentUID, wishlistID: id)
             }
         } catch {
+            print("[DataService] deleteWishlist error: \(error)")
             isSyncing = false
             throw error
         }

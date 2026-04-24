@@ -116,9 +116,9 @@ struct WishlistDetailView: View {
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {
             ToolbarItem(placement: .principal) {
-                VStack(spacing: 1) {
-                    Text("Желания").font(.headline)
+                HStack(spacing: 6) {
                     detailSyncSubtitle
+                    Text("Желания").font(.headline)
                 }
             }
 
