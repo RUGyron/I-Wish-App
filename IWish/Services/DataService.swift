@@ -410,7 +410,16 @@ final class DataService {
             }
 
             for membership in memberships {
-                if let info = try? await firestore.fetchSharedWishlist(wishlistID: membership.wishlistID) {
+                guard let info = try? await firestore.fetchSharedWishlist(wishlistID: membership.wishlistID) else {
+                    // Shared wishlist deleted — clean up stale membership
+                    try? await firestore.leaveWishlist(wishlistID: membership.wishlistID, userUID: currentUID)
+                    // Delete local copy if exists
+                    if let local = localBySharedID[membership.wishlistID] {
+                        modelContext.delete(local)
+                    }
+                    continue
+                }
+                if true {
                     // Re-fetch local list after deletions
                     let currentLocal = (try? modelContext.fetch(FetchDescriptor<Wishlist>())) ?? []
                     let currentBySharedID = Dictionary(currentLocal.compactMap { wl -> (String, Wishlist)? in

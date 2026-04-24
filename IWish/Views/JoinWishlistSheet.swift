@@ -191,7 +191,8 @@ struct JoinWishlistSheet: View {
                     name: sharedData.name,
                     coverEmoji: sharedData.coverEmoji,
                     isShared: true,
-                    sharedWishlistID: info.wishlistID
+                    sharedWishlistID: info.wishlistID,
+                    gradientSeed: sharedData.gradientSeed
                 )
                 context.insert(wishlist)
 
