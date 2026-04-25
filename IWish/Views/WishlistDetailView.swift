@@ -284,7 +284,17 @@ struct WishlistDetailView: View {
             }
         }
         .onAppear {
-            startPolling()
+            if pollTimer == nil {
+                startPolling()
+                Task {
+                    await services.data?.refreshItems(for: wishlist.id.uuidString)
+                    if wishlist.isShared, let sharedID = wishlist.sharedWishlistID {
+                        if let info = try? await services.firestore.fetchSharedWishlist(wishlistID: sharedID) {
+                            isCurrentUserOwner = info.ownerUID == services.auth.uid
+                        }
+                    }
+                }
+            }
         }
         .onDisappear {
             stopPolling()
@@ -296,14 +306,8 @@ struct WishlistDetailView: View {
             addButton
                 .padding(.bottom, 24)
         }
-        .task {
-            await services.data?.refreshItems(for: wishlist.id.uuidString)
-            // Check ownership for shared wishlists
-            if wishlist.isShared, let sharedID = wishlist.sharedWishlistID {
-                if let info = try? await services.firestore.fetchSharedWishlist(wishlistID: sharedID) {
-                    isCurrentUserOwner = info.ownerUID == services.auth.uid
-                }
-            }
+        .onChange(of: wishlist.isDeleted) { _, deleted in
+            if deleted { dismiss() }
         }
     }
 

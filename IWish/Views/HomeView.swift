@@ -102,14 +102,12 @@ struct HomeView: View {
             WishlistArchiveView()
                 .applyTheme()
         }
-        .task {
-            await services.data?.refreshWishlists()
-        }
         .onAppear {
-            startPolling()
-        }
-        .onDisappear {
-            stopPolling()
+            if pollTimer == nil {
+                // First appear — refresh + start polling
+                Task { await services.data?.refreshWishlists() }
+                startPolling()
+            }
         }
         .onReceive(NotificationCenter.default.publisher(for: .didReceiveShareLink)) { _ in
             showingJoin = true
