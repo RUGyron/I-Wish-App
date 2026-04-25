@@ -722,21 +722,38 @@ final class DataService {
             // 3. Fetch shared wishlist + items
             let sharedData = try await firestore.fetchSharedWishlist(wishlistID: info.wishlistID)
 
-            // 4. Create local copy in SwiftData
-            let wishlist = Wishlist(
-                name: sharedData.name,
-                coverEmoji: sharedData.coverEmoji,
-                ownerRecordID: sharedData.ownerUID,
-                isShared: true,
-                sharedWishlistID: info.wishlistID,
-                gradientSeed: sharedData.gradientSeed
-            )
+            // 4. Create or update local copy in SwiftData
+            let targetSharedID = info.wishlistID
+            let allLocal = (try? modelContext.fetch(FetchDescriptor<Wishlist>())) ?? []
+            let existing = allLocal.first { $0.sharedWishlistID == targetSharedID }
+
+            let wishlist: Wishlist
+            if let existing {
+                // Already joined — update
+                wishlist = existing
+                wishlist.name = sharedData.name
+                wishlist.coverEmoji = sharedData.coverEmoji
+                wishlist.ownerRecordID = sharedData.ownerUID
+                wishlist.gradientSeed = sharedData.gradientSeed
+            } else {
+                // New — create
+                wishlist = Wishlist(
+                    name: sharedData.name,
+                    coverEmoji: sharedData.coverEmoji,
+                    ownerRecordID: sharedData.ownerUID,
+                    isShared: true,
+                    sharedWishlistID: info.wishlistID,
+                    gradientSeed: sharedData.gradientSeed
+                )
+                if let uuid = UUID(uuidString: info.wishlistID) {
+                    wishlist.id = uuid
+                }
+                modelContext.insert(wishlist)
+            }
             wishlist.myRole = info.role
             wishlist.canInvite = info.canInvite
-            if let uuid = UUID(uuidString: info.wishlistID) {
-                wishlist.id = uuid
-            }
-            modelContext.insert(wishlist)
+            wishlist.isShared = true
+            wishlist.sharedWishlistID = info.wishlistID
 
             for sharedItem in sharedData.items {
                 let item = Item(
