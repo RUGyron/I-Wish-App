@@ -12,6 +12,7 @@ struct HomeView: View {
     @State private var sharingWishlist: Wishlist?
     @State private var pollTimer: Timer?
     @State private var deletingWishlistID: String?
+    @State private var wishlistToDelete: Wishlist?
     @State private var isPerformingAction = false
 
     // MARK: - Debug
@@ -95,6 +96,25 @@ struct HomeView: View {
             showingJoin = true
         }
         .loadingOverlay(isPerformingAction)
+        .confirmationDialog(
+            "Удалить «\(wishlistToDelete?.name ?? "")»?",
+            isPresented: Binding(get: { wishlistToDelete != nil }, set: { if !$0 { wishlistToDelete = nil } }),
+            titleVisibility: .visible
+        ) {
+            Button("Удалить", role: .destructive) {
+                guard let wl = wishlistToDelete else { return }
+                isPerformingAction = true
+                Task {
+                    do {
+                        try await services.data?.deleteWishlist(id: wl.id.uuidString)
+                    } catch {
+                        toast.error(error.localizedDescription)
+                    }
+                    isPerformingAction = false
+                }
+                wishlistToDelete = nil
+            }
+        }
         .overlay(alignment: .bottom) {
             addButton
                 .padding(.bottom, 24)
@@ -189,7 +209,7 @@ struct HomeView: View {
                 .foregroundStyle(.tint)
             Text("Пока пусто")
                 .font(.title3)
-            Text("Создай первый список — начнём собирать желания.")
+            Text("Начни собирать желания.")
                 .font(.subheadline)
                 .foregroundStyle(.secondary)
                 .multilineTextAlignment(.center)
@@ -224,10 +244,12 @@ struct HomeView: View {
                         }
                         .buttonStyle(.plain)
                         .contextMenu {
-                            Button {
-                                sharingWishlist = wishlist
-                            } label: {
-                                Label("Поделиться", systemImage: "square.and.arrow.up")
+                            if !wishlist.isShared || wishlist.myRole == "owner" || wishlist.canInvite {
+                                Button {
+                                    sharingWishlist = wishlist
+                                } label: {
+                                    Label("Поделиться", systemImage: "square.and.arrow.up")
+                                }
                             }
                             Button {
                                 wishlist.isArchived = true
@@ -238,18 +260,7 @@ struct HomeView: View {
                             }
                             Divider()
                             Button(role: .destructive) {
-                                let wid = wishlist.id.uuidString
-                                deletingWishlistID = wid
-                                isPerformingAction = true
-                                Task {
-                                    do {
-                                        try await services.data?.deleteWishlist(id: wid)
-                                    } catch {
-                                        toast.error(error.localizedDescription)
-                                    }
-                                    deletingWishlistID = nil
-                                    isPerformingAction = false
-                                }
+                                wishlistToDelete = wishlist
                             } label: {
                                 Label("Удалить", systemImage: "trash")
                             }
@@ -310,32 +321,26 @@ struct HomeView: View {
                             .font(.subheadline.weight(.semibold))
                             .foregroundStyle(.white)
                             .lineLimit(2)
-                        HStack(spacing: 4) {
-                            Image(systemName: "gift")
-                                .font(.system(size: 9))
-                            Text("\(activeItems.count)")
-                                .font(.caption2)
-                            if total > 0 {
-                                Text("· \(formatPrice(total, currency: activeItems.first(where: { $0.price != nil })?.currency ?? "RUB"))")
+                        // Stats chip: 🎁 3 · 👥 2
+                        HStack(spacing: 0) {
+                            HStack(spacing: 3) {
+                                Image(systemName: "gift")
+                                    .font(.system(size: 9))
+                                Text("\(activeItems.count)")
+                                    .font(.caption2.weight(.medium))
+                            }
+                            if wishlist.isShared && wishlist.memberCount > 0 {
+                                Text(" · ")
                                     .font(.caption2)
+                                HStack(spacing: 3) {
+                                    Image(systemName: "person.2")
+                                        .font(.system(size: 9))
+                                    Text("\(wishlist.memberCount)")
+                                        .font(.caption2.weight(.medium))
+                                }
                             }
                         }
                         .foregroundStyle(.white.opacity(0.75))
-                    }
-
-                    Spacer(minLength: 4)
-
-                    // Right: shared badge with participant count
-                    if wishlist.isShared {
-                        HStack(spacing: 3) {
-                            Image(systemName: "person.2.fill")
-                                .font(.system(size: 9))
-                            if wishlist.memberCount > 0 {
-                                Text("\(wishlist.memberCount)")
-                                    .font(.system(size: 10, weight: .medium))
-                            }
-                        }
-                        .foregroundStyle(.white.opacity(0.8))
                         .padding(.horizontal, 7)
                         .padding(.vertical, 4)
                         .background(.black.opacity(0.3), in: Capsule())

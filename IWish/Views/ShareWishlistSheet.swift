@@ -106,6 +106,7 @@ struct ShareWishlistSheet: View {
             }
         }
         .loadingOverlay(shareManager.isLoading)
+        .presentationDetents([.medium, .large])
         .applyTheme()
         .sheet(isPresented: $showingAppleSignIn) {
             SignInWithAppleSheet { result in

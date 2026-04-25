@@ -102,15 +102,18 @@ struct ParticipantsView: View {
 
                                 Spacer()
 
-                                // Kick button (owner only)
-                                if isCurrentUserOwner {
-                                    Button(role: .destructive) {
+                                // Kick button (owner only, not self)
+                                if isCurrentUserOwner && member.userUID != services.auth.uid {
+                                    Button {
                                         kickMember(userUID: member.userUID)
                                     } label: {
-                                        Image(systemName: "xmark.circle.fill")
-                                            .foregroundStyle(.red.opacity(0.6))
+                                        Text("Удалить")
+                                            .font(.caption)
+                                            .foregroundStyle(.red)
                                     }
-                                    .buttonStyle(.plain)
+                                    .buttonStyle(.bordered)
+                                    .tint(.red)
+                                    .controlSize(.mini)
                                 }
                             }
                             .padding(.vertical, 4)
