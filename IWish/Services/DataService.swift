@@ -182,6 +182,83 @@ final class DataService {
         try? modelContext.save()
     }
 
+    // MARK: - Archive / Unarchive Wishlist
+
+    func archiveWishlist(id: String) async throws {
+        let currentUID = try uid
+
+        await acquireLock()
+        isSyncing = true
+        syncError = nil
+        defer { releaseLock() }
+
+        guard let uuid = UUID(uuidString: id) else { throw FirestoreService.FirestoreError.notFound }
+        let descriptor = FetchDescriptor<Wishlist>(predicate: #Predicate { $0.id == uuid })
+        guard let wishlist = try modelContext.fetch(descriptor).first else {
+            isSyncing = false
+            throw FirestoreService.FirestoreError.notFound
+        }
+
+        do {
+            if wishlistIsShared(wishlist), let sharedID = wishlist.sharedWishlistID {
+                // Archive shared → make private: kick all members, delete invites
+                // 1. Delete all memberships except owner
+                if let info = try? await firestore.fetchSharedWishlist(wishlistID: sharedID) {
+                    for member in info.members where member.userUID != currentUID {
+                        try? await firestore.leaveWishlist(wishlistID: sharedID, userUID: member.userUID)
+                    }
+                }
+                // 2. Delete invite links
+                await firestore.deleteAllInviteLinks(forWishlistID: sharedID)
+                // 3. Archive in Firestore
+                try await firestore.archiveSharedWishlist(wishlistID: sharedID, isArchived: true)
+            } else {
+                try await firestore.archivePersonalWishlist(uid: currentUID, wishlistID: id, isArchived: true)
+            }
+        } catch {
+            isSyncing = false
+            throw error
+        }
+
+        wishlist.isArchived = true
+        wishlist.memberCount = 1
+        wishlist.updatedAt = .now
+        try? modelContext.save()
+        isSyncing = false
+    }
+
+    func unarchiveWishlist(id: String) async throws {
+        let currentUID = try uid
+
+        await acquireLock()
+        isSyncing = true
+        syncError = nil
+        defer { releaseLock() }
+
+        guard let uuid = UUID(uuidString: id) else { throw FirestoreService.FirestoreError.notFound }
+        let descriptor = FetchDescriptor<Wishlist>(predicate: #Predicate { $0.id == uuid })
+        guard let wishlist = try modelContext.fetch(descriptor).first else {
+            isSyncing = false
+            throw FirestoreService.FirestoreError.notFound
+        }
+
+        do {
+            if wishlistIsShared(wishlist), let sharedID = wishlist.sharedWishlistID {
+                try await firestore.archiveSharedWishlist(wishlistID: sharedID, isArchived: false)
+            } else {
+                try await firestore.archivePersonalWishlist(uid: currentUID, wishlistID: id, isArchived: false)
+            }
+        } catch {
+            isSyncing = false
+            throw error
+        }
+
+        wishlist.isArchived = false
+        wishlist.updatedAt = .now
+        try? modelContext.save()
+        isSyncing = false
+    }
+
     // MARK: - Items
 
     func addItem(to wishlistID: String, name: String, tier: ItemTier, price: Double?, currency: String, url: String?, emoji: String?, sortIndex: Double, descriptionText: String? = nil, probationEndAt: Date? = nil, coverImageData: Data? = nil) async throws -> Item {
@@ -403,6 +480,7 @@ final class DataService {
                     local.name = r.name
                     local.coverEmoji = r.emoji
                     local.gradientSeed = r.gradientSeed
+                    local.isArchived = r.isArchived
                     local.updatedAt = .now
                     let personalItems = try await firestore.fetchPersonalItems(uid: currentUID, wishlistID: r.id)
                     mergeItems(personalItems, into: local)
@@ -411,6 +489,7 @@ final class DataService {
                     let newWL = Wishlist(
                         name: r.name,
                         coverEmoji: r.emoji,
+                        isArchived: r.isArchived,
                         gradientSeed: r.gradientSeed
                     )
                     newWL.id = uuid
@@ -471,6 +550,7 @@ final class DataService {
                         local.name = info.name
                         local.coverEmoji = info.coverEmoji
                         local.gradientSeed = info.gradientSeed
+                        local.isArchived = info.isArchived
                         local.ownerRecordID = info.ownerUID
                         local.myRole = membership.role
                         local.canInvite = membership.canInvite
@@ -486,6 +566,7 @@ final class DataService {
                             coverEmoji: info.coverEmoji,
                             ownerRecordID: info.ownerUID,
                             isShared: true,
+                            isArchived: info.isArchived,
                             sharedWishlistID: info.wishlistID,
                             gradientSeed: info.gradientSeed
                         )

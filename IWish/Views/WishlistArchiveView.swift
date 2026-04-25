@@ -4,7 +4,11 @@ import SwiftData
 struct WishlistArchiveView: View {
     @Environment(\.modelContext) private var context
     @Environment(\.dismiss) private var dismiss
+    @Environment(\.appServices) private var services
+    @Environment(\.toast) private var toast
     @Query private var allWishlists: [Wishlist]
+    @State private var isPerformingAction = false
+    @State private var wishlistToDelete: Wishlist?
 
     private var archivedWishlists: [Wishlist] {
         allWishlists.filter { $0.isArchived }.sorted { $0.updatedAt > $1.updatedAt }
@@ -29,6 +33,7 @@ struct WishlistArchiveView: View {
                                     gradientSeed: wishlist.gradientSeed
                                 )
                                 .frame(width: 48, height: 48)
+                                .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
 
                                 VStack(alignment: .leading, spacing: 2) {
                                     Text(wishlist.name).font(.body)
@@ -40,14 +45,19 @@ struct WishlistArchiveView: View {
                             }
                             .swipeActions(edge: .trailing) {
                                 Button(role: .destructive) {
-                                    context.delete(wishlist)
-                                    try? context.save()
+                                    wishlistToDelete = wishlist
                                 } label: { Label("Удалить", systemImage: "trash") }
 
                                 Button {
-                                    wishlist.isArchived = false
-                                    wishlist.updatedAt = .now
-                                    try? context.save()
+                                    isPerformingAction = true
+                                    Task {
+                                        do {
+                                            try await services.data?.unarchiveWishlist(id: wishlist.id.uuidString)
+                                        } catch {
+                                            toast.error(error.localizedDescription)
+                                        }
+                                        isPerformingAction = false
+                                    }
                                 } label: { Label("Восстановить", systemImage: "arrow.uturn.backward") }
                                 .tint(.blue)
                             }
@@ -62,6 +72,26 @@ struct WishlistArchiveView: View {
             .toolbar {
                 ToolbarItem(placement: .confirmationAction) {
                     Button("Готово") { dismiss() }
+                }
+            }
+            .loadingOverlay(isPerformingAction)
+            .confirmationDialog(
+                "Удалить «\(wishlistToDelete?.name ?? "")»?",
+                isPresented: Binding(get: { wishlistToDelete != nil }, set: { if !$0 { wishlistToDelete = nil } }),
+                titleVisibility: .visible
+            ) {
+                Button("Удалить", role: .destructive) {
+                    guard let wl = wishlistToDelete else { return }
+                    isPerformingAction = true
+                    Task {
+                        do {
+                            try await services.data?.deleteWishlist(id: wl.id.uuidString)
+                        } catch {
+                            toast.error(error.localizedDescription)
+                        }
+                        isPerformingAction = false
+                    }
+                    wishlistToDelete = nil
                 }
             }
         }

@@ -32,6 +32,7 @@ final class FirestoreService {
         let ownerUID: String
         let ownerName: String?
         let gradientSeed: Int
+        let isArchived: Bool
         let members: [(userUID: String, role: String)]
         let items: [SharedItemInfo]
     }
@@ -180,6 +181,7 @@ final class FirestoreService {
             "name": name,
             "coverEmoji": emoji ?? "",
             "gradientSeed": gradientSeed as Any,
+            "isArchived": false as Any,
             "createdAt": Date() as Any,
             "updatedAt": Date() as Any
         ])
@@ -193,6 +195,22 @@ final class FirestoreService {
             "updatedAt": Date() as Any
         ])
         let _ = try await request("PATCH", path: "users/\(uid)/wishlists/\(wishlistID)?updateMask.fieldPaths=name&updateMask.fieldPaths=coverEmoji&updateMask.fieldPaths=updatedAt", body: ["fields": fields])
+    }
+
+    func archivePersonalWishlist(uid: String, wishlistID: String, isArchived: Bool) async throws {
+        let fields = toFields([
+            "isArchived": isArchived as Any,
+            "updatedAt": Date() as Any
+        ])
+        let _ = try await request("PATCH", path: "users/\(uid)/wishlists/\(wishlistID)?updateMask.fieldPaths=isArchived&updateMask.fieldPaths=updatedAt", body: ["fields": fields])
+    }
+
+    func archiveSharedWishlist(wishlistID: String, isArchived: Bool) async throws {
+        let fields = toFields([
+            "isArchived": isArchived as Any,
+            "updatedAt": Date() as Any
+        ])
+        let _ = try await request("PATCH", path: "shared_wishlists/\(wishlistID)?updateMask.fieldPaths=isArchived&updateMask.fieldPaths=updatedAt", body: ["fields": fields])
     }
 
     func deletePersonalWishlist(uid: String, wishlistID: String) async throws {
@@ -212,9 +230,9 @@ final class FirestoreService {
         let _ = try await request("DELETE", path: "users/\(uid)/wishlists/\(wishlistID)")
     }
 
-    func fetchPersonalWishlists(uid: String) async throws -> [(id: String, name: String, emoji: String?, gradientSeed: Int)] {
+    func fetchPersonalWishlists(uid: String) async throws -> [(id: String, name: String, emoji: String?, gradientSeed: Int, isArchived: Bool)] {
         let docs = try await listDocuments(parentPath: "users/\(uid)/wishlists")
-        return docs.compactMap { doc -> (id: String, name: String, emoji: String?, gradientSeed: Int)? in
+        return docs.compactMap { doc -> (id: String, name: String, emoji: String?, gradientSeed: Int, isArchived: Bool)? in
             guard let name = doc["name"] as? String else { return nil }
             let docID = documentID(from: name)
             guard let fields = doc["fields"] as? [String: Any] else { return nil }
@@ -226,7 +244,8 @@ final class FirestoreService {
             } else {
                 seed = 0
             }
-            return (id: docID, name: data["name"] as? String ?? "", emoji: emoji, gradientSeed: seed)
+            let isArchived = data["isArchived"] as? Bool ?? false
+            return (id: docID, name: data["name"] as? String ?? "", emoji: emoji, gradientSeed: seed, isArchived: isArchived)
         }
     }
 
@@ -280,6 +299,7 @@ final class FirestoreService {
             "name": name,
             "coverEmoji": emoji ?? "",
             "gradientSeed": gradientSeed as Any,
+            "isArchived": false as Any,
             "ownerUID": ownerUID,
             "ownerName": ownerName ?? "",
             "createdAt": Date() as Any,
@@ -433,6 +453,7 @@ final class FirestoreService {
             ownerUID: data["ownerUID"] as? String ?? "",
             ownerName: (data["ownerName"] as? String)?.isEmpty == true ? nil : data["ownerName"] as? String,
             gradientSeed: data["gradientSeed"] as? Int ?? 0,
+            isArchived: data["isArchived"] as? Bool ?? false,
             members: members,
             items: items
         )
@@ -550,6 +571,16 @@ final class FirestoreService {
             gradientSeed: data["gradientSeed"] as? Int ?? 0,
             canInvite: data["canInvite"] as? Bool ?? false
         )
+    }
+
+    func deleteAllInviteLinks(forWishlistID wishlistID: String) async {
+        if let results = try? await runQuery(collectionId: "inviteLinks", field: "wishlistID", op: "EQUAL", value: wishlistID) {
+            for entry in results {
+                if let doc = entry["document"] as? [String: Any], let name = doc["name"] as? String {
+                    let _ = try? await request("DELETE", path: "inviteLinks/\(documentID(from: name))")
+                }
+            }
+        }
     }
 
     func deleteInviteLink(shortID: String) async throws {

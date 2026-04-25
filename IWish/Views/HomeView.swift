@@ -13,7 +13,9 @@ struct HomeView: View {
     @State private var pollTimer: Timer?
     @State private var deletingWishlistID: String?
     @State private var wishlistToDelete: Wishlist?
+    @State private var wishlistToArchive: Wishlist?
     @State private var isPerformingAction = false
+    @State private var showingArchive = false
 
     // MARK: - Debug
 
@@ -31,6 +33,10 @@ struct HomeView: View {
 
     private var totalItems: Int {
         activeWishlists.reduce(0) { $0 + ($1.items ?? []).filter { !$0.isArchived }.count }
+    }
+
+    private var archivedCount: Int {
+        wishlists.filter { $0.isArchived }.count
     }
 
     private var hasAnyWishlists: Bool {
@@ -52,10 +58,19 @@ struct HomeView: View {
                 homeNavTitle
             }
             ToolbarItem(placement: .topBarLeading) {
-                Button {
-                    showingJoin = true
-                } label: {
-                    Image(systemName: "qrcode.viewfinder")
+                HStack(spacing: 16) {
+                    Button {
+                        showingJoin = true
+                    } label: {
+                        Image(systemName: "qrcode.viewfinder")
+                    }
+                    if archivedCount > 0 {
+                        Button {
+                            showingArchive = true
+                        } label: {
+                            Image(systemName: "archivebox")
+                        }
+                    }
                 }
             }
             ToolbarItem(placement: .topBarTrailing) {
@@ -81,6 +96,10 @@ struct HomeView: View {
         }
         .sheet(item: $sharingWishlist) { wishlist in
             ShareWishlistSheet(wishlist: wishlist)
+                .applyTheme()
+        }
+        .sheet(isPresented: $showingArchive) {
+            WishlistArchiveView()
                 .applyTheme()
         }
         .task {
@@ -114,6 +133,27 @@ struct HomeView: View {
                 }
                 wishlistToDelete = nil
             }
+        }
+        .confirmationDialog(
+            "Архивировать «\(wishlistToArchive?.name ?? "")»?",
+            isPresented: Binding(get: { wishlistToArchive != nil }, set: { if !$0 { wishlistToArchive = nil } }),
+            titleVisibility: .visible
+        ) {
+            Button("Архивировать", role: .destructive) {
+                guard let wl = wishlistToArchive else { return }
+                isPerformingAction = true
+                Task {
+                    do {
+                        try await services.data?.archiveWishlist(id: wl.id.uuidString)
+                    } catch {
+                        toast.error(error.localizedDescription)
+                    }
+                    isPerformingAction = false
+                }
+                wishlistToArchive = nil
+            }
+        } message: {
+            Text("Все участники будут удалены, инвайты отозваны. Список станет приватным.")
         }
         .overlay(alignment: .bottom) {
             addButton
@@ -241,9 +281,19 @@ struct HomeView: View {
                             wishlist: wishlist,
                             onShare: { sharingWishlist = wishlist },
                             onArchive: {
-                                wishlist.isArchived = true
-                                wishlist.updatedAt = .now
-                                try? context.save()
+                                if wishlist.isShared && wishlist.memberCount > 1 {
+                                    wishlistToArchive = wishlist
+                                } else {
+                                    isPerformingAction = true
+                                    Task {
+                                        do {
+                                            try await services.data?.archiveWishlist(id: wishlist.id.uuidString)
+                                        } catch {
+                                            toast.error(error.localizedDescription)
+                                        }
+                                        isPerformingAction = false
+                                    }
+                                }
                             },
                             onDelete: { wishlistToDelete = wishlist }
                         )
