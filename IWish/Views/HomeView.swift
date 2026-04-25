@@ -323,13 +323,17 @@ struct HomeView: View {
 
                     Spacer(minLength: 4)
 
-                    // Right: shared badge with participant icon
+                    // Right: shared badge with participant count
                     if wishlist.isShared {
                         HStack(spacing: 3) {
                             Image(systemName: "person.2.fill")
                                 .font(.system(size: 9))
+                            if wishlist.memberCount > 0 {
+                                Text("\(wishlist.memberCount)")
+                                    .font(.system(size: 10, weight: .medium))
+                            }
                         }
-                        .foregroundStyle(.white.opacity(0.7))
+                        .foregroundStyle(.white.opacity(0.8))
                         .padding(.horizontal, 7)
                         .padding(.vertical, 4)
                         .background(.black.opacity(0.3), in: Capsule())

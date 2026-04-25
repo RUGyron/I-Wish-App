@@ -18,6 +18,8 @@ final class Wishlist {
     var myRole: String?
     /// Whether the current user can invite others to this shared wishlist
     var canInvite: Bool = false
+    /// Number of participants (synced from Firestore)
+    var memberCount: Int = 0
 
     @Relationship(deleteRule: .cascade, inverse: \Item.wishlist)
     var items: [Item]?

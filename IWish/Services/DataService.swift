@@ -462,6 +462,7 @@ final class DataService {
                         local.ownerRecordID = info.ownerUID
                         local.myRole = membership.role
                         local.canInvite = membership.canInvite
+                        local.memberCount = info.members.count
                         local.isShared = true
                         local.sharedWishlistID = info.wishlistID
                         local.updatedAt = .now
@@ -478,6 +479,7 @@ final class DataService {
                         )
                         newWL.myRole = membership.role
                         newWL.canInvite = membership.canInvite
+                        newWL.memberCount = info.members.count
                         newWL.id = uuid
                         modelContext.insert(newWL)
 
