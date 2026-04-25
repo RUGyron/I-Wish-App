@@ -315,8 +315,8 @@ struct HomeView: View {
                         .fontWeight(.semibold)
                         .foregroundStyle(.white)
                         .lineLimit(2)
-                    if wishlist.isShared {
-                        Image(systemName: "person.2.fill")
+                    if wishlist.isShared, let role = wishlist.myRole {
+                        Image(systemName: roleBadgeIcon(role))
                             .font(.caption2)
                             .foregroundStyle(.white.opacity(0.8))
                     }
@@ -336,6 +336,15 @@ struct HomeView: View {
         .aspectRatio(1, contentMode: .fit)
         .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
         .titaniumBorder(cornerRadius: 16)
+    }
+
+    private func roleBadgeIcon(_ role: String) -> String {
+        switch role {
+        case "owner": return "crown.fill"
+        case "editor": return "pencil"
+        case "viewer": return "eye"
+        default: return "person.2.fill"
+        }
     }
 
     private func formatPrice(_ price: Double, currency: String) -> String {

@@ -14,6 +14,8 @@ final class Wishlist {
     var isArchived: Bool = false
     var sharedWishlistID: String?
     var gradientSeed: Int = 0
+    /// "owner", "editor", "viewer", nil (personal)
+    var myRole: String?
 
     @Relationship(deleteRule: .cascade, inverse: \Item.wishlist)
     var items: [Item]?

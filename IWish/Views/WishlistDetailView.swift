@@ -359,9 +359,16 @@ struct WishlistDetailView: View {
             .frame(width: 64, height: 64)
 
             VStack(alignment: .leading, spacing: 4) {
-                Text(wishlist.name)
-                    .font(.title2.weight(.bold))
-                    .lineLimit(2)
+                HStack(spacing: 6) {
+                    Text(wishlist.name)
+                        .font(.title2.weight(.bold))
+                        .lineLimit(2)
+                    if wishlist.isShared, let role = wishlist.myRole {
+                        Image(systemName: roleIcon(role))
+                            .font(.caption)
+                            .foregroundStyle(roleColor(role))
+                    }
+                }
 
                 HStack(spacing: 4) {
                     Text(String(format: NSLocalizedString("%lld желаний", comment: ""), activeItems.count))
@@ -639,6 +646,24 @@ struct WishlistDetailView: View {
     }
 
     // MARK: - Helpers
+
+    private func roleIcon(_ role: String) -> String {
+        switch role {
+        case "owner": return "crown.fill"
+        case "editor": return "pencil"
+        case "viewer": return "eye"
+        default: return "person.2.fill"
+        }
+    }
+
+    private func roleColor(_ role: String) -> Color {
+        switch role {
+        case "owner": return .yellow
+        case "editor": return .blue
+        case "viewer": return .secondary
+        default: return .secondary
+        }
+    }
 
     private func formatPrice(_ price: Double, currency: String) -> String {
         let formatter = NumberFormatter()

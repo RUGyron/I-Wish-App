@@ -460,6 +460,7 @@ final class DataService {
                         local.coverEmoji = info.coverEmoji
                         local.gradientSeed = info.gradientSeed
                         local.ownerRecordID = info.ownerUID
+                        local.myRole = membership.role
                         local.isShared = true
                         local.sharedWishlistID = info.wishlistID
                         local.updatedAt = .now
@@ -474,6 +475,7 @@ final class DataService {
                             sharedWishlistID: info.wishlistID,
                             gradientSeed: info.gradientSeed
                         )
+                        newWL.myRole = membership.role
                         newWL.id = uuid
                         modelContext.insert(newWL)
 
@@ -675,6 +677,7 @@ final class DataService {
             wishlist.isShared = true
             wishlist.sharedWishlistID = id
             wishlist.ownerRecordID = currentUID
+            wishlist.myRole = "owner"
             wishlist.updatedAt = .now
             try? modelContext.save()
 
@@ -724,6 +727,7 @@ final class DataService {
                 sharedWishlistID: info.wishlistID,
                 gradientSeed: sharedData.gradientSeed
             )
+            wishlist.myRole = info.role
             if let uuid = UUID(uuidString: info.wishlistID) {
                 wishlist.id = uuid
             }
