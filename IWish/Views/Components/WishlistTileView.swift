@@ -14,11 +14,12 @@ struct WishlistTileView: View {
             WishlistDetailView(wishlist: wishlist)
         } label: {
             tileContent
+                .contentShape(Rectangle())
+                .onLongPressGesture(minimumDuration: 0.5) {
+                    showingActions = true
+                }
         }
         .buttonStyle(.plain)
-        .onLongPressGesture {
-            showingActions = true
-        }
         .confirmationDialog(wishlist.name, isPresented: $showingActions, titleVisibility: .visible) {
             if !wishlist.isShared || wishlist.myRole == "owner" || wishlist.canInvite {
                 Button("Поделиться") { onShare() }
