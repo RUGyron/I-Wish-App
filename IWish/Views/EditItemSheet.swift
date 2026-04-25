@@ -25,6 +25,12 @@ struct EditItemSheet: View {
     var body: some View {
         NavigationStack {
             Form {
+                Section("Ссылка") {
+                    TextField("URL", text: $urlString)
+                        .textInputAutocapitalization(.never)
+                        .autocorrectionDisabled()
+                }
+
                 Section("Название") {
                     TextField("Чего хочется?", text: $name)
                         .textInputAutocapitalization(.sentences)
@@ -60,12 +66,6 @@ struct EditItemSheet: View {
                         .labelsHidden()
                         .pickerStyle(.menu)
                     }
-                }
-
-                Section("Ссылка") {
-                    TextField("URL", text: $urlString)
-                        .textInputAutocapitalization(.never)
-                        .autocorrectionDisabled()
                 }
 
                 Section("Описание") {

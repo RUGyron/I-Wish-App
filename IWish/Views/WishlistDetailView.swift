@@ -365,10 +365,16 @@ struct WishlistDetailView: View {
                     Text(wishlist.name)
                         .font(.title2.weight(.bold))
                         .lineLimit(2)
-                    if wishlist.isShared, let role = wishlist.myRole {
-                        Image(systemName: roleIcon(role))
-                            .font(.caption)
-                            .foregroundStyle(roleColor(role))
+                    if wishlist.isShared {
+                        HStack(spacing: 3) {
+                            Image(systemName: "person.2.fill")
+                                .foregroundStyle(.secondary)
+                            if let role = wishlist.myRole {
+                                Image(systemName: roleIcon(role))
+                                    .foregroundStyle(roleColor(role))
+                            }
+                        }
+                        .font(.caption)
                     }
                 }
 
@@ -660,7 +666,7 @@ struct WishlistDetailView: View {
 
     private func roleColor(_ role: String) -> Color {
         switch role {
-        case "owner": return .yellow
+        case "owner": return .orange
         case "editor": return .blue
         case "viewer": return .secondary
         default: return .secondary

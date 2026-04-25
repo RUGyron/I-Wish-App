@@ -315,10 +315,15 @@ struct HomeView: View {
                         .fontWeight(.semibold)
                         .foregroundStyle(.white)
                         .lineLimit(2)
-                    if wishlist.isShared, let role = wishlist.myRole {
-                        Image(systemName: roleBadgeIcon(role))
-                            .font(.caption2)
-                            .foregroundStyle(.white.opacity(0.8))
+                    if wishlist.isShared {
+                        HStack(spacing: 2) {
+                            Image(systemName: "person.2.fill")
+                            if let role = wishlist.myRole {
+                                Image(systemName: roleBadgeIcon(role))
+                            }
+                        }
+                        .font(.caption2)
+                        .foregroundStyle(.white.opacity(0.8))
                     }
                 }
                 if total > 0 {
