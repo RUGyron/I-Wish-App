@@ -17,6 +17,7 @@ struct ShareWishlistSheet: View {
     @State private var selectedTTL: InviteTTL = .minutes15
     @State private var showingShareSheet = false
     @State private var showingAppleSignIn = false
+    @State private var showingExportSheet = false
     @State private var copied = false
 
     var body: some View {
@@ -54,6 +55,10 @@ struct ShareWishlistSheet: View {
 
                     // Action buttons
                     actionButtons
+                        .padding(.horizontal)
+
+                    // Export
+                    exportButton
                         .padding(.horizontal)
 
                     // Revoke
@@ -250,6 +255,53 @@ struct ShareWishlistSheet: View {
                 ShareSheetView(items: shareItems(for: url))
             }
         }
+    }
+
+    private var exportButton: some View {
+        Button {
+            showingExportSheet = true
+        } label: {
+            VStack(spacing: 5) {
+                Image(systemName: "doc.text")
+                    .font(.title3)
+                Text("Экспорт списка")
+                    .font(.caption)
+            }
+            .frame(maxWidth: .infinity)
+            .padding(.vertical, 14)
+            .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 14))
+        }
+        .buttonStyle(.plain)
+        .foregroundStyle(.primary)
+        .sheet(isPresented: $showingExportSheet) {
+            let text = exportText()
+            ShareSheetView(items: [text])
+        }
+    }
+
+    private func exportText() -> String {
+        let items = (wishlist.items ?? []).filter { !$0.isArchived }
+        var lines = ["📝 \(wishlist.name)", ""]
+        for (i, item) in items.enumerated() {
+            var line = "\(i + 1). \(item.tier.emoji) \(item.name)"
+            if let price = item.price {
+                let fmt = NumberFormatter()
+                fmt.numberStyle = .currency
+                fmt.currencyCode = item.currency
+                fmt.maximumFractionDigits = 0
+                if let priceStr = fmt.string(from: NSNumber(value: price)) {
+                    line += " — \(priceStr)"
+                }
+            }
+            if let url = item.url, !url.isEmpty {
+                line += "\n   🔗 \(url)"
+            }
+            lines.append(line)
+        }
+        if items.isEmpty {
+            lines.append("Список пуст")
+        }
+        return lines.joined(separator: "\n")
     }
 
     private var revokeButton: some View {

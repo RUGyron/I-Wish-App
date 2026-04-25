@@ -21,7 +21,7 @@ struct RootView: View {
         .fontDesign(.rounded)
         .environment(\.systemColorScheme, detectedSystemScheme)
         .preferredColorScheme(activeSettings.themeMode.colorScheme)
-        .animation(.easeInOut(duration: 0.35), value: activeSettings.themeMode)
+        .animation(.easeInOut(duration: 0.8), value: activeSettings.themeMode)
         .onAppear {
             if settingsList.isEmpty {
                 _ = AppSettings.loadOrCreate(in: context)

@@ -671,12 +671,15 @@ final class DataService {
             // 3. Create owner membership
             try await firestore.joinWishlist(wishlistID: id, userUID: currentUID, role: "owner")
 
-            // 4. Mark local as shared (no personal delete — polling skips shared via !$0.isShared filter)
+            // 4. Mark local as shared FIRST, then save
             wishlist.isShared = true
             wishlist.sharedWishlistID = id
             wishlist.ownerRecordID = currentUID
             wishlist.updatedAt = .now
             try? modelContext.save()
+
+            // 5. Delete personal copy from Firestore (after local is marked shared to prevent flicker)
+            try? await firestore.deletePersonalWishlist(uid: currentUID, wishlistID: id)
 
             let url = URL(string: "https://rugyron.github.io/I-Wish-App/j/\(shortID)")!
             isSyncing = false
