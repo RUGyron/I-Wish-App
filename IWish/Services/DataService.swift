@@ -30,6 +30,13 @@ final class DataService {
         operationLock = false
     }
 
+    /// Non-blocking: returns false if lock is taken (poll should skip)
+    func tryAcquireLock() -> Bool {
+        guard !operationLock else { return false }
+        operationLock = true
+        return true
+    }
+
     /// Public wrappers for external callers (ShareManager)
     func acquireLockPublic() async { await acquireLock() }
     func releaseLockPublic() { releaseLock() }
@@ -434,7 +441,7 @@ final class DataService {
 
     func refreshWishlists() async {
         guard let currentUID = auth.uid else { return }
-        await acquireLock()
+        guard tryAcquireLock() else { return } // Skip if busy
         defer { releaseLock() }
 
         isSyncing = true
@@ -605,7 +612,7 @@ final class DataService {
 
     func refreshItems(for wishlistID: String) async {
         guard let currentUID = auth.uid else { return }
-        await acquireLock()
+        guard tryAcquireLock() else { return } // Skip if busy
         defer { releaseLock() }
 
         isSyncing = true

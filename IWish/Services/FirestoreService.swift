@@ -94,6 +94,7 @@ final class FirestoreService {
         }
         var req = URLRequest(url: url)
         req.httpMethod = method
+        req.timeoutInterval = 10
         req.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
         req.setValue("application/json", forHTTPHeaderField: "Content-Type")
         if let body {
@@ -116,6 +117,7 @@ final class FirestoreService {
         }
         var req = URLRequest(url: url)
         req.httpMethod = "POST"
+        req.timeoutInterval = 10
         req.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
         req.setValue("application/json", forHTTPHeaderField: "Content-Type")
         req.httpBody = try JSONSerialization.data(withJSONObject: body)
