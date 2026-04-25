@@ -387,6 +387,9 @@ final class DataService {
                     local.coverEmoji = r.emoji
                     local.gradientSeed = r.gradientSeed
                     local.updatedAt = .now
+                    // Refresh items for existing personal wishlists
+                    let personalItems = try await firestore.fetchPersonalItems(uid: currentUID, wishlistID: r.id)
+                    mergeItems(personalItems, into: local)
                 } else {
                     guard let uuid = UUID(uuidString: r.id) else { continue }
                     let newWL = Wishlist(
@@ -456,6 +459,8 @@ final class DataService {
                         local.isShared = true
                         local.sharedWishlistID = info.wishlistID
                         local.updatedAt = .now
+                        // Merge remote items into existing shared wishlist
+                        mergeItems(info.items, into: local)
                     } else if let uuid = UUID(uuidString: info.wishlistID) {
                         let newWL = Wishlist(
                             name: info.name,

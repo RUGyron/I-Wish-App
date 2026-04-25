@@ -11,6 +11,7 @@ struct ParticipantsView: View {
     @State private var isLoading = true
     @State private var ownerName: String?
     @State private var ownerUID: String?
+    @State private var pollTimer: Timer?
 
     var body: some View {
         NavigationStack {
@@ -131,37 +132,58 @@ struct ParticipantsView: View {
                 }
             }
             .task {
-                do {
-                    let sharedID = wishlist.sharedWishlistID ?? wishlist.id.uuidString
-                    let info = try await services.firestore.fetchSharedWishlist(
-                        wishlistID: sharedID
-                    )
-
-                    // Set owner info
-                    ownerUID = info.ownerUID
-                    if let name = info.ownerName {
-                        ownerName = name
-                    } else {
-                        ownerName = await services.firestore.fetchUserName(uid: info.ownerUID) ?? "Владелец"
-                    }
-
-                    // Filter out the owner — they're shown in the owner section
-                    let nonOwnerMembers = info.members.filter { $0.userUID != info.ownerUID }
-
-                    // Fetch names for each member
-                    var resolved: [(userUID: String, role: String, name: String)] = []
-                    for member in nonOwnerMembers {
-                        let name = await services.firestore.fetchUserName(uid: member.userUID) ?? "Участник"
-                        resolved.append((userUID: member.userUID, role: member.role, name: name))
-                    }
-                    members = resolved
-                } catch {
-                    members = []
-                }
-                isLoading = false
+                await fetchMembers()
             }
+            .onAppear { startPolling() }
+            .onDisappear { stopPolling() }
         }
         .applyTheme()
+    }
+
+    // MARK: - Polling
+
+    private func startPolling() {
+        pollTimer = Timer.scheduledTimer(withTimeInterval: 5.0, repeats: true) { _ in
+            Task { @MainActor in
+                await fetchMembers()
+            }
+        }
+    }
+
+    private func stopPolling() {
+        pollTimer?.invalidate()
+        pollTimer = nil
+    }
+
+    private func fetchMembers() async {
+        do {
+            let sharedID = wishlist.sharedWishlistID ?? wishlist.id.uuidString
+            let info = try await services.firestore.fetchSharedWishlist(
+                wishlistID: sharedID
+            )
+
+            // Set owner info
+            ownerUID = info.ownerUID
+            if let name = info.ownerName {
+                ownerName = name
+            } else {
+                ownerName = await services.firestore.fetchUserName(uid: info.ownerUID) ?? "Владелец"
+            }
+
+            // Filter out the owner — they're shown in the owner section
+            let nonOwnerMembers = info.members.filter { $0.userUID != info.ownerUID }
+
+            // Fetch names for each member
+            var resolved: [(userUID: String, role: String, name: String)] = []
+            for member in nonOwnerMembers {
+                let name = await services.firestore.fetchUserName(uid: member.userUID) ?? "Участник"
+                resolved.append((userUID: member.userUID, role: member.role, name: name))
+            }
+            members = resolved
+        } catch {
+            // Don't clear members on poll failure — keep last known state
+        }
+        isLoading = false
     }
 
     // MARK: - Helpers
