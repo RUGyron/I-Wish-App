@@ -23,54 +23,66 @@ struct ShareWishlistSheet: View {
 
     var body: some View {
         NavigationStack {
-            ScrollView {
-                VStack(spacing: 24) {
-                    // Wishlist name hero
-                    VStack(spacing: 4) {
-                        if let emoji = wishlist.coverEmoji, !emoji.isEmpty {
-                            Text(emoji).font(.system(size: 44))
-                        }
-                        Text(wishlist.name)
-                            .font(.title3.weight(.semibold))
-                            .multilineTextAlignment(.center)
-                        Text("Приглашение в список")
-                            .font(.caption)
+            Group {
+                if shareManager.shareURL == nil {
+                    // Loading state — QR not ready yet
+                    VStack(spacing: 16) {
+                        ProgressView()
+                            .scaleEffect(1.2)
+                        Text("Генерация приглашения...")
+                            .font(.subheadline)
                             .foregroundStyle(.secondary)
                     }
-                    .padding(.top, 8)
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+                } else {
+                    ScrollView {
+                        VStack(spacing: 24) {
+                            // Wishlist name hero
+                            VStack(spacing: 4) {
+                                if let emoji = wishlist.coverEmoji, !emoji.isEmpty {
+                                    Text(emoji).font(.system(size: 44))
+                                }
+                                Text(wishlist.name)
+                                    .font(.title3.weight(.semibold))
+                                    .multilineTextAlignment(.center)
+                                Text("Приглашение в список")
+                                    .font(.caption)
+                                    .foregroundStyle(.secondary)
+                            }
+                            .padding(.top, 8)
 
-                    // QR Code
-                    qrSection
+                            // QR Code
+                            qrSection
 
-                    // Expiry
-                    expiryLabel
+                            // Expiry
+                            expiryLabel
 
-                    // Error shown via toast
+                            // Pickers
+                            VStack(spacing: 16) {
+                                rolePicker
+                                ttlPicker
+                                Toggle("Участники могут приглашать", isOn: $canInvite)
+                                    .tint(Color(red: 0.72, green: 0.38, blue: 0.06))
+                            }
+                            .padding(.horizontal)
 
-                    // Pickers
-                    VStack(spacing: 16) {
-                        rolePicker
-                        ttlPicker
-                        Toggle("Участники могут приглашать", isOn: $canInvite)
-                            .tint(Color(red: 0.72, green: 0.38, blue: 0.06))
+                            // Action buttons
+                            actionButtons
+                                .padding(.horizontal)
+
+                            // Export
+                            exportButton
+                                .padding(.horizontal)
+
+                            // Revoke
+                            revokeButton
+                        }
+                        .padding(.top, 16)
+                        .padding(.bottom, 32)
                     }
-                    .padding(.horizontal)
-
-                    // Action buttons
-                    actionButtons
-                        .padding(.horizontal)
-
-                    // Export
-                    exportButton
-                        .padding(.horizontal)
-
-                    // Revoke
-                    revokeButton
+                    .scrollBounceBehavior(.basedOnSize)
                 }
-                .padding(.top, 16)
-                .padding(.bottom, 32)
             }
-            .scrollBounceBehavior(.basedOnSize)
             .background(Theme.background)
             .navigationTitle("Поделиться")
             .navigationBarTitleDisplayMode(.inline)
@@ -106,7 +118,6 @@ struct ShareWishlistSheet: View {
             }
         }
         .loadingOverlay(shareManager.isLoading)
-        .presentationDetents([.medium, .large])
         .applyTheme()
         .sheet(isPresented: $showingAppleSignIn) {
             SignInWithAppleSheet { result in

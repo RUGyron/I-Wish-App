@@ -295,10 +295,10 @@ struct HomeView: View {
                 .frame(height: 80)
             }
 
-            // Top-left: stats chip (🎁 3 · 👥 2) + role badge
+            // Top: stats chip left, role badge right
             VStack {
-                HStack(spacing: 6) {
-                    // Stats chip
+                HStack {
+                    // Stats chip (top-left)
                     HStack(spacing: 0) {
                         HStack(spacing: 3) {
                             Image(systemName: "gift")
@@ -322,7 +322,9 @@ struct HomeView: View {
                     .padding(.vertical, 4)
                     .background(.black.opacity(0.35), in: Capsule())
 
-                    // Role badge
+                    Spacer()
+
+                    // Role badge (top-right)
                     if wishlist.isShared, let role = wishlist.myRole {
                         Image(systemName: roleBadgeIcon(role))
                             .font(.system(size: 10, weight: .semibold))
@@ -330,8 +332,6 @@ struct HomeView: View {
                             .padding(6)
                             .background(.black.opacity(0.35), in: Circle())
                     }
-
-                    Spacer()
                 }
                 Spacer()
             }
