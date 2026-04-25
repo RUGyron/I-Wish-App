@@ -1,11 +1,13 @@
 import SwiftUI
 
-/// Isolated tile view — prevents context menu crossover in LazyVGrid
+/// Isolated tile view with confirmationDialog instead of contextMenu
 struct WishlistTileView: View {
     let wishlist: Wishlist
     let onShare: () -> Void
     let onArchive: () -> Void
     let onDelete: () -> Void
+
+    @State private var showingActions = false
 
     var body: some View {
         NavigationLink {
@@ -14,28 +16,15 @@ struct WishlistTileView: View {
             tileContent
         }
         .buttonStyle(.plain)
-        .contextMenu { menuContent }
-    }
-
-    @ViewBuilder
-    private var menuContent: some View {
-        if !wishlist.isShared || wishlist.myRole == "owner" || wishlist.canInvite {
-            Button {
-                onShare()
-            } label: {
-                Label("Поделиться", systemImage: "square.and.arrow.up")
+        .onLongPressGesture {
+            showingActions = true
+        }
+        .confirmationDialog(wishlist.name, isPresented: $showingActions, titleVisibility: .visible) {
+            if !wishlist.isShared || wishlist.myRole == "owner" || wishlist.canInvite {
+                Button("Поделиться") { onShare() }
             }
-        }
-        Button {
-            onArchive()
-        } label: {
-            Label("В архив", systemImage: "archivebox")
-        }
-        Divider()
-        Button(role: .destructive) {
-            onDelete()
-        } label: {
-            Label("Удалить", systemImage: "trash")
+            Button("В архив") { onArchive() }
+            Button("Удалить", role: .destructive) { onDelete() }
         }
     }
 
