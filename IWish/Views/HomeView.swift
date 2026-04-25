@@ -244,12 +244,14 @@ struct HomeView: View {
                         }
                         .buttonStyle(.plain)
                         .contextMenu {
-                            if !wishlist.isShared || wishlist.myRole == "owner" || wishlist.canInvite {
-                                Button {
+                            Button {
+                                if wishlist.isShared && wishlist.myRole != "owner" && !wishlist.canInvite {
+                                    toast.error("У вас нет права приглашать")
+                                } else {
                                     sharingWishlist = wishlist
-                                } label: {
-                                    Label("Поделиться", systemImage: "square.and.arrow.up")
                                 }
+                            } label: {
+                                Label("Поделиться", systemImage: "square.and.arrow.up")
                             }
                             Button {
                                 wishlist.isArchived = true
@@ -306,15 +308,13 @@ struct HomeView: View {
                             Text("\(activeItems.count)")
                                 .font(.caption2.weight(.medium))
                         }
-                        if wishlist.isShared && wishlist.memberCount > 0 {
-                            Text(" · ")
-                                .font(.caption2)
-                            HStack(spacing: 3) {
-                                Image(systemName: "person.2")
-                                    .font(.system(size: 9))
-                                Text("\(wishlist.memberCount)")
-                                    .font(.caption2.weight(.medium))
-                            }
+                        Text(" · ")
+                            .font(.caption2)
+                        HStack(spacing: 3) {
+                            Image(systemName: "person.2")
+                                .font(.system(size: 9))
+                            Text("\(max(wishlist.memberCount, 1))")
+                                .font(.caption2.weight(.medium))
                         }
                     }
                     .foregroundStyle(.white)
@@ -324,14 +324,12 @@ struct HomeView: View {
 
                     Spacer()
 
-                    // Role badge (top-right)
-                    if wishlist.isShared, let role = wishlist.myRole {
-                        Image(systemName: roleBadgeIcon(role))
-                            .font(.system(size: 10, weight: .semibold))
-                            .foregroundStyle(.white)
-                            .padding(6)
-                            .background(.black.opacity(0.35), in: Circle())
-                    }
+                    // Role/status badge (top-right) — always visible
+                    Image(systemName: tileStatusIcon(wishlist))
+                        .font(.system(size: 10, weight: .semibold))
+                        .foregroundStyle(.white)
+                        .padding(6)
+                        .background(.black.opacity(0.35), in: Circle())
                 }
                 Spacer()
             }
@@ -389,6 +387,16 @@ struct HomeView: View {
                 }
             }
         }
+    }
+
+    /// Status icon: lock if private/no members, role icon if shared
+    private func tileStatusIcon(_ wishlist: Wishlist) -> String {
+        // Locked: personal or shared with no other members
+        if !wishlist.isShared || wishlist.memberCount <= 1 {
+            return "lock.fill"
+        }
+        // Shared with members — show role
+        return roleBadgeIcon(wishlist.myRole ?? "owner")
     }
 
     private func roleBadgeIcon(_ role: String) -> String {
