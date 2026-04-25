@@ -20,10 +20,10 @@ struct SettingsView: View {
             appearanceSection
             wishesSection
             invitesSection
-            aboutSection
             if services.auth.isAuthenticated {
                 signOutSection
             }
+            aboutSection
         }
         .sheet(isPresented: $showingAppleSignIn) {
             SignInWithAppleSheet { result in

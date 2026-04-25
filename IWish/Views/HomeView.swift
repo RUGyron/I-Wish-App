@@ -279,22 +279,25 @@ struct HomeView: View {
                 }
             } else {
                 let colors = DefaultCoverGenerator.colors(forSeed: wishlist.gradientSeed != 0 ? wishlist.gradientSeed : DefaultCoverGenerator.stableHash(wishlist.id.uuidString))
-                ZStack {
-                    MeshGradient(
-                        width: 3, height: 3,
-                        points: [
-                            .init(0, 0),   .init(0.5, 0),   .init(1, 0),
-                            .init(0, 0.5), .init(0.5, 0.5), .init(1, 0.5),
-                            .init(0, 1),   .init(0.5, 1),   .init(1, 1),
-                        ],
-                        colors: [
-                            colors[0], colors[1], colors[2],
-                            colors[1], colors[2], colors[0],
-                            colors[2], colors[0], colors[1],
-                        ]
-                    )
-                    if let emoji = wishlist.coverEmoji {
-                        Text(emoji).font(.system(size: 48))
+                GeometryReader { geo in
+                    ZStack {
+                        MeshGradient(
+                            width: 3, height: 3,
+                            points: [
+                                .init(0, 0),   .init(0.5, 0),   .init(1, 0),
+                                .init(0, 0.5), .init(0.5, 0.5), .init(1, 0.5),
+                                .init(0, 1),   .init(0.5, 1),   .init(1, 1),
+                            ],
+                            colors: [
+                                colors[0], colors[1], colors[2],
+                                colors[1], colors[2], colors[0],
+                                colors[2], colors[0], colors[1],
+                            ]
+                        )
+                        .frame(width: geo.size.width, height: geo.size.height)
+                        if let emoji = wishlist.coverEmoji {
+                            Text(emoji).font(.system(size: 48))
+                        }
                     }
                 }
             }
