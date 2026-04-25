@@ -4,10 +4,13 @@ struct InvitePreviewSheet: View {
     @Environment(\.dismiss) private var dismiss
     @Environment(\.colorScheme) private var colorScheme
 
+    @Environment(\.appServices) private var services
+
     let info: FirestoreService.ShareLinkInfo
     let onAccept: () -> Void
 
     @State private var isAccepting = false
+    @State private var coverImageData: Data?
 
     private let brand = Color(red: 0.72, green: 0.38, blue: 0.06)
 
@@ -72,13 +75,25 @@ struct InvitePreviewSheet: View {
         .presentationDragIndicator(.visible)
         .loadingOverlay(isAccepting)
         .fontDesign(.rounded)
+        .task {
+            // Load cover photo from shared wishlist
+            if let wlInfo = try? await services.firestore.fetchSharedWishlist(wishlistID: info.wishlistID) {
+                coverImageData = wlInfo.coverImageData
+            }
+        }
     }
 
     // MARK: - Cover
 
     @ViewBuilder
     private var coverView: some View {
-        if let emoji = info.wishlistEmoji, !emoji.isEmpty {
+        if let imageData = coverImageData, let uiImage = UIImage(data: imageData) {
+            Image(uiImage: uiImage)
+                .resizable()
+                .scaledToFill()
+                .frame(width: 80, height: 80)
+                .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
+        } else if let emoji = info.wishlistEmoji, !emoji.isEmpty {
             Text(emoji)
                 .font(.system(size: 56))
                 .frame(width: 80, height: 80)

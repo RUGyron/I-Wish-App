@@ -51,13 +51,17 @@ struct WishlistTileView: View {
 
         return Color.clear
             .aspectRatio(1, contentMode: .fit)
+            .background {
+                tileBackground.clipped()
+            }
             .overlay {
-                ZStack {
-                    tileBackground
-                    bottomGradient
-                    topBadges(activeItems: activeItems)
-                    bottomContent(activeItems: activeItems, total: total)
-                }
+                bottomGradient
+            }
+            .overlay {
+                topBadges(activeItems: activeItems)
+            }
+            .overlay {
+                bottomContent(activeItems: activeItems, total: total)
             }
             .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
             .titaniumBorder(cornerRadius: 16)
