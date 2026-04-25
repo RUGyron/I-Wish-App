@@ -49,17 +49,18 @@ struct WishlistTileView: View {
         let activeItems = (wishlist.items ?? []).filter { !$0.isArchived }
         let total = activeItems.compactMap(\.price).reduce(0, +)
 
-        return ZStack {
-            Color.clear // sizing anchor
-            tileBackground
-            bottomGradient
-            topBadges(activeItems: activeItems)
-            bottomContent(activeItems: activeItems, total: total)
-        }
-        .aspectRatio(1, contentMode: .fill)
-        .clipped()
-        .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
-        .titaniumBorder(cornerRadius: 16)
+        return Color.clear
+            .aspectRatio(1, contentMode: .fit)
+            .overlay {
+                ZStack {
+                    tileBackground
+                    bottomGradient
+                    topBadges(activeItems: activeItems)
+                    bottomContent(activeItems: activeItems, total: total)
+                }
+            }
+            .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
+            .titaniumBorder(cornerRadius: 16)
     }
 
     @ViewBuilder
