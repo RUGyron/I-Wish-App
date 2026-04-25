@@ -237,36 +237,16 @@ struct HomeView: View {
                     spacing: 12
                 ) {
                     ForEach(activeWishlists) { wishlist in
-                        NavigationLink {
-                            WishlistDetailView(wishlist: wishlist)
-                        } label: {
-                            wishlistTile(wishlist)
-                                .id(wishlist.id)
-                        }
-                        .buttonStyle(.plain)
-                        .id(wishlist.id)
-                        .contextMenu {
-                            if !wishlist.isShared || wishlist.myRole == "owner" || wishlist.canInvite {
-                                Button {
-                                    sharingWishlist = wishlist
-                                } label: {
-                                    Label("Поделиться", systemImage: "square.and.arrow.up")
-                                }
-                            }
-                            Button {
+                        WishlistTileView(
+                            wishlist: wishlist,
+                            onShare: { sharingWishlist = wishlist },
+                            onArchive: {
                                 wishlist.isArchived = true
                                 wishlist.updatedAt = .now
                                 try? context.save()
-                            } label: {
-                                Label("В архив", systemImage: "archivebox")
-                            }
-                            Divider()
-                            Button(role: .destructive) {
-                                wishlistToDelete = wishlist
-                            } label: {
-                                Label("Удалить", systemImage: "trash")
-                            }
-                        }
+                            },
+                            onDelete: { wishlistToDelete = wishlist }
+                        )
                     }
 
                 }
