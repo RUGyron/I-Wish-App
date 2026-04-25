@@ -188,14 +188,12 @@ struct WishlistDetailView: View {
                             }
                         }
 
-                        Button {
-                            if wishlist.isShared && wishlist.myRole != "owner" && !wishlist.canInvite {
-                                toast.error("У вас нет права приглашать")
-                            } else {
+                        if !wishlist.isShared || wishlist.myRole == "owner" || wishlist.canInvite {
+                            Button {
                                 showingShare = true
+                            } label: {
+                                Label("Поделиться", systemImage: "square.and.arrow.up")
                             }
-                        } label: {
-                            Label("Поделиться", systemImage: "square.and.arrow.up")
                         }
 
                         // Participants: visible for all shared wishlists
