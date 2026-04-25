@@ -34,6 +34,7 @@ final class ShareManager {
         for wishlist: Wishlist,
         role: ShareRole,
         ttl: InviteTTL,
+        canInvite: Bool,
         ownerUID: String,
         ownerName: String?
     ) async {
@@ -92,6 +93,7 @@ final class ShareManager {
                 role: role.rawValue,
                 itemCount: itemCount,
                 gradientSeed: wishlist.gradientSeed,
+                canInvite: canInvite,
                 expiresAt: expiry
             )
 
@@ -102,13 +104,14 @@ final class ShareManager {
             self.wishlistID = wishlist.id
             self.wishlistRef = wishlist
 
-            // 4. Create owner membership
-            try await firestore.joinWishlist(wishlistID: wishlist.id.uuidString, userUID: ownerUID, role: "owner")
+            // 4. Create owner membership (owner always canInvite)
+            try await firestore.joinWishlist(wishlistID: wishlist.id.uuidString, userUID: ownerUID, role: "owner", canInvite: true)
 
             // 5. Mark wishlist as shared locally
             wishlist.isShared = true
             wishlist.sharedWishlistID = wishlist.id.uuidString
             wishlist.ownerRecordID = ownerUID
+            wishlist.canInvite = true // owner always can invite
             wishlist.updatedAt = .now
 
             print("[Share] SUCCESS — shareURL: \(userURL)")

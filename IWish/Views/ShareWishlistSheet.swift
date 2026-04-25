@@ -15,6 +15,7 @@ struct ShareWishlistSheet: View {
     @State private var shareManager = ShareManager()
     @State private var selectedRole: ShareRole = .editor
     @State private var selectedTTL: InviteTTL = .minutes15
+    @State private var canInvite = true
     @State private var showingShareSheet = false
     @State private var showingAppleSignIn = false
     @State private var showingExportSheet = false
@@ -50,6 +51,8 @@ struct ShareWishlistSheet: View {
                     VStack(spacing: 16) {
                         rolePicker
                         ttlPicker
+                        Toggle("Участники могут приглашать", isOn: $canInvite)
+                            .tint(Color(red: 0.72, green: 0.38, blue: 0.06))
                     }
                     .padding(.horizontal)
 
@@ -95,6 +98,9 @@ struct ShareWishlistSheet: View {
             .onChange(of: selectedTTL) { _, _ in
                 Task { await generateShareNow() }
             }
+            .onChange(of: canInvite) { _, _ in
+                Task { await generateShareNow() }
+            }
             .onChange(of: shareManager.error) { _, newError in
                 if let msg = newError { toast.error(msg) }
             }
@@ -112,6 +118,7 @@ struct ShareWishlistSheet: View {
                             for: wishlist,
                             role: selectedRole,
                             ttl: selectedTTL,
+                            canInvite: canInvite,
                             ownerUID: services.auth.uid ?? "",
                             ownerName: services.auth.userName ?? "Вы"
                         )
@@ -135,6 +142,7 @@ struct ShareWishlistSheet: View {
             for: wishlist,
             role: selectedRole,
             ttl: selectedTTL,
+            canInvite: canInvite,
             ownerUID: services.auth.uid ?? "",
             ownerName: services.auth.userName ?? "Вы"
         )
@@ -264,7 +272,7 @@ struct ShareWishlistSheet: View {
             VStack(spacing: 5) {
                 Image(systemName: "doc.text")
                     .font(.title3)
-                Text("Экспорт списка")
+                Text("Экспорт файлом")
                     .font(.caption)
             }
             .frame(maxWidth: .infinity)

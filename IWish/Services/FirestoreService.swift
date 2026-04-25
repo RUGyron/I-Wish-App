@@ -22,6 +22,7 @@ final class FirestoreService {
         let role: String
         let itemCount: Int
         let gradientSeed: Int
+        let canInvite: Bool
     }
 
     struct SharedWishlistInfo {
@@ -461,18 +462,19 @@ final class FirestoreService {
 
     // MARK: - Memberships
 
-    func joinWishlist(wishlistID: String, userUID: String, role: String) async throws {
+    func joinWishlist(wishlistID: String, userUID: String, role: String, canInvite: Bool = false) async throws {
         let membershipID = "\(userUID)_\(wishlistID)"
         let fields = toFields([
             "wishlistID": wishlistID,
             "userUID": userUID,
             "role": role,
+            "canInvite": canInvite as Any,
             "joinedAt": Date() as Any
         ])
         let _ = try await request("PATCH", path: "memberships/\(membershipID)", body: ["fields": fields])
     }
 
-    func fetchMyMemberships(userUID: String) async throws -> [(wishlistID: String, role: String)] {
+    func fetchMyMemberships(userUID: String) async throws -> [(wishlistID: String, role: String, canInvite: Bool)] {
         let results = try await runQuery(collectionId: "memberships", field: "userUID", op: "EQUAL", value: userUID)
         return results.compactMap { entry in
             guard let doc = entry["document"] as? [String: Any],
@@ -480,7 +482,8 @@ final class FirestoreService {
             let d = parseFields(f)
             guard let wID = d["wishlistID"] as? String else { return nil }
             let role = d["role"] as? String ?? "viewer"
-            return (wishlistID: wID, role: role)
+            let canInvite = d["canInvite"] as? Bool ?? false
+            return (wishlistID: wID, role: role, canInvite: canInvite)
         }
     }
 
@@ -495,6 +498,7 @@ final class FirestoreService {
         role: String,
         itemCount: Int,
         gradientSeed: Int,
+        canInvite: Bool,
         expiresAt: Date?
     ) async throws {
         var data: [String: Any?] = [
@@ -505,6 +509,7 @@ final class FirestoreService {
             "role": role,
             "itemCount": itemCount,
             "gradientSeed": gradientSeed as Any,
+            "canInvite": canInvite as Any,
             "createdAt": Date() as Any
         ]
         if let expiresAt {
@@ -542,7 +547,8 @@ final class FirestoreService {
             ownerName: (data["ownerName"] as? String)?.isEmpty == true ? nil : data["ownerName"] as? String,
             role: data["role"] as? String ?? "viewer",
             itemCount: data["itemCount"] as? Int ?? 0,
-            gradientSeed: data["gradientSeed"] as? Int ?? 0
+            gradientSeed: data["gradientSeed"] as? Int ?? 0,
+            canInvite: data["canInvite"] as? Bool ?? false
         )
     }
 

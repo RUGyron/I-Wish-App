@@ -16,6 +16,8 @@ final class Wishlist {
     var gradientSeed: Int = 0
     /// "owner", "editor", "viewer", nil (personal)
     var myRole: String?
+    /// Whether the current user can invite others to this shared wishlist
+    var canInvite: Bool = false
 
     @Relationship(deleteRule: .cascade, inverse: \Item.wishlist)
     var items: [Item]?

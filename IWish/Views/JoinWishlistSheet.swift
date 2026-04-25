@@ -171,11 +171,12 @@ struct JoinWishlistSheet: View {
                     return
                 }
 
-                // 2. Join: create membership in Firestore
+                // 2. Join: create membership in Firestore (with canInvite from invite link)
                 try await services.firestore.joinWishlist(
                     wishlistID: info.wishlistID,
                     userUID: uid,
-                    role: info.role
+                    role: info.role,
+                    canInvite: info.canInvite
                 )
 
                 // 3. Fetch shared wishlist + items from Firestore
@@ -192,6 +193,8 @@ struct JoinWishlistSheet: View {
                     sharedWishlistID: info.wishlistID,
                     gradientSeed: sharedData.gradientSeed
                 )
+                wishlist.myRole = info.role
+                wishlist.canInvite = info.canInvite
                 context.insert(wishlist)
 
                 for sharedItem in sharedData.items {

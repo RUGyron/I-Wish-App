@@ -188,16 +188,18 @@ struct WishlistDetailView: View {
                             }
                         }
 
-                        Button {
-                            showingShare = true
-                        } label: {
-                            Label("Поделиться", systemImage: "square.and.arrow.up")
-                        }
+                        if wishlist.canInvite || wishlist.myRole == "owner" || wishlist.myRole == nil {
+                            Button {
+                                showingShare = true
+                            } label: {
+                                Label("Поделиться", systemImage: "square.and.arrow.up")
+                            }
 
-                        Button {
-                            showingParticipants = true
-                        } label: {
-                            Label("Участники", systemImage: "person.2")
+                            Button {
+                                showingParticipants = true
+                            } label: {
+                                Label("Участники", systemImage: "person.2")
+                            }
                         }
 
                         Divider()

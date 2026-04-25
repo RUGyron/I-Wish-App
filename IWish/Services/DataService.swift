@@ -461,6 +461,7 @@ final class DataService {
                         local.gradientSeed = info.gradientSeed
                         local.ownerRecordID = info.ownerUID
                         local.myRole = membership.role
+                        local.canInvite = membership.canInvite
                         local.isShared = true
                         local.sharedWishlistID = info.wishlistID
                         local.updatedAt = .now
@@ -476,6 +477,7 @@ final class DataService {
                             gradientSeed: info.gradientSeed
                         )
                         newWL.myRole = membership.role
+                        newWL.canInvite = membership.canInvite
                         newWL.id = uuid
                         modelContext.insert(newWL)
 
@@ -667,17 +669,19 @@ final class DataService {
                 role: role.rawValue,
                 itemCount: localItems.count,
                 gradientSeed: wishlist.gradientSeed,
+                canInvite: true,
                 expiresAt: expiry
             )
 
-            // 3. Create owner membership
-            try await firestore.joinWishlist(wishlistID: id, userUID: currentUID, role: "owner")
+            // 3. Create owner membership (owner always canInvite)
+            try await firestore.joinWishlist(wishlistID: id, userUID: currentUID, role: "owner", canInvite: true)
 
             // 4. Mark local as shared FIRST, then save
             wishlist.isShared = true
             wishlist.sharedWishlistID = id
             wishlist.ownerRecordID = currentUID
             wishlist.myRole = "owner"
+            wishlist.canInvite = true // owner always can invite
             wishlist.updatedAt = .now
             try? modelContext.save()
 
@@ -712,8 +716,8 @@ final class DataService {
                 throw FirestoreService.FirestoreError.notFound
             }
 
-            // 2. Create membership
-            try await firestore.joinWishlist(wishlistID: info.wishlistID, userUID: currentUID, role: info.role)
+            // 2. Create membership (with canInvite from invite link)
+            try await firestore.joinWishlist(wishlistID: info.wishlistID, userUID: currentUID, role: info.role, canInvite: info.canInvite)
 
             // 3. Fetch shared wishlist + items
             let sharedData = try await firestore.fetchSharedWishlist(wishlistID: info.wishlistID)
@@ -728,6 +732,7 @@ final class DataService {
                 gradientSeed: sharedData.gradientSeed
             )
             wishlist.myRole = info.role
+            wishlist.canInvite = info.canInvite
             if let uuid = UUID(uuidString: info.wishlistID) {
                 wishlist.id = uuid
             }
