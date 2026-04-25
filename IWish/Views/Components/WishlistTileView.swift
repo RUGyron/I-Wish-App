@@ -7,25 +7,31 @@ struct WishlistTileView: View {
     let onArchive: () -> Void
     let onDelete: () -> Void
 
-    @State private var showingActions = false
+    // Store values to prevent closure crossover
+    private var canShare: Bool {
+        !wishlist.isShared || wishlist.myRole == "owner" || wishlist.canInvite
+    }
 
     var body: some View {
         NavigationLink {
             WishlistDetailView(wishlist: wishlist)
         } label: {
             tileContent
-                .contentShape(Rectangle())
-                .onLongPressGesture(minimumDuration: 0.5) {
-                    showingActions = true
-                }
         }
         .buttonStyle(.plain)
-        .confirmationDialog(wishlist.name, isPresented: $showingActions, titleVisibility: .visible) {
-            if !wishlist.isShared || wishlist.myRole == "owner" || wishlist.canInvite {
-                Button("Поделиться") { onShare() }
+        .contextMenu {
+            if canShare {
+                Button { onShare() } label: {
+                    Label("Поделиться", systemImage: "square.and.arrow.up")
+                }
             }
-            Button("В архив") { onArchive() }
-            Button("Удалить", role: .destructive) { onDelete() }
+            Button { onArchive() } label: {
+                Label("В архив", systemImage: "archivebox")
+            }
+            Divider()
+            Button(role: .destructive) { onDelete() } label: {
+                Label("Удалить", systemImage: "trash")
+            }
         }
     }
 
