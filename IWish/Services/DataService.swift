@@ -467,12 +467,8 @@ final class DataService {
             let memberWishlistIDs = Set(membershipsForCheck.map(\.wishlistID))
 
             for r in remote {
-                // Check: if this personal wishlist exists in shared_wishlists but user has no membership → orphan, delete it
-                let isSharedElsewhere = (try? await firestore.fetchSharedWishlist(wishlistID: r.id)) != nil
-                if isSharedElsewhere && !memberWishlistIDs.contains(r.id) {
-                    // Kicked from shared wishlist — delete personal copy
-                    try? await firestore.deletePersonalWishlist(uid: currentUID, wishlistID: r.id)
-                    if let local = localByID[r.id] { modelContext.delete(local) }
+                // Skip personal wishlists that are managed as shared (have membership)
+                if memberWishlistIDs.contains(r.id) {
                     continue
                 }
 
