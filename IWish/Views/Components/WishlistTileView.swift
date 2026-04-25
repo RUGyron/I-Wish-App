@@ -49,15 +49,18 @@ struct WishlistTileView: View {
         let activeItems = (wishlist.items ?? []).filter { !$0.isArchived }
         let total = activeItems.compactMap(\.price).reduce(0, +)
 
-        return ZStack {
-            tileBackground
-            bottomGradient
-            topBadges(activeItems: activeItems)
-            bottomContent(activeItems: activeItems, total: total)
+        return GeometryReader { geo in
+            ZStack {
+                tileBackground
+                bottomGradient
+                topBadges(activeItems: activeItems)
+                bottomContent(activeItems: activeItems, total: total)
+            }
+            .frame(width: geo.size.width, height: geo.size.width) // square
+            .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
+            .titaniumBorder(cornerRadius: 16)
         }
         .aspectRatio(1, contentMode: .fit)
-        .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
-        .titaniumBorder(cornerRadius: 16)
     }
 
     @ViewBuilder
