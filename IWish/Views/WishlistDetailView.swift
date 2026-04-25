@@ -575,10 +575,18 @@ struct WishlistDetailView: View {
         HStack(spacing: 4) {
             Text(item.tier.emoji)
             Text(item.createdAt.formatted(.dateTime.day().month(.abbreviated)))
-            if let domain = extractDomain(from: item.url) {
+            if let urlString = item.url, !urlString.isEmpty, let url = URL(string: urlString) {
                 Text("\u{00B7}")
-                Image(systemName: "link")
-                Text(domain)
+                Button {
+                    UIApplication.shared.open(url)
+                } label: {
+                    HStack(spacing: 2) {
+                        Image(systemName: "link")
+                        Text(extractDomain(from: urlString) ?? "ссылка")
+                    }
+                    .foregroundStyle(.tint)
+                }
+                .buttonStyle(.plain)
             }
             if let days = probationDaysLeft(item) {
                 Text("\u{00B7}")
