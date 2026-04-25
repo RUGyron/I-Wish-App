@@ -385,13 +385,25 @@ final class DataService {
             }
 
             // 4. Add new or update existing
+            // Pre-fetch memberships to detect orphaned personal copies
+            let membershipsForCheck = try await firestore.fetchMyMemberships(userUID: currentUID)
+            let memberWishlistIDs = Set(membershipsForCheck.map(\.wishlistID))
+
             for r in remote {
+                // Check: if this personal wishlist exists in shared_wishlists but user has no membership → orphan, delete it
+                let isSharedElsewhere = (try? await firestore.fetchSharedWishlist(wishlistID: r.id)) != nil
+                if isSharedElsewhere && !memberWishlistIDs.contains(r.id) {
+                    // Kicked from shared wishlist — delete personal copy
+                    try? await firestore.deletePersonalWishlist(uid: currentUID, wishlistID: r.id)
+                    if let local = localByID[r.id] { modelContext.delete(local) }
+                    continue
+                }
+
                 if let local = localByID[r.id] {
                     local.name = r.name
                     local.coverEmoji = r.emoji
                     local.gradientSeed = r.gradientSeed
                     local.updatedAt = .now
-                    // Refresh items for existing personal wishlists
                     let personalItems = try await firestore.fetchPersonalItems(uid: currentUID, wishlistID: r.id)
                     mergeItems(personalItems, into: local)
                 } else {
