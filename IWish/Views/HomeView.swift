@@ -295,57 +295,58 @@ struct HomeView: View {
                 .frame(height: 80)
             }
 
-            // Top-right: role badge (only for shared)
-            if wishlist.isShared, let role = wishlist.myRole {
-                VStack {
-                    HStack {
-                        Spacer()
+            // Top-left: stats chip (🎁 3 · 👥 2) + role badge
+            VStack {
+                HStack(spacing: 6) {
+                    // Stats chip
+                    HStack(spacing: 0) {
+                        HStack(spacing: 3) {
+                            Image(systemName: "gift")
+                                .font(.system(size: 9))
+                            Text("\(activeItems.count)")
+                                .font(.caption2.weight(.medium))
+                        }
+                        if wishlist.isShared && wishlist.memberCount > 0 {
+                            Text(" · ")
+                                .font(.caption2)
+                            HStack(spacing: 3) {
+                                Image(systemName: "person.2")
+                                    .font(.system(size: 9))
+                                Text("\(wishlist.memberCount)")
+                                    .font(.caption2.weight(.medium))
+                            }
+                        }
+                    }
+                    .foregroundStyle(.white)
+                    .padding(.horizontal, 7)
+                    .padding(.vertical, 4)
+                    .background(.black.opacity(0.35), in: Capsule())
+
+                    // Role badge
+                    if wishlist.isShared, let role = wishlist.myRole {
                         Image(systemName: roleBadgeIcon(role))
                             .font(.system(size: 10, weight: .semibold))
                             .foregroundStyle(.white)
                             .padding(6)
                             .background(.black.opacity(0.35), in: Circle())
                     }
+
                     Spacer()
                 }
-                .padding(8)
+                Spacer()
             }
+            .padding(8)
 
-            // Bottom content
+            // Bottom-left: name
             VStack {
                 Spacer()
-                HStack(alignment: .bottom) {
-                    // Left: name + count
-                    VStack(alignment: .leading, spacing: 3) {
-                        Text(wishlist.name)
-                            .font(.subheadline.weight(.semibold))
-                            .foregroundStyle(.white)
-                            .lineLimit(2)
-                        // Stats chip: 🎁 3 · 👥 2
-                        HStack(spacing: 0) {
-                            HStack(spacing: 3) {
-                                Image(systemName: "gift")
-                                    .font(.system(size: 9))
-                                Text("\(activeItems.count)")
-                                    .font(.caption2.weight(.medium))
-                            }
-                            if wishlist.isShared && wishlist.memberCount > 0 {
-                                Text(" · ")
-                                    .font(.caption2)
-                                HStack(spacing: 3) {
-                                    Image(systemName: "person.2")
-                                        .font(.system(size: 9))
-                                    Text("\(wishlist.memberCount)")
-                                        .font(.caption2.weight(.medium))
-                                }
-                            }
-                        }
-                        .foregroundStyle(.white.opacity(0.75))
-                        .padding(.horizontal, 7)
-                        .padding(.vertical, 4)
-                        .background(.black.opacity(0.3), in: Capsule())
-                    }
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(wishlist.name)
+                        .font(.subheadline.weight(.semibold))
+                        .foregroundStyle(.white)
+                        .lineLimit(2)
                 }
+                .frame(maxWidth: .infinity, alignment: .leading)
                 .padding(10)
             }
         }
