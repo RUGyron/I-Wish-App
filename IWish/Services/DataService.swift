@@ -168,6 +168,8 @@ final class DataService {
             dsLog.info("deleteWishlist: shared=\(sharedID), uid=\(currentUID), ownerRecordID=\(wishlist.ownerRecordID ?? "nil"), isOwner=\(isOwner)")
             if isOwner {
                 try await firestore.deleteSharedWishlistFull(wishlistID: sharedID)
+                // Also delete personal copy that was kept during share
+                try? await firestore.deletePersonalWishlist(uid: currentUID, wishlistID: id)
             } else {
                 try await firestore.leaveWishlist(wishlistID: sharedID, userUID: currentUID)
             }
