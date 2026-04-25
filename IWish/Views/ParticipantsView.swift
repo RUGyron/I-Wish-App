@@ -12,6 +12,7 @@ struct ParticipantsView: View {
     @State private var ownerName: String?
     @State private var ownerUID: String?
     @State private var pollTimer: Timer?
+    private var isCurrentUserOwner: Bool { ownerUID == services.auth.uid }
 
     var body: some View {
         NavigationStack {
@@ -100,6 +101,17 @@ struct ParticipantsView: View {
                                 }
 
                                 Spacer()
+
+                                // Kick button (owner only)
+                                if isCurrentUserOwner {
+                                    Button(role: .destructive) {
+                                        kickMember(userUID: member.userUID)
+                                    } label: {
+                                        Image(systemName: "xmark.circle.fill")
+                                            .foregroundStyle(.red.opacity(0.6))
+                                    }
+                                    .buttonStyle(.plain)
+                                }
                             }
                             .padding(.vertical, 4)
                         }
@@ -187,6 +199,18 @@ struct ParticipantsView: View {
     }
 
     // MARK: - Helpers
+
+    private func kickMember(userUID: String) {
+        guard let sharedID = wishlist.sharedWishlistID else { return }
+        Task {
+            do {
+                try await services.firestore.leaveWishlist(wishlistID: sharedID, userUID: userUID)
+                await fetchMembers()
+            } catch {
+                // silent — member removed
+            }
+        }
+    }
 
     private func roleBadge(for role: String) -> String {
         role == "editor" ? "(редактор)" : "(зритель)"

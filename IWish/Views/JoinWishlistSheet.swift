@@ -164,14 +164,23 @@ struct JoinWishlistSheet: View {
         guard let info = resolvedInfo else { return }
         Task {
             do {
-                // 1. Check auth — must be signed in (not anonymous)
                 guard let uid = services.auth.uid else {
                     showingInvitePreview = false
                     toast.error("Необходимо войти через Apple ID")
                     return
                 }
 
-                // 2. Join: create membership in Firestore (with canInvite from invite link)
+                // Check if already a member (Firestore is source of truth)
+                let memberships = try await services.firestore.fetchMyMemberships(userUID: uid)
+                if memberships.contains(where: { $0.wishlistID == info.wishlistID }) {
+                    showingInvitePreview = false
+                    toast.success("Вы уже участник этого списка")
+                    try? await Task.sleep(for: .seconds(0.5))
+                    dismiss()
+                    return
+                }
+
+                // Join: create membership
                 try await services.firestore.joinWishlist(
                     wishlistID: info.wishlistID,
                     userUID: uid,
@@ -179,23 +188,40 @@ struct JoinWishlistSheet: View {
                     canInvite: info.canInvite
                 )
 
-                // 3. Fetch shared wishlist + items from Firestore
+                // Fetch data
                 let sharedData = try await services.firestore.fetchSharedWishlist(
                     wishlistID: info.wishlistID
                 )
 
-                // 4. Create local Wishlist + Items in SwiftData
-                let wishlist = Wishlist(
-                    name: sharedData.name,
-                    coverEmoji: sharedData.coverEmoji,
-                    ownerRecordID: sharedData.ownerUID,
-                    isShared: true,
-                    sharedWishlistID: info.wishlistID,
-                    gradientSeed: sharedData.gradientSeed
-                )
+                // Create or update local (dedup by sharedWishlistID)
+                let allLocal = (try? context.fetch(FetchDescriptor<Wishlist>())) ?? []
+                let existing = allLocal.first { $0.sharedWishlistID == info.wishlistID }
+
+                let wishlist: Wishlist
+                if let existing {
+                    wishlist = existing
+                    wishlist.name = sharedData.name
+                    wishlist.coverEmoji = sharedData.coverEmoji
+                    wishlist.gradientSeed = sharedData.gradientSeed
+                } else {
+                    wishlist = Wishlist(
+                        name: sharedData.name,
+                        coverEmoji: sharedData.coverEmoji,
+                        ownerRecordID: sharedData.ownerUID,
+                        isShared: true,
+                        sharedWishlistID: info.wishlistID,
+                        gradientSeed: sharedData.gradientSeed
+                    )
+                    if let uuid = UUID(uuidString: info.wishlistID) {
+                        wishlist.id = uuid
+                    }
+                    context.insert(wishlist)
+                }
                 wishlist.myRole = info.role
                 wishlist.canInvite = info.canInvite
-                context.insert(wishlist)
+                wishlist.isShared = true
+                wishlist.ownerRecordID = sharedData.ownerUID
+                wishlist.memberCount = sharedData.members.count
 
                 for sharedItem in sharedData.items {
                     let item = Item(

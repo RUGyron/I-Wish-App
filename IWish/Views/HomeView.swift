@@ -310,15 +310,17 @@ struct HomeView: View {
                             .font(.subheadline.weight(.semibold))
                             .foregroundStyle(.white)
                             .lineLimit(2)
-                        if total > 0 {
-                            Text(formatPrice(total, currency: activeItems.first(where: { $0.price != nil })?.currency ?? "RUB"))
+                        HStack(spacing: 4) {
+                            Image(systemName: "gift")
+                                .font(.system(size: 9))
+                            Text("\(activeItems.count)")
                                 .font(.caption2)
-                                .foregroundStyle(.white.opacity(0.75))
-                        } else {
-                            Text("\(activeItems.count) желан.")
-                                .font(.caption2)
-                                .foregroundStyle(.white.opacity(0.75))
+                            if total > 0 {
+                                Text("· \(formatPrice(total, currency: activeItems.first(where: { $0.price != nil })?.currency ?? "RUB"))")
+                                    .font(.caption2)
+                            }
                         }
+                        .foregroundStyle(.white.opacity(0.75))
                     }
 
                     Spacer(minLength: 4)
