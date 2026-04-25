@@ -607,6 +607,13 @@ struct WishlistDetailView: View {
                     return
                 }
                 await services.data?.refreshItems(for: wishlist.id.uuidString)
+                // Check if refreshItems detected remote deletion
+                if services.data?.wishlistDeleted == true {
+                    services.data?.wishlistDeleted = false
+                    stopPolling()
+                    dismiss()
+                    return
+                }
             }
         }
     }

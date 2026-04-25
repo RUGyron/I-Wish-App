@@ -13,6 +13,8 @@ final class DataService {
 
     var isSyncing: Bool = false
     var syncError: String?
+    /// Set to true when refreshItems detects wishlist was deleted remotely
+    var wishlistDeleted: Bool = false
     /// Serializes all Firestore operations — no parallel mutations/polls
     private var operationLock = false
 
@@ -525,13 +527,22 @@ final class DataService {
         do {
             let remoteItems: [FirestoreService.SharedItemInfo]
             if wishlistIsShared(wishlist), let sharedID = wishlist.sharedWishlistID {
+                // Verify wishlist still exists
+                let _ = try await firestore.fetchSharedWishlist(wishlistID: sharedID)
                 remoteItems = try await firestore.fetchSharedWishlistItems(wishlistID: sharedID)
             } else {
                 remoteItems = try await firestore.fetchPersonalItems(uid: currentUID, wishlistID: wishlistID)
             }
 
             mergeItems(remoteItems, into: wishlist)
+            wishlistDeleted = false
         } catch {
+            // If shared wishlist not found — it was deleted remotely
+            if wishlistIsShared(wishlist) {
+                modelContext.delete(wishlist)
+                try? modelContext.save()
+                wishlistDeleted = true
+            }
             syncError = error.localizedDescription
             print("[DataService] refreshItems error: \(error)")
         }
