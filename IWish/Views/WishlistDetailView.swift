@@ -310,25 +310,27 @@ struct WishlistDetailView: View {
     // MARK: - Empty State
 
     private var emptyState: some View {
-        ScrollView {
-            VStack(spacing: 16) {
-                wishlistHeaderRow
-                    .padding(.horizontal, 16)
+        VStack(spacing: 0) {
+            wishlistHeaderRow
+                .padding(.horizontal, 16)
+                .padding(.top, 8)
 
-                VStack(spacing: 12) {
-                    Image(systemName: "list.bullet")
-                        .font(.system(size: 40))
-                        .foregroundStyle(.tint)
-                    Text("Список пуст")
-                        .font(.title3)
-                    Text("Добавь первое желание.")
-                        .font(.subheadline)
-                        .foregroundStyle(.secondary)
-                }
-                .padding(.top, 40)
+            Spacer()
+
+            VStack(spacing: 12) {
+                Image(systemName: "list.bullet")
+                    .font(.system(size: 40))
+                    .foregroundStyle(.tint)
+                Text("Список пуст")
+                    .font(.title3)
+                Text("Добавь первое желание.")
+                    .font(.subheadline)
+                    .foregroundStyle(.secondary)
             }
-            .padding(.bottom, 80)
+
+            Spacer()
         }
+        .padding(.bottom, 80)
         .warmBackground()
     }
 
