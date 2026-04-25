@@ -537,6 +537,16 @@ final class DataService {
             if wishlistIsShared(wishlist), let sharedID = wishlist.sharedWishlistID {
                 // Verify wishlist still exists
                 let _ = try await firestore.fetchSharedWishlist(wishlistID: sharedID)
+                // Verify we're still a member (might have been kicked)
+                let memberships = try await firestore.fetchMyMemberships(userUID: currentUID)
+                if !memberships.contains(where: { $0.wishlistID == sharedID }) {
+                    // Kicked — remove local copy
+                    modelContext.delete(wishlist)
+                    try? modelContext.save()
+                    wishlistDeleted = true
+                    isSyncing = false
+                    return
+                }
                 remoteItems = try await firestore.fetchSharedWishlistItems(wishlistID: sharedID)
             } else {
                 remoteItems = try await firestore.fetchPersonalItems(uid: currentUID, wishlistID: wishlistID)
