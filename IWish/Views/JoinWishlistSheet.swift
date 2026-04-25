@@ -86,6 +86,7 @@ struct JoinWishlistSheet: View {
             }
         }
         .loadingOverlay(joinStatus.isJoining)
+        .presentationDetents([.medium])
         .applyTheme()
         .onAppear {
             if let url = initialURL {
