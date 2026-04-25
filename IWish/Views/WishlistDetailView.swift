@@ -600,6 +600,12 @@ struct WishlistDetailView: View {
     private func startPolling() {
         pollTimer = Timer.scheduledTimer(withTimeInterval: 5.0, repeats: true) { _ in
             Task { @MainActor in
+                // Check if wishlist still exists (might be deleted by another device)
+                if wishlist.isDeleted || wishlist.modelContext == nil {
+                    stopPolling()
+                    dismiss()
+                    return
+                }
                 await services.data?.refreshItems(for: wishlist.id.uuidString)
             }
         }
