@@ -267,80 +267,116 @@ struct HomeView: View {
     private func wishlistTile(_ wishlist: Wishlist) -> some View {
         let activeItems = (wishlist.items ?? []).filter { !$0.isArchived }
         let total = activeItems.compactMap(\.price).reduce(0, +)
+        let memberCount = 0 // Updated by polling if shared
 
-        return ZStack(alignment: .bottomLeading) {
-            if let imageData = wishlist.coverImageData, let uiImage = UIImage(data: imageData) {
-                GeometryReader { geo in
-                    Image(uiImage: uiImage)
-                        .resizable()
-                        .scaledToFill()
-                        .frame(width: geo.size.width, height: geo.size.height)
-                        .clipped()
-                }
-            } else {
-                let colors = DefaultCoverGenerator.colors(forSeed: wishlist.gradientSeed != 0 ? wishlist.gradientSeed : DefaultCoverGenerator.stableHash(wishlist.id.uuidString))
-                GeometryReader { geo in
-                    ZStack {
-                        MeshGradient(
-                            width: 3, height: 3,
-                            points: [
-                                .init(0, 0),   .init(0.5, 0),   .init(1, 0),
-                                .init(0, 0.5), .init(0.5, 0.5), .init(1, 0.5),
-                                .init(0, 1),   .init(0.5, 1),   .init(1, 1),
-                            ],
-                            colors: [
-                                colors[0], colors[1], colors[2],
-                                colors[1], colors[2], colors[0],
-                                colors[2], colors[0], colors[1],
-                            ]
-                        )
-                        .frame(width: geo.size.width, height: geo.size.height)
-                        if let emoji = wishlist.coverEmoji {
-                            Text(emoji).font(.system(size: 48))
-                        }
-                    }
-                }
+        return ZStack {
+            // Background
+            tileBackground(wishlist)
+
+            // Bottom gradient for text legibility
+            VStack {
+                Spacer()
+                LinearGradient(
+                    colors: [.clear, .black.opacity(0.55)],
+                    startPoint: .top,
+                    endPoint: .bottom
+                )
+                .frame(height: 80)
             }
 
-            LinearGradient(
-                colors: [.clear, .black.opacity(0.6)],
-                startPoint: .top,
-                endPoint: .bottom
-            )
+            // Top-right: role badge (only for shared)
+            if wishlist.isShared, let role = wishlist.myRole {
+                VStack {
+                    HStack {
+                        Spacer()
+                        Image(systemName: roleBadgeIcon(role))
+                            .font(.system(size: 10, weight: .semibold))
+                            .foregroundStyle(.white)
+                            .padding(6)
+                            .background(.black.opacity(0.35), in: Circle())
+                    }
+                    Spacer()
+                }
+                .padding(8)
+            }
 
-            VStack(alignment: .leading, spacing: 2) {
-                HStack(spacing: 4) {
-                    Text(wishlist.name)
-                        .font(.subheadline)
-                        .fontWeight(.semibold)
-                        .foregroundStyle(.white)
-                        .lineLimit(2)
+            // Bottom content
+            VStack {
+                Spacer()
+                HStack(alignment: .bottom) {
+                    // Left: name + count
+                    VStack(alignment: .leading, spacing: 3) {
+                        Text(wishlist.name)
+                            .font(.subheadline.weight(.semibold))
+                            .foregroundStyle(.white)
+                            .lineLimit(2)
+                        if total > 0 {
+                            Text(formatPrice(total, currency: activeItems.first(where: { $0.price != nil })?.currency ?? "RUB"))
+                                .font(.caption2)
+                                .foregroundStyle(.white.opacity(0.75))
+                        } else {
+                            Text("\(activeItems.count) желан.")
+                                .font(.caption2)
+                                .foregroundStyle(.white.opacity(0.75))
+                        }
+                    }
+
+                    Spacer(minLength: 4)
+
+                    // Right: shared badge with participant icon
                     if wishlist.isShared {
-                        HStack(spacing: 2) {
+                        HStack(spacing: 3) {
                             Image(systemName: "person.2.fill")
-                            if let role = wishlist.myRole {
-                                Image(systemName: roleBadgeIcon(role))
-                            }
+                                .font(.system(size: 9))
                         }
-                        .font(.caption2)
-                        .foregroundStyle(.white.opacity(0.8))
+                        .foregroundStyle(.white.opacity(0.7))
+                        .padding(.horizontal, 7)
+                        .padding(.vertical, 4)
+                        .background(.black.opacity(0.3), in: Capsule())
                     }
                 }
-                if total > 0 {
-                    Text(formatPrice(total, currency: activeItems.first(where: { $0.price != nil })?.currency ?? "RUB"))
-                        .font(.caption2)
-                        .foregroundStyle(.white.opacity(0.8))
-                } else {
-                    Text(String(format: NSLocalizedString("%lld желаний", comment: ""), activeItems.count))
-                        .font(.caption2)
-                        .foregroundStyle(.white.opacity(0.8))
-                }
+                .padding(10)
             }
-            .padding(10)
         }
         .aspectRatio(1, contentMode: .fit)
         .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
         .titaniumBorder(cornerRadius: 16)
+    }
+
+    @ViewBuilder
+    private func tileBackground(_ wishlist: Wishlist) -> some View {
+        if let imageData = wishlist.coverImageData, let uiImage = UIImage(data: imageData) {
+            GeometryReader { geo in
+                Image(uiImage: uiImage)
+                    .resizable()
+                    .scaledToFill()
+                    .frame(width: geo.size.width, height: geo.size.height)
+                    .clipped()
+            }
+        } else {
+            let colors = DefaultCoverGenerator.colors(forSeed: wishlist.gradientSeed != 0 ? wishlist.gradientSeed : DefaultCoverGenerator.stableHash(wishlist.id.uuidString))
+            GeometryReader { geo in
+                ZStack {
+                    MeshGradient(
+                        width: 3, height: 3,
+                        points: [
+                            .init(0, 0),   .init(0.5, 0),   .init(1, 0),
+                            .init(0, 0.5), .init(0.5, 0.5), .init(1, 0.5),
+                            .init(0, 1),   .init(0.5, 1),   .init(1, 1),
+                        ],
+                        colors: [
+                            colors[0], colors[1], colors[2],
+                            colors[1], colors[2], colors[0],
+                            colors[2], colors[0], colors[1],
+                        ]
+                    )
+                    .frame(width: geo.size.width, height: geo.size.height)
+                    if let emoji = wishlist.coverEmoji {
+                        Text(emoji).font(.system(size: 44))
+                    }
+                }
+            }
+        }
     }
 
     private func roleBadgeIcon(_ role: String) -> String {

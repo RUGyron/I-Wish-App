@@ -188,13 +188,17 @@ struct WishlistDetailView: View {
                             }
                         }
 
-                        if wishlist.canInvite || wishlist.myRole == "owner" || wishlist.myRole == nil {
+                        // Share: only if personal (myRole==nil), owner, or has canInvite
+                        if !wishlist.isShared || wishlist.myRole == "owner" || wishlist.canInvite {
                             Button {
                                 showingShare = true
                             } label: {
                                 Label("Поделиться", systemImage: "square.and.arrow.up")
                             }
+                        }
 
+                        // Participants: visible for all shared wishlists
+                        if wishlist.isShared {
                             Button {
                                 showingParticipants = true
                             } label: {
