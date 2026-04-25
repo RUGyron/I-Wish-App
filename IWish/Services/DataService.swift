@@ -112,7 +112,7 @@ final class DataService {
         return wishlist
     }
 
-    func updateWishlist(id: String, name: String, emoji: String?) async throws {
+    func updateWishlist(id: String, name: String, emoji: String?, coverImageData: Data? = nil) async throws {
         let currentUID = try uid
 
         await acquireLock()
@@ -136,9 +136,9 @@ final class DataService {
                     isSyncing = false
                     throw FirestoreService.FirestoreError.requestFailed("Только владелец может изменить название")
                 }
-                try await firestore.updateSharedWishlist(wishlistID: sharedID, name: name, emoji: emoji)
+                try await firestore.updateSharedWishlist(wishlistID: sharedID, name: name, emoji: emoji, coverImageData: coverImageData)
             } else {
-                try await firestore.updatePersonalWishlist(uid: currentUID, wishlistID: id, name: name, emoji: emoji)
+                try await firestore.updatePersonalWishlist(uid: currentUID, wishlistID: id, name: name, emoji: emoji, coverImageData: coverImageData)
             }
         } catch {
             isSyncing = false
@@ -147,6 +147,7 @@ final class DataService {
 
         wishlist.name = name
         wishlist.coverEmoji = emoji
+        wishlist.coverImageData = coverImageData
         wishlist.updatedAt = .now
         try? modelContext.save()
         isSyncing = false
@@ -482,6 +483,9 @@ final class DataService {
                 if let local = localByID[r.id] {
                     local.name = r.name
                     local.coverEmoji = r.emoji
+                    if local.coverImageData == nil, let remoteImage = r.coverImageData {
+                        local.coverImageData = remoteImage
+                    }
                     local.gradientSeed = r.gradientSeed
                     local.isArchived = r.isArchived
                     local.updatedAt = .now
@@ -491,6 +495,7 @@ final class DataService {
                     guard let uuid = UUID(uuidString: r.id) else { continue }
                     let newWL = Wishlist(
                         name: r.name,
+                        coverImageData: r.coverImageData,
                         coverEmoji: r.emoji,
                         isArchived: r.isArchived,
                         gradientSeed: r.gradientSeed
@@ -552,6 +557,9 @@ final class DataService {
                     if let local = currentBySharedID[info.wishlistID] {
                         local.name = info.name
                         local.coverEmoji = info.coverEmoji
+                        if local.coverImageData == nil, let remoteImage = info.coverImageData {
+                            local.coverImageData = remoteImage
+                        }
                         local.gradientSeed = info.gradientSeed
                         local.isArchived = info.isArchived
                         local.ownerRecordID = info.ownerUID
@@ -566,6 +574,7 @@ final class DataService {
                     } else if let uuid = UUID(uuidString: info.wishlistID) {
                         let newWL = Wishlist(
                             name: info.name,
+                            coverImageData: info.coverImageData,
                             coverEmoji: info.coverEmoji,
                             ownerRecordID: info.ownerUID,
                             isShared: true,
@@ -752,6 +761,7 @@ final class DataService {
                 wishlistID: id,
                 name: wishlist.name,
                 emoji: wishlist.coverEmoji,
+                coverImageData: wishlist.coverImageData,
                 gradientSeed: wishlist.gradientSeed,
                 ownerUID: currentUID,
                 ownerName: ownerName,
@@ -841,12 +851,14 @@ final class DataService {
                 wishlist = existing
                 wishlist.name = sharedData.name
                 wishlist.coverEmoji = sharedData.coverEmoji
+                wishlist.coverImageData = sharedData.coverImageData
                 wishlist.ownerRecordID = sharedData.ownerUID
                 wishlist.gradientSeed = sharedData.gradientSeed
             } else {
                 // New — create
                 wishlist = Wishlist(
                     name: sharedData.name,
+                    coverImageData: sharedData.coverImageData,
                     coverEmoji: sharedData.coverEmoji,
                     ownerRecordID: sharedData.ownerUID,
                     isShared: true,

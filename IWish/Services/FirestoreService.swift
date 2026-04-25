@@ -29,6 +29,7 @@ final class FirestoreService {
         let wishlistID: String
         let name: String
         let coverEmoji: String?
+        let coverImageData: Data?
         let ownerUID: String
         let ownerName: String?
         let gradientSeed: Int
@@ -143,6 +144,7 @@ final class FirestoreService {
             else if let i = fieldValue["integerValue"] as? Int { result[key] = i }
             else if let b = fieldValue["booleanValue"] as? Bool { result[key] = b }
             else if let t = fieldValue["timestampValue"] as? String { result[key] = t }
+            else if let b = fieldValue["bytesValue"] as? String { result[key] = Data(base64Encoded: b) as Any }
             else if fieldValue["nullValue"] != nil { result[key] = NSNull() }
         }
         return result
@@ -156,6 +158,7 @@ final class FirestoreService {
             else if let d = value as? Double { fields[key] = ["doubleValue": d] }
             else if let i = value as? Int { fields[key] = ["integerValue": String(i)] }
             else if let b = value as? Bool { fields[key] = ["booleanValue": b] }
+            else if let data = value as? Data { fields[key] = ["bytesValue": data.base64EncodedString()] }
             else if let date = value as? Date {
                 let formatter = ISO8601DateFormatter()
                 fields[key] = ["timestampValue": formatter.string(from: date)]
@@ -178,25 +181,33 @@ final class FirestoreService {
 
     // MARK: - Personal Wishlists (users/{uid}/wishlists)
 
-    func createPersonalWishlist(uid: String, wishlistID: String, name: String, emoji: String?, gradientSeed: Int) async throws {
-        let fields = toFields([
+    func createPersonalWishlist(uid: String, wishlistID: String, name: String, emoji: String?, gradientSeed: Int, coverImageData: Data? = nil) async throws {
+        var data: [String: Any?] = [
             "name": name,
             "coverEmoji": emoji ?? "",
             "gradientSeed": gradientSeed as Any,
             "isArchived": false as Any,
             "createdAt": Date() as Any,
             "updatedAt": Date() as Any
-        ])
+        ]
+        if let coverImageData { data["coverImageData"] = coverImageData }
+        let fields = toFields(data)
         let _ = try await request("PATCH", path: "users/\(uid)/wishlists/\(wishlistID)", body: ["fields": fields])
     }
 
-    func updatePersonalWishlist(uid: String, wishlistID: String, name: String, emoji: String?) async throws {
-        let fields = toFields([
+    func updatePersonalWishlist(uid: String, wishlistID: String, name: String, emoji: String?, coverImageData: Data? = nil) async throws {
+        var data: [String: Any?] = [
             "name": name,
             "coverEmoji": emoji ?? "",
             "updatedAt": Date() as Any
-        ])
-        let _ = try await request("PATCH", path: "users/\(uid)/wishlists/\(wishlistID)?updateMask.fieldPaths=name&updateMask.fieldPaths=coverEmoji&updateMask.fieldPaths=updatedAt", body: ["fields": fields])
+        ]
+        var maskPaths = "updateMask.fieldPaths=name&updateMask.fieldPaths=coverEmoji&updateMask.fieldPaths=updatedAt"
+        if let coverImageData {
+            data["coverImageData"] = coverImageData
+            maskPaths += "&updateMask.fieldPaths=coverImageData"
+        }
+        let fields = toFields(data)
+        let _ = try await request("PATCH", path: "users/\(uid)/wishlists/\(wishlistID)?\(maskPaths)", body: ["fields": fields])
     }
 
     func archivePersonalWishlist(uid: String, wishlistID: String, isArchived: Bool) async throws {
@@ -232,14 +243,15 @@ final class FirestoreService {
         let _ = try await request("DELETE", path: "users/\(uid)/wishlists/\(wishlistID)")
     }
 
-    func fetchPersonalWishlists(uid: String) async throws -> [(id: String, name: String, emoji: String?, gradientSeed: Int, isArchived: Bool)] {
+    func fetchPersonalWishlists(uid: String) async throws -> [(id: String, name: String, emoji: String?, coverImageData: Data?, gradientSeed: Int, isArchived: Bool)] {
         let docs = try await listDocuments(parentPath: "users/\(uid)/wishlists")
-        return docs.compactMap { doc -> (id: String, name: String, emoji: String?, gradientSeed: Int, isArchived: Bool)? in
+        return docs.compactMap { doc -> (id: String, name: String, emoji: String?, coverImageData: Data?, gradientSeed: Int, isArchived: Bool)? in
             guard let name = doc["name"] as? String else { return nil }
             let docID = documentID(from: name)
             guard let fields = doc["fields"] as? [String: Any] else { return nil }
             let data = parseFields(fields)
             let emoji = (data["coverEmoji"] as? String)?.isEmpty == true ? nil : data["coverEmoji"] as? String
+            let coverImageData = data["coverImageData"] as? Data
             let seed: Int
             if let s = data["gradientSeed"] as? Int {
                 seed = s
@@ -247,7 +259,7 @@ final class FirestoreService {
                 seed = 0
             }
             let isArchived = data["isArchived"] as? Bool ?? false
-            return (id: docID, name: data["name"] as? String ?? "", emoji: emoji, gradientSeed: seed, isArchived: isArchived)
+            return (id: docID, name: data["name"] as? String ?? "", emoji: emoji, coverImageData: coverImageData, gradientSeed: seed, isArchived: isArchived)
         }
     }
 
@@ -295,9 +307,9 @@ final class FirestoreService {
 
     // MARK: - Shared Wishlists (shared_wishlists/)
 
-    func createSharedWishlist(wishlistID: String, name: String, emoji: String?, gradientSeed: Int, ownerUID: String, ownerName: String?, items: [SharedItemInfo]) async throws {
+    func createSharedWishlist(wishlistID: String, name: String, emoji: String?, coverImageData: Data? = nil, gradientSeed: Int, ownerUID: String, ownerName: String?, items: [SharedItemInfo]) async throws {
         // 1. Write the wishlist document
-        let wishlistFields = toFields([
+        var data: [String: Any?] = [
             "name": name,
             "coverEmoji": emoji ?? "",
             "gradientSeed": gradientSeed as Any,
@@ -306,7 +318,9 @@ final class FirestoreService {
             "ownerName": ownerName ?? "",
             "createdAt": Date() as Any,
             "updatedAt": Date() as Any
-        ])
+        ]
+        if let coverImageData { data["coverImageData"] = coverImageData }
+        let wishlistFields = toFields(data)
         let _ = try await request("PATCH", path: "shared_wishlists/\(wishlistID)", body: ["fields": wishlistFields])
 
         // 2. Batch write all items
@@ -337,13 +351,19 @@ final class FirestoreService {
         }
     }
 
-    func updateSharedWishlist(wishlistID: String, name: String, emoji: String?) async throws {
-        let fields = toFields([
+    func updateSharedWishlist(wishlistID: String, name: String, emoji: String?, coverImageData: Data? = nil) async throws {
+        var data: [String: Any?] = [
             "name": name,
             "coverEmoji": emoji ?? "",
             "updatedAt": Date() as Any
-        ])
-        let _ = try await request("PATCH", path: "shared_wishlists/\(wishlistID)?updateMask.fieldPaths=name&updateMask.fieldPaths=coverEmoji&updateMask.fieldPaths=updatedAt", body: ["fields": fields])
+        ]
+        var maskPaths = "updateMask.fieldPaths=name&updateMask.fieldPaths=coverEmoji&updateMask.fieldPaths=updatedAt"
+        if let coverImageData {
+            data["coverImageData"] = coverImageData
+            maskPaths += "&updateMask.fieldPaths=coverImageData"
+        }
+        let fields = toFields(data)
+        let _ = try await request("PATCH", path: "shared_wishlists/\(wishlistID)?\(maskPaths)", body: ["fields": fields])
     }
 
     func fetchSharedWishlistItems(wishlistID: String) async throws -> [SharedItemInfo] {
@@ -452,6 +472,7 @@ final class FirestoreService {
             wishlistID: wishlistID,
             name: data["name"] as? String ?? "",
             coverEmoji: (data["coverEmoji"] as? String)?.isEmpty == true ? nil : data["coverEmoji"] as? String,
+            coverImageData: data["coverImageData"] as? Data,
             ownerUID: data["ownerUID"] as? String ?? "",
             ownerName: (data["ownerName"] as? String)?.isEmpty == true ? nil : data["ownerName"] as? String,
             gradientSeed: data["gradientSeed"] as? Int ?? 0,

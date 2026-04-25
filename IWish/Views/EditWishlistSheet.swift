@@ -65,10 +65,7 @@ struct EditWishlistSheet: View {
         isSaving = true
         Task {
             do {
-                try await services.data.updateWishlist(id: wishlist.id.uuidString, name: trimmed, emoji: coverEmoji)
-                // Apply cover image locally (not stored in Firestore)
-                wishlist.coverImageData = coverImageData
-                try? context.save()
+                try await services.data.updateWishlist(id: wishlist.id.uuidString, name: trimmed, emoji: coverEmoji, coverImageData: coverImageData)
                 dismiss()
             } catch {
                 toast.error(error.localizedDescription)
