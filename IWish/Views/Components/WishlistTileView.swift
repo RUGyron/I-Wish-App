@@ -7,7 +7,8 @@ struct WishlistTileView: View {
     let onArchive: () -> Void
     let onDelete: () -> Void
 
-    // Store values to prevent closure crossover
+    @State private var menuEnabled = true
+
     private var canShare: Bool {
         !wishlist.isShared || wishlist.myRole == "owner" || wishlist.canInvite
     }
@@ -19,19 +20,28 @@ struct WishlistTileView: View {
             tileContent
         }
         .buttonStyle(.plain)
+        .allowsHitTesting(menuEnabled)
         .contextMenu {
             if canShare {
-                Button { onShare() } label: {
+                Button { cooldown(); onShare() } label: {
                     Label("Поделиться", systemImage: "square.and.arrow.up")
                 }
             }
-            Button { onArchive() } label: {
+            Button { cooldown(); onArchive() } label: {
                 Label("В архив", systemImage: "archivebox")
             }
             Divider()
-            Button(role: .destructive) { onDelete() } label: {
+            Button(role: .destructive) { cooldown(); onDelete() } label: {
                 Label("Удалить", systemImage: "trash")
             }
+        }
+    }
+
+    private func cooldown() {
+        menuEnabled = false
+        Task { @MainActor in
+            try? await Task.sleep(for: .seconds(0.5))
+            menuEnabled = true
         }
     }
 
