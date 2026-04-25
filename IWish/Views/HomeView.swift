@@ -241,8 +241,10 @@ struct HomeView: View {
                             WishlistDetailView(wishlist: wishlist)
                         } label: {
                             wishlistTile(wishlist)
+                                .id(wishlist.id)
                         }
                         .buttonStyle(.plain)
+                        .id(wishlist.id)
                         .contextMenu {
                             if !wishlist.isShared || wishlist.myRole == "owner" || wishlist.canInvite {
                                 Button {
