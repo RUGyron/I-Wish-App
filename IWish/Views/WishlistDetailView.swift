@@ -637,21 +637,13 @@ struct WishlistDetailView: View {
     }
 
     /// Текст "от <имя>" для item в shared wishlist. Если автор — текущий юзер, показываем "Вы".
-    /// Если addedByName отсутствует, но известен addedByUID — показываем "от участника" (это не наш item, но имя автор не задал).
-    /// Если ни UID ни name — это legacy item до внедрения авторства, скрываем подпись.
+    /// Если addedByName отсутствует (legacy item, добавленный до внедрения авторства) — возвращаем nil.
     private func authorLabel(for item: Item) -> String? {
-        // Свой item — всегда "от Вас", даже если имя в момент добавления было пустое.
+        guard let name = item.addedByName, !name.isEmpty else { return nil }
         if let myUID = services.auth.uid, item.addedByUID == myUID {
             return "от Вас"
         }
-        if let name = item.addedByName, !name.isEmpty {
-            return "от \(name)"
-        }
-        // UID есть, имя не задано (юзер не указал у себя в Settings) → подписываем как «от участника».
-        if let uid = item.addedByUID, !uid.isEmpty {
-            return "от участника"
-        }
-        return nil
+        return "от \(name)"
     }
 
     // MARK: - Reorder helpers

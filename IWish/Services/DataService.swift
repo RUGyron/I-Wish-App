@@ -366,9 +366,10 @@ final class DataService {
 
     func addItem(to wishlistID: String, name: String, tier: ItemTier, price: Double?, currency: String, url: String?, emoji: String?, sortIndex: Double, descriptionText: String? = nil, probationEndAt: Date? = nil, coverImageData: Data? = nil) async throws -> Item {
         let currentUID = try uid
-        // Имя автора фиксируем на момент добавления — если юзер потом сменит имя в Apple ID,
-        // существующие items сохранят оригинальное "от <имя>".
-        let currentUserName = auth.userName
+        // Имя автора фиксируем на момент добавления. bestDisplayName() добирает имя
+        // из Keychain → Firebase displayName → email-prefix, чтобы атрибуция работала
+        // даже если Apple credential не передал name на повторном sign-in.
+        let currentUserName = auth.bestDisplayName()
 
         let item = Item(
             name: name,

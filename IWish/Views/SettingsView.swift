@@ -48,9 +48,6 @@ struct SettingsView: View {
 
     // MARK: - Account
 
-    @State private var nameDraft: String = ""
-    @FocusState private var nameFieldFocused: Bool
-
     private var accountSection: some View {
         Section {
             if services.auth.isAuthenticated {
@@ -59,30 +56,12 @@ struct SettingsView: View {
                         .font(.title2)
                         .foregroundStyle(.tint)
                     VStack(alignment: .leading, spacing: 2) {
-                        TextField("Ваше имя", text: $nameDraft)
-                            .focused($nameFieldFocused)
-                            .submitLabel(.done)
-                            .onSubmit {
-                                services.auth.setUserName(nameDraft)
-                                nameFieldFocused = false
-                                toast.success("Имя сохранено")
-                            }
-                            .onChange(of: nameFieldFocused) { _, focused in
-                                if !focused {
-                                    let trimmed = nameDraft.trimmingCharacters(in: .whitespaces)
-                                    if !trimmed.isEmpty, trimmed != services.auth.userName {
-                                        services.auth.setUserName(trimmed)
-                                    }
-                                }
-                            }
+                        Text(services.auth.userName ?? "Apple ID")
                             .font(.body.weight(.medium))
-                        Text("Вы вошли через Apple. Имя видно участникам ваших общих списков.")
+                        Text("Вы вошли через Apple")
                             .font(.caption)
                             .foregroundStyle(.secondary)
                     }
-                }
-                .onAppear {
-                    nameDraft = services.auth.userName ?? ""
                 }
                 Button(role: .destructive) {
                     let wishlistDescriptor = FetchDescriptor<Wishlist>()

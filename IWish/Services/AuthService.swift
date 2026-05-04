@@ -194,13 +194,19 @@ final class AuthService: NSObject {
         }
     }
 
-    /// Ручная установка имени пользователем (через Settings).
-    /// Сохраняем в iCloud Keychain — синкается между Apple ID девайсами.
-    func setUserName(_ name: String) {
-        let trimmed = name.trimmingCharacters(in: .whitespaces)
-        guard !trimmed.isEmpty else { return }
-        userName = trimmed
-        KeychainService.saveUserName(trimmed)
+    /// Лучшее имя, которое можно подписать под items этого юзера прямо сейчас.
+    /// Порядок: Keychain (синкнутое) → Firebase displayName → email-prefix.
+    /// Используется в DataService.addItem, чтобы атрибуция работала даже когда
+    /// Apple credential не передал имя на повторном sign-in.
+    func bestDisplayName() -> String? {
+        if let name = userName, !name.isEmpty { return name }
+        if let dn = Auth.auth().currentUser?.displayName, !dn.isEmpty { return dn }
+        if let email = Auth.auth().currentUser?.email,
+           let prefix = email.components(separatedBy: "@").first,
+           !prefix.isEmpty {
+            return prefix
+        }
+        return nil
     }
 
     func signOut() throws {
