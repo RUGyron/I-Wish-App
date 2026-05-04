@@ -626,9 +626,10 @@ struct WishlistDetailView: View {
                 Image(systemName: "clock")
                 Text(String(format: NSLocalizedString("%lld дней", comment: ""), days))
             }
-            // "от <имя>" — только в shared-вишлистах с активным membership.
-            // Для личных списков юзер сам добавлял всё — атрибуция не нужна.
-            if wishlist.isShared, wishlist.myRole != nil, let authorLabel = authorLabel(for: item) {
+            // "от <имя>" — только в shared-вишлистах. Для личных списков юзер сам
+            // добавлял всё — атрибуция не нужна. myRole не проверяем, т.к. у owner'а
+            // он может быть nil сразу после share, до первого refresh membership'ов.
+            if wishlist.isShared, let authorLabel = authorLabel(for: item) {
                 Text("\u{00B7}")
                 Text(authorLabel)
             }

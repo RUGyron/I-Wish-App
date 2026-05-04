@@ -134,6 +134,7 @@ final class ShareManager {
             wishlist.isShared = true
             wishlist.sharedWishlistID = wishlist.id.uuidString
             wishlist.ownerRecordID = ownerUID
+            wishlist.myRole = "owner"  // иначе UI не показывает owner-only фичи до первого polling refresh
             wishlist.canInvite = true // owner always can invite
             wishlist.updatedAt = .now
 
