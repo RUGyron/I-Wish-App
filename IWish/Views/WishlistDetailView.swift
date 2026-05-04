@@ -162,25 +162,27 @@ struct WishlistDetailView: View {
                     }
                 } else {
                     Menu {
-                        Button {
-                            showingEditWishlist = true
-                        } label: {
-                            Label("Изменить список", systemImage: "pencil")
-                        }
-
-                        if selectedSort == .importance {
+                        if wishlist.isEditable {
                             Button {
-                                saveSortSnapshot()
-                                withAnimation { editMode = .active }
+                                showingEditWishlist = true
                             } label: {
-                                Label("Переместить", systemImage: "arrow.up.arrow.down")
+                                Label("Изменить список", systemImage: "pencil")
                             }
-                        }
 
-                        Divider()
+                            if selectedSort == .importance {
+                                Button {
+                                    saveSortSnapshot()
+                                    withAnimation { editMode = .active }
+                                } label: {
+                                    Label("Переместить", systemImage: "arrow.up.arrow.down")
+                                }
+                            }
+
+                            Divider()
+                        }
 
                         let archivedCount = (wishlist.items ?? []).filter { $0.isArchived }.count
-                        if archivedCount > 0 {
+                        if archivedCount > 0 && wishlist.isEditable {
                             Button {
                                 showingArchive = true
                             } label: {
@@ -308,8 +310,10 @@ struct WishlistDetailView: View {
             }
         }
         .overlay(alignment: .bottom) {
-            addButton
-                .padding(.bottom, 24)
+            if wishlist.isEditable {
+                addButton
+                    .padding(.bottom, 24)
+            }
         }
         .onChange(of: wishlist.isDeleted) { _, deleted in
             if deleted { dismiss() }
@@ -332,9 +336,15 @@ struct WishlistDetailView: View {
                     .foregroundStyle(.tint)
                 Text("Список пуст")
                     .font(.title3)
-                Text("Добавь первое желание.")
-                    .font(.subheadline)
-                    .foregroundStyle(.secondary)
+                if wishlist.isEditable {
+                    Text("Добавь первое желание.")
+                        .font(.subheadline)
+                        .foregroundStyle(.secondary)
+                } else {
+                    Text("В этот список ещё ничего не добавили.")
+                        .font(.subheadline)
+                        .foregroundStyle(.secondary)
+                }
             }
 
             Spacer()
@@ -423,11 +433,16 @@ struct WishlistDetailView: View {
                 Section {
                     if !collapsedTiers.contains(tier.rawValue) {
                         ForEach(tierItems) { item in
-                            itemRow(item)
-                                .itemContextMenu(item: item, context: context, editingItem: $editingItem, dataService: services.data, wishlistID: wishlist.id.uuidString, toast: toast)
-                                .itemSwipeActions(item: item, dataService: services.data, wishlistID: wishlist.id.uuidString, toast: toast)
+                            if wishlist.isEditable {
+                                itemRow(item)
+                                    .itemContextMenu(item: item, context: context, editingItem: $editingItem, dataService: services.data, wishlistID: wishlist.id.uuidString, toast: toast)
+                                    .itemSwipeActions(item: item, dataService: services.data, wishlistID: wishlist.id.uuidString, toast: toast)
+                            } else {
+                                itemRow(item)
+                            }
                         }
                         .onMove { from, to in
+                            guard wishlist.isEditable else { return }
                             reorderItems(in: tier, from: from, to: to)
                         }
                     }
@@ -520,9 +535,13 @@ struct WishlistDetailView: View {
 
         Section {
             ForEach(sorted) { item in
-                itemRow(item)
-                    .itemContextMenu(item: item, context: context, editingItem: $editingItem, dataService: services.data, wishlistID: wishlist.id.uuidString, toast: toast)
-                    .itemSwipeActions(item: item, dataService: services.data, wishlistID: wishlist.id.uuidString, toast: toast)
+                if wishlist.isEditable {
+                    itemRow(item)
+                        .itemContextMenu(item: item, context: context, editingItem: $editingItem, dataService: services.data, wishlistID: wishlist.id.uuidString, toast: toast)
+                        .itemSwipeActions(item: item, dataService: services.data, wishlistID: wishlist.id.uuidString, toast: toast)
+                } else {
+                    itemRow(item)
+                }
             }
         }
     }

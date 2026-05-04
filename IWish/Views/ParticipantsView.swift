@@ -4,6 +4,7 @@ import SwiftData
 struct ParticipantsView: View {
     @Environment(\.dismiss) private var dismiss
     @Environment(\.appServices) private var services
+    @Environment(\.toast) private var toast
     let wishlist: Wishlist
     var onShareRequested: (() -> Void)? = nil
 
@@ -12,6 +13,12 @@ struct ParticipantsView: View {
     @State private var ownerName: String?
     @State private var ownerUID: String?
     @State private var pollTimer: Timer?
+    /// userUID участника, по которому сейчас идёт mutation (changeRole / kick).
+    /// Нужен чтобы заблокировать повторные тапы на той же строке и показать ProgressView.
+    @State private var pendingMutationUID: String?
+    /// Confirmation dialog: какого юзера собираемся кикнуть.
+    @State private var memberToKick: (userUID: String, name: String)?
+
     private var isCurrentUserOwner: Bool { ownerUID == services.auth.uid }
 
     var body: some View {
@@ -82,39 +89,7 @@ struct ParticipantsView: View {
                         .padding(.vertical, 24)
                     } else {
                         ForEach(Array(members.enumerated()), id: \.offset) { _, member in
-                            HStack(spacing: 12) {
-                                Image(systemName: "person.fill.checkmark")
-                                    .font(.title3)
-                                    .foregroundStyle(.green)
-                                    .frame(width: 36, height: 36)
-                                    .background(.green.opacity(0.15))
-                                    .clipShape(Circle())
-
-                                VStack(alignment: .leading, spacing: 2) {
-                                    HStack(spacing: 4) {
-                                        Text(member.name)
-                                            .font(.body.weight(.medium))
-                                        Text(roleBadge(for: member.role))
-                                            .font(.caption)
-                                            .foregroundStyle(.secondary)
-                                    }
-                                }
-
-                                Spacer()
-
-                                // Kick (owner only, not self)
-                                if isCurrentUserOwner && member.userUID != services.auth.uid {
-                                    Button {
-                                        kickMember(userUID: member.userUID)
-                                    } label: {
-                                        Image(systemName: "minus.circle.fill")
-                                            .font(.title3)
-                                            .foregroundStyle(.red.opacity(0.7))
-                                    }
-                                    .buttonStyle(.plain)
-                                }
-                            }
-                            .padding(.vertical, 4)
+                            memberRow(member: member)
                         }
                     }
                 } header: {
@@ -149,8 +124,101 @@ struct ParticipantsView: View {
             }
             .onAppear { startPolling() }
             .onDisappear { stopPolling() }
+            .confirmationDialog(
+                "Удалить участника из списка?",
+                isPresented: Binding(
+                    get: { memberToKick != nil },
+                    set: { if !$0 { memberToKick = nil } }
+                ),
+                titleVisibility: .visible,
+                presenting: memberToKick
+            ) { target in
+                Button("Удалить", role: .destructive) {
+                    performKick(userUID: target.userUID, name: target.name)
+                }
+                Button("Отмена", role: .cancel) {
+                    memberToKick = nil
+                }
+            } message: { target in
+                Text("«\(target.name)» потеряет доступ к списку. Чтобы вернуть — потребуется новое приглашение.")
+            }
         }
         .applyTheme()
+    }
+
+    // MARK: - Member row
+
+    @ViewBuilder
+    private func memberRow(member: (userUID: String, role: String, name: String)) -> some View {
+        HStack(spacing: 12) {
+            Image(systemName: "person.fill.checkmark")
+                .font(.title3)
+                .foregroundStyle(.green)
+                .frame(width: 36, height: 36)
+                .background(.green.opacity(0.15))
+                .clipShape(Circle())
+
+            VStack(alignment: .leading, spacing: 2) {
+                HStack(spacing: 4) {
+                    Text(member.name)
+                        .font(.body.weight(.medium))
+                    Text(roleBadge(for: member.role))
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
+            }
+
+            Spacer()
+
+            // Owner-only controls для каждого не-owner и не-self.
+            if isCurrentUserOwner && member.userUID != services.auth.uid {
+                if pendingMutationUID == member.userUID {
+                    ProgressView()
+                        .controlSize(.small)
+                } else {
+                    Menu {
+                        // Role switcher
+                        Section("Роль") {
+                            Button {
+                                performRoleChange(memberUID: member.userUID, newRole: "editor")
+                            } label: {
+                                Label("Редактор", systemImage: member.role == "editor" ? "checkmark" : "pencil")
+                            }
+                            Button {
+                                performRoleChange(memberUID: member.userUID, newRole: "viewer")
+                            } label: {
+                                Label("Зритель", systemImage: member.role == "viewer" ? "checkmark" : "eye")
+                            }
+                        }
+
+                        // Kick action
+                        Section {
+                            Button(role: .destructive) {
+                                memberToKick = (userUID: member.userUID, name: member.name)
+                            } label: {
+                                Label("Удалить из списка", systemImage: "person.fill.xmark")
+                            }
+                        }
+                    } label: {
+                        Image(systemName: "ellipsis.circle")
+                            .font(.title3)
+                            .foregroundStyle(.secondary)
+                    }
+                    .menuStyle(.borderlessButton)
+                }
+            }
+        }
+        .padding(.vertical, 4)
+        // Swipe-action как альтернатива menu — типичный iOS pattern.
+        .swipeActions(edge: .trailing, allowsFullSwipe: false) {
+            if isCurrentUserOwner && member.userUID != services.auth.uid && pendingMutationUID != member.userUID {
+                Button(role: .destructive) {
+                    memberToKick = (userUID: member.userUID, name: member.name)
+                } label: {
+                    Label("Удалить", systemImage: "person.fill.xmark")
+                }
+            }
+        }
     }
 
     // MARK: - Polling
@@ -212,19 +280,54 @@ struct ParticipantsView: View {
         isLoading = false
     }
 
-    // MARK: - Helpers
+    // MARK: - Mutations
 
-    private func kickMember(userUID: String) {
+    private func performRoleChange(memberUID: String, newRole: String) {
         guard let sharedID = wishlist.sharedWishlistID else { return }
+        // Если пытаются поставить ту же роль что уже есть — silent no-op, не дёргаем сеть.
+        if let current = members.first(where: { $0.userUID == memberUID }), current.role == newRole {
+            return
+        }
+        pendingMutationUID = memberUID
         Task {
             do {
-                try await services.firestore.leaveWishlist(wishlistID: sharedID, userUID: userUID)
+                try await services.data.changeMemberRole(
+                    wishlistID: sharedID,
+                    memberUID: memberUID,
+                    newRole: newRole
+                )
                 await fetchMembers()
+                let label = newRole == "editor" ? "редактором" : "зрителем"
+                toast.success("Участник теперь \(label)")
             } catch {
-                // silent — member removed
+                toast.error(error.localizedDescription)
             }
+            pendingMutationUID = nil
         }
     }
+
+    private func performKick(userUID: String, name: String) {
+        guard let sharedID = wishlist.sharedWishlistID else { return }
+        memberToKick = nil
+        pendingMutationUID = userUID
+        Task {
+            do {
+                try await services.data.kickMember(
+                    wishlistID: sharedID,
+                    memberUID: userUID
+                )
+                // Локально убираем сразу — fetchMembers догонит из Firestore через 30s,
+                // но пользователь должен видеть результат немедленно.
+                members.removeAll { $0.userUID == userUID }
+                toast.success("«\(name)» удалён из списка")
+            } catch {
+                toast.error(error.localizedDescription)
+            }
+            pendingMutationUID = nil
+        }
+    }
+
+    // MARK: - Helpers
 
     private func roleBadge(for role: String) -> String {
         role == "editor" ? "(редактор)" : "(зритель)"

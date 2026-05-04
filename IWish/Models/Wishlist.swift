@@ -48,3 +48,26 @@ final class Wishlist {
         self.gradientSeed = gradientSeed ?? DefaultCoverGenerator.stableHash(self.id.uuidString)
     }
 }
+
+// MARK: - Permissions
+
+extension Wishlist {
+    /// Может ли текущий юзер редактировать содержимое (items + сам wishlist).
+    /// Personal wishlists всегда editable. Shared — только если роль owner/editor.
+    var isEditable: Bool {
+        if !isShared { return true }
+        guard let role = myRole else { return true } // legacy / pending sync
+        return role == "owner" || role == "editor"
+    }
+
+    /// Только владелец shared wishlist'а — может расшаривать/менять роли/удалять wishlist целиком.
+    var isOwnedByMe: Bool {
+        if !isShared { return true }  // personal — own
+        return myRole == "owner"
+    }
+
+    /// Является ли роль текущего юзера "viewer" (только просмотр).
+    var isViewerOnly: Bool {
+        return isShared && myRole == "viewer"
+    }
+}

@@ -6,6 +6,21 @@ struct WishlistTileView: View {
     let onShare: () -> Void
     let onArchive: () -> Void
     let onDelete: () -> Void
+    let onLeave: (() -> Void)?
+
+    init(
+        wishlist: Wishlist,
+        onShare: @escaping () -> Void,
+        onArchive: @escaping () -> Void,
+        onDelete: @escaping () -> Void,
+        onLeave: (() -> Void)? = nil
+    ) {
+        self.wishlist = wishlist
+        self.onShare = onShare
+        self.onArchive = onArchive
+        self.onDelete = onDelete
+        self.onLeave = onLeave
+    }
 
     @State private var menuEnabled = true
 
@@ -27,12 +42,21 @@ struct WishlistTileView: View {
                     Label("Поделиться", systemImage: "square.and.arrow.up")
                 }
             }
-            Button { cooldown(); onArchive() } label: {
-                Label("В архив", systemImage: "archivebox")
-            }
-            Divider()
-            Button(role: .destructive) { cooldown(); onDelete() } label: {
-                Label("Удалить", systemImage: "trash")
+            // Editor/owner — могут архивировать/удалять
+            if wishlist.isEditable {
+                Button { cooldown(); onArchive() } label: {
+                    Label("В архив", systemImage: "archivebox")
+                }
+                Divider()
+                Button(role: .destructive) { cooldown(); onDelete() } label: {
+                    Label("Удалить", systemImage: "trash")
+                }
+            } else if let onLeave {
+                // Viewer — может только покинуть shared список
+                Divider()
+                Button(role: .destructive) { cooldown(); onLeave() } label: {
+                    Label("Покинуть список", systemImage: "rectangle.portrait.and.arrow.right")
+                }
             }
         }
     }

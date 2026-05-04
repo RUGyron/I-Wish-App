@@ -14,6 +14,7 @@ struct HomeView: View {
     @State private var deletingWishlistID: String?
     @State private var wishlistToDelete: Wishlist?
     @State private var wishlistToArchive: Wishlist?
+    @State private var wishlistToLeave: Wishlist?
     @State private var isPerformingAction = false
     @State private var showingArchive = false
 
@@ -152,6 +153,25 @@ struct HomeView: View {
             }
         } message: {
             Text("Все участники будут удалены, инвайты отозваны. Список станет приватным.")
+        }
+        .confirmationDialog(
+            "Покинуть «\(wishlistToLeave?.name ?? "")»?",
+            isPresented: Binding(get: { wishlistToLeave != nil }, set: { if !$0 { wishlistToLeave = nil } }),
+            titleVisibility: .visible
+        ) {
+            Button("Покинуть список", role: .destructive) {
+                guard let wl = wishlistToLeave else { return }
+                isPerformingAction = true
+                Task {
+                    do {
+                        try await services.data?.deleteWishlist(id: wl.id.uuidString)
+                    } catch {
+                        toast.error(error.localizedDescription)
+                    }
+                    isPerformingAction = false
+                }
+                wishlistToLeave = nil
+            }
         }
         .overlay(alignment: .bottom) {
             addButton
@@ -293,7 +313,8 @@ struct HomeView: View {
                                     }
                                 }
                             },
-                            onDelete: { wishlistToDelete = wishlist }
+                            onDelete: { wishlistToDelete = wishlist },
+                            onLeave: { wishlistToLeave = wishlist }
                         )
                     }
 
