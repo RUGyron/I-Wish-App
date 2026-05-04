@@ -53,6 +53,77 @@ final class DataService {
         self.auth = auth
     }
 
+    // MARK: - Debug seed (только для подготовки скриншотов в App Store)
+
+    #if DEBUG
+    /// Создаёт реалистичный набор тестовых данных: 4 wishlist'а с items.
+    /// Идёт через обычные create-методы — генерируются ключи, шифруется payload,
+    /// всё видно в Firestore как нормальные encrypted documents.
+    func seedMockDataForScreenshots() async {
+        let lists: [(name: String, emoji: String, items: [(String, ItemTier, Double?, String, String?)])] = [
+            ("День рождения", "🎂", [
+                ("Apple Watch Ultra 2", .must, 89_990, "RUB", "https://apple.com/watch-ultra"),
+                ("Книга «Атомные привычки»", .must, 890, "RUB", "https://wildberries.ru/book"),
+                ("Букет тюльпанов", .maybe, 1_500, "RUB", "https://flowwow.com/tulips"),
+                ("Мини-проектор", .idea, 12_990, "RUB", nil),
+                ("Подарочная карта Steam", .idea, 3_000, "RUB", nil),
+            ]),
+            ("Хотелки", "🎁", [
+                ("Кофемашина De'Longhi", .must, 89_990, "RUB", "https://wildberries.ru/coffee"),
+                ("Кроссовки Nike Pegasus", .maybe, 12_490, "RUB", "https://nike.com/pegasus"),
+                ("AirPods Pro 2", .maybe, 24_990, "RUB", "https://apple.com/airpods"),
+                ("Стикеры с котиками", .idea, nil, "RUB", nil),
+                ("Мини-холодильник", .idea, 7_990, "RUB", nil),
+            ]),
+            ("Путешествия", "✈️", [
+                ("Билеты в Стамбул", .must, 35_000, "RUB", "https://aviasales.ru/istanbul"),
+                ("Чемодан Samsonite", .maybe, 25_000, "RUB", "https://samsonite.com"),
+                ("Travel-адаптер", .idea, 800, "RUB", nil),
+                ("Путеводитель по Азии", .idea, 1_200, "RUB", "https://ozon.ru/guide-asia"),
+            ]),
+            ("Книги", "📚", [
+                ("«Дюна» Фрэнк Герберт", .must, 1_500, "RUB", "https://ozon.ru/dune"),
+                ("«Сапиенс» Юваль Харари", .maybe, 1_200, "RUB", nil),
+                ("«1984» Оруэлл", .idea, 750, "RUB", nil),
+            ]),
+        ]
+
+        for (idx, list) in lists.enumerated() {
+            do {
+                let wl = try await createWishlist(name: list.name, emoji: list.emoji)
+                for (i, item) in list.items.enumerated() {
+                    let sortIndex = Double((i + 1) * 1000)
+                    _ = try await addItem(
+                        to: wl.id.uuidString,
+                        name: item.0,
+                        tier: item.1,
+                        price: item.2,
+                        currency: item.3,
+                        url: item.4,
+                        emoji: nil,
+                        sortIndex: sortIndex
+                    )
+                }
+                dsLog.info("seed: list #\(idx) '\(list.name, privacy: .public)' done")
+            } catch {
+                dsLog.error("seed: list '\(list.name, privacy: .public)' failed: \(error.localizedDescription, privacy: .public)")
+            }
+        }
+    }
+
+    /// Удаляет всё локально + чистит Keychain. Firestore docs остаются orphaned (не критично).
+    func wipeAllLocal() {
+        if let allWishlists = try? modelContext.fetch(FetchDescriptor<Wishlist>()) {
+            for wl in allWishlists { modelContext.delete(wl) }
+        }
+        if let allItems = try? modelContext.fetch(FetchDescriptor<Item>()) {
+            for item in allItems { modelContext.delete(item) }
+        }
+        try? modelContext.save()
+        KeychainService.deleteAll()
+    }
+    #endif
+
     // MARK: - One-shot Migration
 
     /// Однократный wipe локального стора + Keychain после перехода на E2E-шифрование.

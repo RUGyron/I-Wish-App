@@ -20,6 +20,9 @@ struct SettingsView: View {
             appearanceSection
             wishesSection
             invitesSection
+            #if DEBUG
+            debugSection
+            #endif
             aboutSection
         }
         .sheet(isPresented: $showingAppleSignIn) {
@@ -188,6 +191,31 @@ struct SettingsView: View {
             }
         }
     }
+
+    #if DEBUG
+    @State private var isSeeding = false
+    private var debugSection: some View {
+        Section("Debug") {
+            Button {
+                isSeeding = true
+                Task {
+                    await services.data?.seedMockDataForScreenshots()
+                    isSeeding = false
+                    toast.success("Тестовые данные созданы")
+                }
+            } label: {
+                Label("Заполнить тестовыми данными", systemImage: "wand.and.stars")
+            }
+            .disabled(isSeeding)
+            Button(role: .destructive) {
+                services.data?.wipeAllLocal()
+                toast.success("Локальные данные удалены")
+            } label: {
+                Label("Очистить локально", systemImage: "trash")
+            }
+        }
+    }
+    #endif
 
     private var aboutSection: some View {
         Section {
