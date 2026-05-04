@@ -577,8 +577,9 @@ struct WishlistDetailView: View {
     private func itemRow(_ item: Item) -> some View {
         // Telegram-style: автор+дата сверху, имя жирно, мета-строка снизу.
         // Слева — цветная полоска по tier (вместо эмодзи в тексте).
-        // Все три строки имеют фиксированную высоту, поэтому опциональные
-        // поля (нет цены / url / автора / probation) не «прыгают» список.
+        // Title зафиксирован lineLimit(1) → длинный текст не растягивает row.
+        // Bottom row показываем только когда есть url / probation, иначе
+        // карточка не оставляет пустого места под именем.
         HStack(alignment: .top, spacing: 0) {
             RoundedRectangle(cornerRadius: 2, style: .continuous)
                 .fill(item.tier.stripeColor)
@@ -595,15 +596,26 @@ struct WishlistDetailView: View {
                 VStack(alignment: .leading, spacing: 2) {
                     topRow(for: item)
                     titleRow(for: item)
-                    bottomRow(for: item)
+                    if hasBottomMeta(item) {
+                        bottomRow(for: item)
+                    }
                 }
                 .frame(maxWidth: .infinity, alignment: .leading)
             }
             .padding(.leading, 10)
         }
         .padding(.vertical, 8)
+        .padding(.horizontal, 12)
         .contentShape(Rectangle())
         .onTapGesture { detailItem = item }
+        .listRowInsets(EdgeInsets())
+        .listRowBackground(Color(.secondarySystemGroupedBackground))
+        .alignmentGuide(.listRowSeparatorLeading) { _ in 78 }
+    }
+
+    private func hasBottomMeta(_ item: Item) -> Bool {
+        let hasURL = (item.url ?? "").isEmpty == false
+        return hasURL || probationDaysLeft(item) != nil
     }
 
     private func topRow(for item: Item) -> some View {

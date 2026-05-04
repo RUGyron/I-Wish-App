@@ -187,6 +187,11 @@ struct SettingsView: View {
     private var aboutSection: some View {
         Section {
             NavigationLink {
+                DesignPreviewView()
+            } label: {
+                Label("Превью карточки желания", systemImage: "square.grid.2x2")
+            }
+            NavigationLink {
                 PrivacyDisclosureView()
             } label: {
                 Label("Как мы храним данные", systemImage: "lock.shield")

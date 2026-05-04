@@ -297,15 +297,15 @@ struct HomeView: View {
                     ForEach(activeWishlists) { wishlist in
                         WishlistTileView(
                             wishlist: wishlist,
-                            onShare: { sharingWishlist = wishlist },
-                            onArchive: {
-                                if wishlist.isShared && wishlist.memberCount > 1 {
-                                    wishlistToArchive = wishlist
+                            onShare: { wl in sharingWishlist = wl },
+                            onArchive: { wl in
+                                if wl.isShared && wl.memberCount > 1 {
+                                    wishlistToArchive = wl
                                 } else {
                                     isPerformingAction = true
                                     Task {
                                         do {
-                                            try await services.data?.archiveWishlist(id: wishlist.id.uuidString)
+                                            try await services.data?.archiveWishlist(id: wl.id.uuidString)
                                         } catch {
                                             toast.error(error.localizedDescription)
                                         }
@@ -313,8 +313,8 @@ struct HomeView: View {
                                     }
                                 }
                             },
-                            onDelete: { wishlistToDelete = wishlist },
-                            onLeave: { wishlistToLeave = wishlist }
+                            onDelete: { wl in wishlistToDelete = wl },
+                            onLeave: { wl in wishlistToLeave = wl }
                         )
                     }
 

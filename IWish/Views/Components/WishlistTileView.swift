@@ -3,17 +3,17 @@ import SwiftUI
 /// Isolated tile view with confirmationDialog instead of contextMenu
 struct WishlistTileView: View {
     let wishlist: Wishlist
-    let onShare: () -> Void
-    let onArchive: () -> Void
-    let onDelete: () -> Void
-    let onLeave: (() -> Void)?
+    let onShare: (Wishlist) -> Void
+    let onArchive: (Wishlist) -> Void
+    let onDelete: (Wishlist) -> Void
+    let onLeave: ((Wishlist) -> Void)?
 
     init(
         wishlist: Wishlist,
-        onShare: @escaping () -> Void,
-        onArchive: @escaping () -> Void,
-        onDelete: @escaping () -> Void,
-        onLeave: (() -> Void)? = nil
+        onShare: @escaping (Wishlist) -> Void,
+        onArchive: @escaping (Wishlist) -> Void,
+        onDelete: @escaping (Wishlist) -> Void,
+        onLeave: ((Wishlist) -> Void)? = nil
     ) {
         self.wishlist = wishlist
         self.onShare = onShare
@@ -38,23 +38,23 @@ struct WishlistTileView: View {
         .allowsHitTesting(menuEnabled)
         .contextMenu {
             if canShare {
-                Button { cooldown(); onShare() } label: {
+                Button { cooldown(); onShare(wishlist) } label: {
                     Label("Поделиться", systemImage: "square.and.arrow.up")
                 }
             }
             // Editor/owner — могут архивировать/удалять
             if wishlist.isEditable {
-                Button { cooldown(); onArchive() } label: {
+                Button { cooldown(); onArchive(wishlist) } label: {
                     Label("В архив", systemImage: "archivebox")
                 }
                 Divider()
-                Button(role: .destructive) { cooldown(); onDelete() } label: {
+                Button(role: .destructive) { cooldown(); onDelete(wishlist) } label: {
                     Label("Удалить", systemImage: "trash")
                 }
             } else if let onLeave {
                 // Viewer — может только покинуть shared список
                 Divider()
-                Button(role: .destructive) { cooldown(); onLeave() } label: {
+                Button(role: .destructive) { cooldown(); onLeave(wishlist) } label: {
                     Label("Покинуть список", systemImage: "rectangle.portrait.and.arrow.right")
                 }
             }
