@@ -53,7 +53,9 @@ final class AuthService: NSObject {
 
     /// Restore session. Trust Firebase SDK + iCloud Keychain.
     /// Имя приходит из iCloud Keychain (синкается между девайсами того же Apple ID).
-    /// Если Keychain пустой — оставляем nil, SettingsView покажет fallback ("Apple ID").
+    /// Fallback — Firebase Auth displayName (Apple передал его при первом sign-in
+    /// и Firebase сохранил на серверной стороне у себя). Это решает кейс когда
+    /// юзер уже логинился раньше, но Keychain не синкнулся (или был стёрт).
     private func verifyAndRestore(uid: String) async {
         _isAppleSignedIn = true
         await refreshToken()
@@ -62,6 +64,15 @@ final class AuthService: NSObject {
         if userName == nil {
             userName = KeychainService.loadUserName()
         }
+
+        // Fallback на Firebase displayName — Apple отдал его при первом sign-in,
+        // Firebase Auth хранит у себя. Содержимое не идёт в наш Firestore (нашу БД).
+        if userName == nil, let dn = Auth.auth().currentUser?.displayName, !dn.isEmpty {
+            userName = dn
+            KeychainService.saveUserName(dn)
+            print("[Auth] Restored name from Firebase displayName: \(dn)")
+        }
+
         print("[Auth] Restored: \(uid), name: \(userName ?? "nil")")
     }
 
