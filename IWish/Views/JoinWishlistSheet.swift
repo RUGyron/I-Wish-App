@@ -2,6 +2,7 @@ import SwiftUI
 import SwiftData
 import AVFoundation
 import AudioToolbox
+import CryptoKit
 
 struct JoinWishlistSheet: View {
     @Environment(\.dismiss) private var dismiss
@@ -11,6 +12,7 @@ struct JoinWishlistSheet: View {
     @State private var showingScanner = false
     @State private var joinStatus: JoinStatus = .idle
     @State private var resolvedInfo: FirestoreService.ShareLinkInfo?
+    @State private var resolvedKey: SymmetricKey?
     @State private var showingInvitePreview = false
 
     var initialURL: String? = nil
@@ -143,26 +145,52 @@ struct JoinWishlistSheet: View {
             return
         }
 
+        // Извлечь ключ из URL fragment: https://.../j/<id>#k=<base64key>
+        // URLComponents.fragment даёт строку после '#'.
+        let fragment = URLComponents(url: url, resolvingAgainstBaseURL: false)?.fragment
+        let keyValue: String? = {
+            guard let fragment, !fragment.isEmpty else { return nil }
+            // Разбираем fragment как query-style: key=value(&key2=value2)
+            // На случай будущих параметров (currently only `k`).
+            if let comps = URLComponents(string: "?\(fragment)"),
+               let items = comps.queryItems,
+               let kItem = items.first(where: { $0.name == "k" }) {
+                return kItem.value
+            }
+            // Fallback: simple manual parse.
+            for part in fragment.split(separator: "&") {
+                let pieces = part.split(separator: "=", maxSplits: 1)
+                if pieces.count == 2, pieces[0] == "k" { return String(pieces[1]) }
+            }
+            return nil
+        }()
+
+        guard let keyValue, let key = EncryptionService.key(fromFragment: keyValue) else {
+            toast.error("Ссылка повреждена — нет ключа доступа")
+            return
+        }
+
         joinStatus = .joining
         Task {
             do {
-                guard let info = try await services.firestore.resolveInviteLink(shortID: id) else {
+                guard let info = try await services.firestore.resolveInviteLink(shortID: id, key: key) else {
                     joinStatus = .idle
                     toast.error("Приглашение недействительно или истекло")
                     return
                 }
                 resolvedInfo = info
+                resolvedKey = key
                 joinStatus = .idle
                 showingInvitePreview = true
             } catch {
                 joinStatus = .idle
-                toast.error("Не удалось загрузить приглашение")
+                toast.error("Не удалось расшифровать приглашение")
             }
         }
     }
 
     private func acceptInvite() {
-        guard let info = resolvedInfo else { return }
+        guard let info = resolvedInfo, let key = resolvedKey else { return }
         Task {
             do {
                 guard let uid = services.auth.uid else {
@@ -170,6 +198,10 @@ struct JoinWishlistSheet: View {
                     toast.error("Необходимо войти через Apple ID")
                     return
                 }
+
+                // КРИТИЧНО: сохраняем ключ в Keychain ДО первого membership/fetch.
+                // Без него последующие fetchSharedWishlist (включая background sync) не смогут расшифровать.
+                try KeychainService.save(key: key, for: info.wishlistID)
 
                 // Check if already a member (Firestore is source of truth)
                 let memberships = try await services.firestore.fetchMyMemberships(userUID: uid)
@@ -189,9 +221,10 @@ struct JoinWishlistSheet: View {
                     canInvite: info.canInvite
                 )
 
-                // Fetch data
+                // Fetch data (теперь с ключом — расшифрует encryptedPayload)
                 let sharedData = try await services.firestore.fetchSharedWishlist(
-                    wishlistID: info.wishlistID
+                    wishlistID: info.wishlistID,
+                    key: key
                 )
 
                 // Create or update local (dedup by sharedWishlistID)

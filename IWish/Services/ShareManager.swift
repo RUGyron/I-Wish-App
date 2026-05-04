@@ -1,5 +1,6 @@
 import SwiftUI
 import SwiftData
+import CryptoKit
 
 // MARK: - Share Role
 
@@ -43,6 +44,17 @@ final class ShareManager {
 
         do {
             print("[Share] Starting generateShare, ownerUID: \(ownerUID)")
+
+            // 0. Получить ключ шифрования wishlist'а из Keychain.
+            //    Если nil — wishlist никогда не шифровался (создан до encryption); это inconsistency.
+            //    DataService.createWishlist всегда сохраняет ключ — но защита от corner case.
+            guard let key = KeychainService.load(for: wishlist.id.uuidString) else {
+                print("[Share] FAILED: no key in Keychain for wishlist \(wishlist.id.uuidString)")
+                self.error = "Не найден ключ шифрования списка. Попробуйте создать список заново."
+                isLoading = false
+                return
+            }
+
             let newShortID = String(
                 wishlist.id.uuidString
                     .replacingOccurrences(of: "-", with: "")
@@ -53,7 +65,7 @@ final class ShareManager {
             // Always delete existing invite link before creating new one
             try? await firestore.deleteInviteLink(shortID: newShortID)
 
-            // 1. Publish wishlist + items to Firestore
+            // 1. Publish wishlist + items to Firestore (encrypted with wishlist key)
             let localItems = (wishlist.items ?? []).filter { !$0.isArchived }
             let sharedItems = localItems.map { item in
                 FirestoreService.SharedItemInfo(
@@ -76,36 +88,41 @@ final class ShareManager {
                 gradientSeed: wishlist.gradientSeed,
                 ownerUID: ownerUID,
                 ownerName: ownerName,
-                items: sharedItems
+                items: sharedItems,
+                key: key
             )
 
             let itemCount = localItems.count
             let expiry = ttl.duration.map { Date.now.addingTimeInterval($0) }
 
-            // 2. Create invite link in Firestore for QR/link resolution
-            let userURL = URL(string: "\(Self.linkDomain)/j/\(newShortID)")!
-
+            // 2. Create invite link in Firestore for QR/link resolution (encrypted preview)
             try await firestore.createInviteLink(
                 shortID: newShortID,
                 wishlistID: wishlist.id.uuidString,
                 wishlistName: wishlist.name,
                 wishlistEmoji: wishlist.coverEmoji,
+                wishlistCoverImageData: wishlist.coverImageData,
                 ownerName: ownerName,
                 role: role.rawValue,
                 itemCount: itemCount,
                 gradientSeed: wishlist.gradientSeed,
                 canInvite: canInvite,
-                expiresAt: expiry
+                expiresAt: expiry,
+                key: key
             )
 
-            // 3. Update local state
+            // 3. Build URL with key fragment: https://.../j/<shortID>#k=<base64key>
+            let keyFragment = EncryptionService.keyFragment(key)
+            let userURL = URL(string: "\(Self.linkDomain)/j/\(newShortID)#k=\(keyFragment)")!
+
+            // 4. Update local state
             self.shareURL = userURL
             self.expiresAt = expiry
             self.shortID = newShortID
             self.wishlistID = wishlist.id
             self.wishlistRef = wishlist
 
-            // 4. Create owner membership (owner always canInvite)
+            // 5. Create owner membership (owner always canInvite). Membership — plaintext, ключ не нужен.
             try await firestore.joinWishlist(wishlistID: wishlist.id.uuidString, userUID: ownerUID, role: "owner", canInvite: true)
 
             // 5. Mark wishlist as shared locally

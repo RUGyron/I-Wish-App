@@ -1,5 +1,6 @@
 import Foundation
 import SwiftData
+import CryptoKit
 import os.log
 
 private let dsLog = Logger(subsystem: "RUGyron.IWish", category: "DataService")
@@ -47,6 +48,34 @@ final class DataService {
         self.auth = auth
     }
 
+    // MARK: - One-shot Migration
+
+    /// Однократный wipe локального стора + Keychain после перехода на E2E-шифрование.
+    /// Старые незашифрованные данные в Firestore будут стёрты сервером, а локальные wishlists
+    /// без ключей в Keychain не смогут синхронизироваться, поэтому логика — снести всё локально
+    /// при первом запуске новой версии и подтянуть только то, что есть в новом формате.
+    func wipeLocalIfNeeded() {
+        let migrationKey = "iwish_encrypted_v1_migration_done"
+        let defaults = UserDefaults.standard
+        guard !defaults.bool(forKey: migrationKey) else { return }
+
+        dsLog.info("wipeLocalIfNeeded: performing one-time wipe for E2E migration")
+
+        if let allWishlists = try? modelContext.fetch(FetchDescriptor<Wishlist>()) {
+            for wl in allWishlists { modelContext.delete(wl) }
+        }
+        if let allItems = try? modelContext.fetch(FetchDescriptor<Item>()) {
+            for item in allItems { modelContext.delete(item) }
+        }
+        try? modelContext.save()
+
+        // Также почистим Keychain — там могли остаться тестовые ключи от предыдущих сборок.
+        KeychainService.deleteAll()
+
+        defaults.set(true, forKey: migrationKey)
+        dsLog.info("wipeLocalIfNeeded: done")
+    }
+
     private var uid: String {
         get throws {
             guard let uid = auth.uid else {
@@ -92,6 +121,18 @@ final class DataService {
         isSyncing = true
         syncError = nil
         defer { releaseLock() }
+
+        // 1. Сгенерировать ключ шифрования и сохранить в iCloud Keychain.
+        // Если запись в Keychain упала — НЕ создаём документ в Firestore (иначе будет orphan,
+        // который никто не сможет расшифровать).
+        let key = EncryptionService.generateKey()
+        do {
+            try KeychainService.save(key: key, for: wishlistID)
+        } catch {
+            isSyncing = false
+            throw error
+        }
+
         do {
             try await firestore.createPersonalWishlist(
                 uid: currentUID,
@@ -99,9 +140,12 @@ final class DataService {
                 name: name,
                 emoji: emoji,
                 gradientSeed: seed,
-                coverImageData: coverImageData
+                coverImageData: coverImageData,
+                key: key
             )
         } catch {
+            // Откатываем Keychain — orphan-ключ без документа тоже не нужен.
+            KeychainService.delete(for: wishlistID)
             isSyncing = false
             throw error
         }
@@ -129,17 +173,42 @@ final class DataService {
             throw FirestoreService.FirestoreError.notFound
         }
 
+        // E2E-ключ берётся по wishlistID. sharedWishlistID == id.uuidString после share, поэтому
+        // для shared/personal ключ хранится под одним и тем же account'ом в Keychain.
+        guard let key = KeychainService.load(for: id) else {
+            isSyncing = false
+            throw FirestoreService.FirestoreError.requestFailed("Ключ шифрования не найден")
+        }
+
         do {
             if wishlistIsShared(wishlist), let sharedID = wishlist.sharedWishlistID {
-                // Only the owner can rename a shared wishlist
-                let info = try await firestore.fetchSharedWishlist(wishlistID: sharedID)
-                guard info.ownerUID == currentUID else {
+                // Owner-check без обращения к Firestore: используем локально сохранённый ownerRecordID.
+                // Если по какой-то причине его нет — fallback на myRole == "owner".
+                let isOwner: Bool = {
+                    if let owner = wishlist.ownerRecordID { return owner == currentUID }
+                    return wishlist.myRole == "owner"
+                }()
+                guard isOwner else {
                     isSyncing = false
                     throw FirestoreService.FirestoreError.requestFailed("Только владелец может изменить название")
                 }
-                try await firestore.updateSharedWishlist(wishlistID: sharedID, name: name, emoji: emoji, coverImageData: coverImageData)
+                try await firestore.updateSharedWishlist(
+                    wishlistID: sharedID,
+                    name: name,
+                    emoji: emoji,
+                    coverImageData: coverImageData,
+                    ownerName: auth.userName,
+                    key: key
+                )
             } else {
-                try await firestore.updatePersonalWishlist(uid: currentUID, wishlistID: id, name: name, emoji: emoji, coverImageData: coverImageData)
+                try await firestore.updatePersonalWishlist(
+                    uid: currentUID,
+                    wishlistID: id,
+                    name: name,
+                    emoji: emoji,
+                    coverImageData: coverImageData,
+                    key: key
+                )
             }
         } catch {
             isSyncing = false
@@ -189,6 +258,11 @@ final class DataService {
         // 2. Only delete locally AFTER Firestore confirmed
         modelContext.delete(wishlist)
         try? modelContext.save()
+
+        // 3. Удаляем ключ из iCloud Keychain — данные уже удалены в Firestore.
+        // Для leaver (не-owner) тоже чистим: ключ больше не нужен на этом Apple ID.
+        // Для owner — синхронно с iCloud Keychain удалится со всех его девайсов.
+        KeychainService.delete(for: id)
     }
 
     // MARK: - Archive / Unarchive Wishlist
@@ -211,8 +285,11 @@ final class DataService {
         do {
             if wishlistIsShared(wishlist), let sharedID = wishlist.sharedWishlistID {
                 // Archive shared → make private: kick all members, delete invites
-                // 1. Delete all memberships except owner
-                if let info = try? await firestore.fetchSharedWishlist(wishlistID: sharedID) {
+                // 1. Delete all memberships except owner.
+                //    fetchSharedWishlist теперь требует ключ для расшифровки payload'а.
+                //    Если ключа нет — просто пропускаем kick (membership-cleanup произойдёт лениво).
+                if let sharedKey = KeychainService.load(for: id),
+                   let info = try? await firestore.fetchSharedWishlist(wishlistID: sharedID, key: sharedKey) {
                     for member in info.members where member.userUID != currentUID {
                         try? await firestore.leaveWishlist(wishlistID: sharedID, userUID: member.userUID)
                     }
@@ -300,12 +377,18 @@ final class DataService {
             throw FirestoreService.FirestoreError.notFound
         }
 
+        // Все items в одном wishlist шифруются одним ключом — берём его по wishlistID (parent).
+        guard let key = KeychainService.load(for: wishlistID) else {
+            isSyncing = false
+            throw FirestoreService.FirestoreError.requestFailed("Ключ шифрования не найден")
+        }
+
         do {
             if wishlistIsShared(wishlist), let sharedID = wishlist.sharedWishlistID {
                 try await verifyEditorRole(wishlistID: sharedID)
-                try await firestore.createSharedItem(wishlistID: sharedID, itemID: itemID, name: name, tier: tier.rawValue, price: price, currency: currency, url: url, emoji: emoji, sortIndex: sortIndex)
+                try await firestore.createSharedItem(wishlistID: sharedID, itemID: itemID, name: name, tier: tier.rawValue, price: price, currency: currency, url: url, emoji: emoji, sortIndex: sortIndex, key: key)
             } else {
-                try await firestore.createPersonalItem(uid: currentUID, wishlistID: wishlistID, itemID: itemID, name: name, tier: tier.rawValue, price: price, currency: currency, url: url, emoji: emoji, sortIndex: sortIndex)
+                try await firestore.createPersonalItem(uid: currentUID, wishlistID: wishlistID, itemID: itemID, name: name, tier: tier.rawValue, price: price, currency: currency, url: url, emoji: emoji, sortIndex: sortIndex, key: key)
             }
         } catch {
             isSyncing = false
@@ -338,12 +421,18 @@ final class DataService {
         let isShared = wishlist.map { wishlistIsShared($0) } ?? false
         let sharedID = wishlist?.sharedWishlistID
 
+        // Ключ берётся по wishlistID — все items в одном wishlist шифруются одним ключом.
+        guard let key = KeychainService.load(for: wishlistID) else {
+            isSyncing = false
+            throw FirestoreService.FirestoreError.requestFailed("Ключ шифрования не найден")
+        }
+
         do {
             if isShared, let sharedID {
                 try await verifyEditorRole(wishlistID: sharedID)
-                try await firestore.updateSharedItem(wishlistID: sharedID, itemID: id, name: name, tier: tier.rawValue, price: price, currency: currency, url: url, emoji: emoji, sortIndex: sortIndex, isArchived: isArchived)
+                try await firestore.updateSharedItem(wishlistID: sharedID, itemID: id, name: name, tier: tier.rawValue, price: price, currency: currency, url: url, emoji: emoji, sortIndex: sortIndex, isArchived: isArchived, key: key)
             } else {
-                try await firestore.updatePersonalItem(uid: currentUID, wishlistID: wishlistID, itemID: id, name: name, tier: tier.rawValue, price: price, currency: currency, url: url, emoji: emoji, sortIndex: sortIndex, isArchived: isArchived)
+                try await firestore.updatePersonalItem(uid: currentUID, wishlistID: wishlistID, itemID: id, name: name, tier: tier.rawValue, price: price, currency: currency, url: url, emoji: emoji, sortIndex: sortIndex, isArchived: isArchived, key: key)
             }
         } catch {
             isSyncing = false
@@ -421,12 +510,18 @@ final class DataService {
         let isShared = wishlist.map { wishlistIsShared($0) } ?? false
         let sharedID = wishlist?.sharedWishlistID
 
+        // Archive — это update isArchived=true, поэтому шифруем содержимое заново тем же ключом.
+        guard let key = KeychainService.load(for: wishlistID) else {
+            isSyncing = false
+            throw FirestoreService.FirestoreError.requestFailed("Ключ шифрования не найден")
+        }
+
         do {
             if isShared, let sharedID {
                 try await verifyEditorRole(wishlistID: sharedID)
-                try await firestore.updateSharedItem(wishlistID: sharedID, itemID: id, name: item.name, tier: item.tier.rawValue, price: item.price, currency: item.currency, url: item.url, emoji: item.coverEmoji, sortIndex: item.sortIndex, isArchived: true)
+                try await firestore.updateSharedItem(wishlistID: sharedID, itemID: id, name: item.name, tier: item.tier.rawValue, price: item.price, currency: item.currency, url: item.url, emoji: item.coverEmoji, sortIndex: item.sortIndex, isArchived: true, key: key)
             } else {
-                try await firestore.updatePersonalItem(uid: currentUID, wishlistID: wishlistID, itemID: id, name: item.name, tier: item.tier.rawValue, price: item.price, currency: item.currency, url: item.url, emoji: item.coverEmoji, sortIndex: item.sortIndex, isArchived: true)
+                try await firestore.updatePersonalItem(uid: currentUID, wishlistID: wishlistID, itemID: id, name: item.name, tier: item.tier.rawValue, price: item.price, currency: item.currency, url: item.url, emoji: item.coverEmoji, sortIndex: item.sortIndex, isArchived: true, key: key)
             }
         } catch {
             isSyncing = false
@@ -450,8 +545,12 @@ final class DataService {
         syncError = nil
 
         do {
-            // 1. Fetch personal wishlists
-            let remote = try await firestore.fetchPersonalWishlists(uid: currentUID)
+            // 1. Fetch personal wishlists. Расшифровка происходит внутри fetchPersonalWishlists
+            // через keyProvider — wishlists без ключа в Keychain автоматически отбрасываются.
+            let keyProvider: (String) -> SymmetricKey? = { wlID in
+                KeychainService.load(for: wlID)
+            }
+            let remote = try await firestore.fetchPersonalWishlists(uid: currentUID, keyProvider: keyProvider)
 
             // 2. Fetch all local wishlists
             let localDescriptor = FetchDescriptor<Wishlist>()
@@ -490,8 +589,11 @@ final class DataService {
                     local.gradientSeed = r.gradientSeed
                     local.isArchived = r.isArchived
                     local.updatedAt = .now
-                    let personalItems = try await firestore.fetchPersonalItems(uid: currentUID, wishlistID: r.id)
-                    mergeItems(personalItems, into: local)
+                    // items в этом wishlist шифруются ключом самого wishlist'а
+                    if let itemKey = KeychainService.load(for: r.id) {
+                        let personalItems = try await firestore.fetchPersonalItems(uid: currentUID, wishlistID: r.id, key: itemKey)
+                        mergeItems(personalItems, into: local)
+                    }
                 } else {
                     guard let uuid = UUID(uuidString: r.id) else { continue }
                     let newWL = Wishlist(
@@ -539,7 +641,13 @@ final class DataService {
             }
 
             for membership in memberships {
-                guard let info = try? await firestore.fetchSharedWishlist(wishlistID: membership.wishlistID) else {
+                // Без ключа из Keychain shared wishlist расшифровать нельзя — пропускаем.
+                // Обычно ключ был сохранён при acceptInvite (JoinWishlistSheet), либо синкнут из iCloud.
+                guard let sharedKey = KeychainService.load(for: membership.wishlistID) else {
+                    dsLog.debug("refreshWishlists: no key for shared \(membership.wishlistID, privacy: .public), skipping")
+                    continue
+                }
+                guard let info = try? await firestore.fetchSharedWishlist(wishlistID: membership.wishlistID, key: sharedKey) else {
                     // Shared wishlist deleted — clean up stale membership
                     try? await firestore.leaveWishlist(wishlistID: membership.wishlistID, userUID: currentUID)
                     // Delete local copy if exists
@@ -638,11 +746,18 @@ final class DataService {
             return
         }
 
+        // Ключ wishlist'а нужен для расшифровки items (одного на всех — wishlist-level key).
+        guard let key = KeychainService.load(for: wishlistID) else {
+            dsLog.debug("refreshItems: no key for \(wishlistID, privacy: .public), skip")
+            isSyncing = false
+            return
+        }
+
         do {
             let remoteItems: [FirestoreService.SharedItemInfo]
             if wishlistIsShared(wishlist), let sharedID = wishlist.sharedWishlistID {
-                // Verify wishlist still exists
-                let _ = try await firestore.fetchSharedWishlist(wishlistID: sharedID)
+                // Verify wishlist still exists (key required for decryption check inside)
+                let _ = try await firestore.fetchSharedWishlist(wishlistID: sharedID, key: key)
                 // Verify we're still a member (might have been kicked)
                 let memberships = try await firestore.fetchMyMemberships(userUID: currentUID)
                 if !memberships.contains(where: { $0.wishlistID == sharedID }) {
@@ -653,9 +768,9 @@ final class DataService {
                     isSyncing = false
                     return
                 }
-                remoteItems = try await firestore.fetchSharedWishlistItems(wishlistID: sharedID)
+                remoteItems = try await firestore.fetchSharedWishlistItems(wishlistID: sharedID, key: key)
             } else {
-                remoteItems = try await firestore.fetchPersonalItems(uid: currentUID, wishlistID: wishlistID)
+                remoteItems = try await firestore.fetchPersonalItems(uid: currentUID, wishlistID: wishlistID, key: key)
             }
 
             mergeItems(remoteItems, into: wishlist)
@@ -724,182 +839,9 @@ final class DataService {
         try? modelContext.save()
     }
 
-    // MARK: - Share
-
-    func shareWishlist(id: String, role: ShareRole, ttl: InviteTTL, ownerName: String?) async throws -> URL {
-        let currentUID = try uid
-
-        await acquireLock()
-        isSyncing = true
-        syncError = nil
-        defer { releaseLock() }
-
-        guard let uuid = UUID(uuidString: id) else { throw FirestoreService.FirestoreError.notFound }
-        let descriptor = FetchDescriptor<Wishlist>(predicate: #Predicate { $0.id == uuid })
-        guard let wishlist = try modelContext.fetch(descriptor).first else {
-            isSyncing = false
-            throw FirestoreService.FirestoreError.notFound
-        }
-
-        do {
-            let localItems = (wishlist.items ?? []).filter { !$0.isArchived }
-            let sharedItems = localItems.map { item in
-                FirestoreService.SharedItemInfo(
-                    itemID: item.id.uuidString,
-                    name: item.name,
-                    tier: item.tier.rawValue,
-                    price: item.price,
-                    currency: item.currency,
-                    url: item.url,
-                    coverEmoji: item.coverEmoji,
-                    sortIndex: item.sortIndex,
-                    isArchived: item.isArchived
-                )
-            }
-
-            // 1. Copy to shared_wishlists
-            try await firestore.createSharedWishlist(
-                wishlistID: id,
-                name: wishlist.name,
-                emoji: wishlist.coverEmoji,
-                coverImageData: wishlist.coverImageData,
-                gradientSeed: wishlist.gradientSeed,
-                ownerUID: currentUID,
-                ownerName: ownerName,
-                items: sharedItems
-            )
-
-            // 2. Create invite link
-            let shortID = String(
-                id.replacingOccurrences(of: "-", with: "")
-                    .prefix(12)
-                    .lowercased()
-            )
-            // Delete existing invite first
-            try? await firestore.deleteInviteLink(shortID: shortID)
-
-            let expiry = ttl.duration.map { Date.now.addingTimeInterval($0) }
-            try await firestore.createInviteLink(
-                shortID: shortID,
-                wishlistID: id,
-                wishlistName: wishlist.name,
-                wishlistEmoji: wishlist.coverEmoji,
-                ownerName: ownerName,
-                role: role.rawValue,
-                itemCount: localItems.count,
-                gradientSeed: wishlist.gradientSeed,
-                canInvite: true,
-                expiresAt: expiry
-            )
-
-            // 3. Create owner membership (owner always canInvite)
-            try await firestore.joinWishlist(wishlistID: id, userUID: currentUID, role: "owner", canInvite: true)
-
-            // 4. Mark local as shared FIRST, then save
-            wishlist.isShared = true
-            wishlist.sharedWishlistID = id
-            wishlist.ownerRecordID = currentUID
-            wishlist.myRole = "owner"
-            wishlist.canInvite = true // owner always can invite
-            wishlist.updatedAt = .now
-            try? modelContext.save()
-
-            // 5. Delete personal copy from Firestore (after local is marked shared to prevent flicker)
-            try? await firestore.deletePersonalWishlist(uid: currentUID, wishlistID: id)
-
-            let url = URL(string: "https://rugyron.github.io/I-Wish-App/j/\(shortID)")!
-            isSyncing = false
-            return url
-        } catch {
-            isSyncing = false
-            throw error
-        }
-    }
-
-    // MARK: - Accept Invite
-
-    func acceptInvite(shortID: String) async throws -> String {
-        guard let currentUID = auth.uid else {
-            throw AuthService.AuthError.notAuthenticated
-        }
-
-        await acquireLock()
-        isSyncing = true
-        syncError = nil
-        defer { releaseLock() }
-
-        do {
-            // 1. Resolve invite link
-            guard let info = try await firestore.resolveInviteLink(shortID: shortID) else {
-                isSyncing = false
-                throw FirestoreService.FirestoreError.notFound
-            }
-
-            // 2. Create membership (with canInvite from invite link)
-            try await firestore.joinWishlist(wishlistID: info.wishlistID, userUID: currentUID, role: info.role, canInvite: info.canInvite)
-
-            // 3. Fetch shared wishlist + items
-            let sharedData = try await firestore.fetchSharedWishlist(wishlistID: info.wishlistID)
-
-            // 4. Create or update local copy in SwiftData
-            let targetSharedID = info.wishlistID
-            let allLocal = (try? modelContext.fetch(FetchDescriptor<Wishlist>())) ?? []
-            let existing = allLocal.first { $0.sharedWishlistID == targetSharedID }
-
-            let wishlist: Wishlist
-            if let existing {
-                // Already joined — update
-                wishlist = existing
-                wishlist.name = sharedData.name
-                wishlist.coverEmoji = sharedData.coverEmoji
-                wishlist.coverImageData = sharedData.coverImageData
-                wishlist.ownerRecordID = sharedData.ownerUID
-                wishlist.gradientSeed = sharedData.gradientSeed
-            } else {
-                // New — create
-                wishlist = Wishlist(
-                    name: sharedData.name,
-                    coverImageData: sharedData.coverImageData,
-                    coverEmoji: sharedData.coverEmoji,
-                    ownerRecordID: sharedData.ownerUID,
-                    isShared: true,
-                    sharedWishlistID: info.wishlistID,
-                    gradientSeed: sharedData.gradientSeed
-                )
-                if let uuid = UUID(uuidString: info.wishlistID) {
-                    wishlist.id = uuid
-                }
-                modelContext.insert(wishlist)
-            }
-            wishlist.myRole = info.role
-            wishlist.canInvite = info.canInvite
-            wishlist.isShared = true
-            wishlist.sharedWishlistID = info.wishlistID
-
-            for sharedItem in sharedData.items {
-                let item = Item(
-                    name: sharedItem.name,
-                    tier: ItemTier(rawValue: sharedItem.tier) ?? .maybe,
-                    sortIndex: sharedItem.sortIndex,
-                    currency: sharedItem.currency,
-                    price: sharedItem.price,
-                    url: sharedItem.url,
-                    coverEmoji: sharedItem.coverEmoji
-                )
-                item.isArchived = sharedItem.isArchived
-                item.wishlist = wishlist
-                if let itemUUID = UUID(uuidString: sharedItem.itemID) {
-                    item.id = itemUUID
-                }
-                modelContext.insert(item)
-            }
-
-            try? modelContext.save()
-            isSyncing = false
-            return info.wishlistID
-        } catch {
-            isSyncing = false
-            throw error
-        }
-    }
+    // MARK: - Share / Accept Invite
+    //
+    // Legacy `shareWishlist(...)` и `acceptInvite(...)` удалены — UI работает через
+    // ShareManager (генерация шары) и JoinWishlistSheet (приём). Дублирование убрано,
+    // чтобы не дрейфовать сигнатуры между двумя реализациями.
 }

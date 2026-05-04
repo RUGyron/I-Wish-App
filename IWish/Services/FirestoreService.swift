@@ -1,9 +1,19 @@
 import Foundation
+import CryptoKit
 import FirebaseAuth
 import os.log
 
 private let logger = Logger(subsystem: "RUGyron.IWish", category: "Firestore")
 
+/// REST-клиент Firestore с E2E-шифрованием content-полей.
+///
+/// Privacy-модель:
+/// - Все user-facing поля (name, emoji, photo, price, url, description, ownerName) пакуются в JSON,
+///   шифруются AES-GCM-256 ключом конкретного wishlist'а и пишутся в одно поле `encryptedPayload` (bytesValue).
+/// - Plaintext остаётся только то, что нужно для индексации/permissions:
+///   IDs, gradientSeed, isArchived, sortIndex, timestamps, role, canInvite, joinedAt.
+/// - Ключи живут в iCloud Keychain (см. `KeychainService`). Разраб с доступом к Firebase Console
+///   видит только зашифрованные блобы и метаданные.
 @Observable
 final class FirestoreService {
 
@@ -18,6 +28,7 @@ final class FirestoreService {
         let wishlistID: String
         let wishlistName: String
         let wishlistEmoji: String?
+        let coverImageData: Data?
         let ownerName: String?
         let role: String
         let itemCount: Int
@@ -54,6 +65,7 @@ final class FirestoreService {
         case notFound
         case notAuthenticated
         case requestFailed(String)
+        case decryptionFailed
 
         var errorDescription: String? {
             switch self {
@@ -63,6 +75,8 @@ final class FirestoreService {
                 return "Необходима авторизация"
             case .requestFailed(let msg):
                 return "Ошибка запроса: \(msg)"
+            case .decryptionFailed:
+                return "Не удалось расшифровать данные"
             }
         }
     }
@@ -181,31 +195,38 @@ final class FirestoreService {
 
     // MARK: - Personal Wishlists (users/{uid}/wishlists)
 
-    func createPersonalWishlist(uid: String, wishlistID: String, name: String, emoji: String?, gradientSeed: Int, coverImageData: Data? = nil) async throws {
-        var data: [String: Any?] = [
+    func createPersonalWishlist(uid: String, wishlistID: String, name: String, emoji: String?, gradientSeed: Int, coverImageData: Data? = nil, key: SymmetricKey) async throws {
+        let payload = EncryptionService.packPayload([
             "name": name,
-            "coverEmoji": emoji ?? "",
+            "coverEmoji": emoji,
+            "coverImageData": coverImageData
+        ])
+        let encrypted = try EncryptionService.encrypt(payload, using: key)
+
+        let data: [String: Any?] = [
+            "encryptedPayload": encrypted,
             "gradientSeed": gradientSeed as Any,
             "isArchived": false as Any,
             "createdAt": Date() as Any,
             "updatedAt": Date() as Any
         ]
-        if let coverImageData { data["coverImageData"] = coverImageData }
         let fields = toFields(data)
         let _ = try await request("PATCH", path: "users/\(uid)/wishlists/\(wishlistID)", body: ["fields": fields])
     }
 
-    func updatePersonalWishlist(uid: String, wishlistID: String, name: String, emoji: String?, coverImageData: Data? = nil) async throws {
-        var data: [String: Any?] = [
+    func updatePersonalWishlist(uid: String, wishlistID: String, name: String, emoji: String?, coverImageData: Data? = nil, key: SymmetricKey) async throws {
+        let payload = EncryptionService.packPayload([
             "name": name,
-            "coverEmoji": emoji ?? "",
+            "coverEmoji": emoji,
+            "coverImageData": coverImageData
+        ])
+        let encrypted = try EncryptionService.encrypt(payload, using: key)
+
+        let data: [String: Any?] = [
+            "encryptedPayload": encrypted,
             "updatedAt": Date() as Any
         ]
-        var maskPaths = "updateMask.fieldPaths=name&updateMask.fieldPaths=coverEmoji&updateMask.fieldPaths=updatedAt"
-        if let coverImageData {
-            data["coverImageData"] = coverImageData
-            maskPaths += "&updateMask.fieldPaths=coverImageData"
-        }
+        let maskPaths = "updateMask.fieldPaths=encryptedPayload&updateMask.fieldPaths=updatedAt"
         let fields = toFields(data)
         let _ = try await request("PATCH", path: "users/\(uid)/wishlists/\(wishlistID)?\(maskPaths)", body: ["fields": fields])
     }
@@ -243,36 +264,58 @@ final class FirestoreService {
         let _ = try await request("DELETE", path: "users/\(uid)/wishlists/\(wishlistID)")
     }
 
-    func fetchPersonalWishlists(uid: String) async throws -> [(id: String, name: String, emoji: String?, coverImageData: Data?, gradientSeed: Int, isArchived: Bool)] {
+    /// Возвращает personal-вишлисты пользователя. Для расшифровки содержимого каждого
+    /// вишлиста запрашивает ключ через `keyProvider(wishlistID)`. Если ключ не найден или
+    /// расшифровка не удалась — wishlist пропускается (зашифрованные данные без ключа бесполезны).
+    func fetchPersonalWishlists(uid: String, keyProvider: (String) -> SymmetricKey?) async throws -> [(id: String, name: String, emoji: String?, coverImageData: Data?, gradientSeed: Int, isArchived: Bool)] {
         let docs = try await listDocuments(parentPath: "users/\(uid)/wishlists")
-        return docs.compactMap { doc -> (id: String, name: String, emoji: String?, coverImageData: Data?, gradientSeed: Int, isArchived: Bool)? in
-            guard let name = doc["name"] as? String else { return nil }
-            let docID = documentID(from: name)
-            guard let fields = doc["fields"] as? [String: Any] else { return nil }
-            let data = parseFields(fields)
-            let emoji = (data["coverEmoji"] as? String)?.isEmpty == true ? nil : data["coverEmoji"] as? String
-            let coverImageData = data["coverImageData"] as? Data
-            let seed: Int
-            if let s = data["gradientSeed"] as? Int {
-                seed = s
-            } else {
-                seed = 0
+        var results: [(id: String, name: String, emoji: String?, coverImageData: Data?, gradientSeed: Int, isArchived: Bool)] = []
+        for doc in docs {
+            guard let docName = doc["name"] as? String else { continue }
+            let docID = documentID(from: docName)
+            guard let fields = doc["fields"] as? [String: Any] else { continue }
+            let parsed = parseFields(fields)
+
+            guard let key = keyProvider(docID) else {
+                logger.debug("[Firestore] No key for personal wishlist \(docID, privacy: .public), skipping")
+                continue
             }
-            let isArchived = data["isArchived"] as? Bool ?? false
-            return (id: docID, name: data["name"] as? String ?? "", emoji: emoji, coverImageData: coverImageData, gradientSeed: seed, isArchived: isArchived)
+            guard let payloadData = parsed["encryptedPayload"] as? Data else {
+                logger.debug("[Firestore] No encryptedPayload for personal wishlist \(docID, privacy: .public), skipping")
+                continue
+            }
+            guard let content = try? EncryptionService.decrypt(payloadData, using: key) else {
+                logger.error("[Firestore] Failed to decrypt personal wishlist \(docID, privacy: .public)")
+                continue
+            }
+
+            let name = content["name"] as? String ?? ""
+            let emojiRaw = content["coverEmoji"] as? String
+            let emoji: String? = (emojiRaw?.isEmpty == false) ? emojiRaw : nil
+            let coverImageData = EncryptionService.dataField(content, "coverImageData")
+            let seed = parsed["gradientSeed"] as? Int ?? 0
+            let isArchived = parsed["isArchived"] as? Bool ?? false
+
+            results.append((id: docID, name: name, emoji: emoji, coverImageData: coverImageData, gradientSeed: seed, isArchived: isArchived))
         }
+        return results
     }
 
     // MARK: - Personal Items (users/{uid}/wishlists/{wid}/items)
 
-    func createPersonalItem(uid: String, wishlistID: String, itemID: String, name: String, tier: String, price: Double?, currency: String, url: String?, emoji: String?, sortIndex: Double) async throws {
-        let fields = toFields([
+    func createPersonalItem(uid: String, wishlistID: String, itemID: String, name: String, tier: String, price: Double?, currency: String, url: String?, emoji: String?, sortIndex: Double, key: SymmetricKey) async throws {
+        let payload = EncryptionService.packPayload([
             "name": name,
             "tier": tier,
-            "price": price as Any?,
+            "price": price,
             "currency": currency,
-            "url": url ?? "",
-            "coverEmoji": emoji ?? "",
+            "url": url,
+            "coverEmoji": emoji
+        ])
+        let encrypted = try EncryptionService.encrypt(payload, using: key)
+
+        let fields = toFields([
+            "encryptedPayload": encrypted as Any,
             "sortIndex": sortIndex as Any,
             "isArchived": false as Any,
             "createdAt": Date() as Any,
@@ -281,14 +324,19 @@ final class FirestoreService {
         let _ = try await request("PATCH", path: "users/\(uid)/wishlists/\(wishlistID)/items/\(itemID)", body: ["fields": fields])
     }
 
-    func updatePersonalItem(uid: String, wishlistID: String, itemID: String, name: String, tier: String, price: Double?, currency: String, url: String?, emoji: String?, sortIndex: Double, isArchived: Bool) async throws {
-        let fields = toFields([
+    func updatePersonalItem(uid: String, wishlistID: String, itemID: String, name: String, tier: String, price: Double?, currency: String, url: String?, emoji: String?, sortIndex: Double, isArchived: Bool, key: SymmetricKey) async throws {
+        let payload = EncryptionService.packPayload([
             "name": name,
             "tier": tier,
-            "price": price as Any?,
+            "price": price,
             "currency": currency,
-            "url": url ?? "",
-            "coverEmoji": emoji ?? "",
+            "url": url,
+            "coverEmoji": emoji
+        ])
+        let encrypted = try EncryptionService.encrypt(payload, using: key)
+
+        let fields = toFields([
+            "encryptedPayload": encrypted as Any,
             "sortIndex": sortIndex as Any,
             "isArchived": isArchived as Any,
             "updatedAt": Date() as Any
@@ -300,40 +348,56 @@ final class FirestoreService {
         let _ = try await request("DELETE", path: "users/\(uid)/wishlists/\(wishlistID)/items/\(itemID)")
     }
 
-    func fetchPersonalItems(uid: String, wishlistID: String) async throws -> [SharedItemInfo] {
+    func fetchPersonalItems(uid: String, wishlistID: String, key: SymmetricKey) async throws -> [SharedItemInfo] {
         let docs = try await listDocuments(parentPath: "users/\(uid)/wishlists/\(wishlistID)/items")
-        return docs.map { parseItemFromDoc($0) }.sorted { $0.sortIndex < $1.sortIndex }
+        var items: [SharedItemInfo] = []
+        for doc in docs {
+            if let item = try? parseEncryptedItemFromDoc(doc, key: key) {
+                items.append(item)
+            }
+        }
+        return items.sorted { $0.sortIndex < $1.sortIndex }
     }
 
     // MARK: - Shared Wishlists (shared_wishlists/)
 
-    func createSharedWishlist(wishlistID: String, name: String, emoji: String?, coverImageData: Data? = nil, gradientSeed: Int, ownerUID: String, ownerName: String?, items: [SharedItemInfo]) async throws {
+    func createSharedWishlist(wishlistID: String, name: String, emoji: String?, coverImageData: Data? = nil, gradientSeed: Int, ownerUID: String, ownerName: String?, items: [SharedItemInfo], key: SymmetricKey) async throws {
         // 1. Write the wishlist document
-        var data: [String: Any?] = [
+        let wishlistPayload = EncryptionService.packPayload([
             "name": name,
-            "coverEmoji": emoji ?? "",
+            "coverEmoji": emoji,
+            "coverImageData": coverImageData,
+            "ownerName": ownerName
+        ])
+        let encryptedWishlist = try EncryptionService.encrypt(wishlistPayload, using: key)
+
+        let data: [String: Any?] = [
+            "encryptedPayload": encryptedWishlist,
             "gradientSeed": gradientSeed as Any,
             "isArchived": false as Any,
             "ownerUID": ownerUID,
-            "ownerName": ownerName ?? "",
             "createdAt": Date() as Any,
             "updatedAt": Date() as Any
         ]
-        if let coverImageData { data["coverImageData"] = coverImageData }
         let wishlistFields = toFields(data)
         let _ = try await request("PATCH", path: "shared_wishlists/\(wishlistID)", body: ["fields": wishlistFields])
 
-        // 2. Batch write all items
+        // 2. Batch write all items (each encrypted with the same wishlist key)
         if !items.isEmpty {
             var writes: [[String: Any]] = []
             for item in items {
-                let itemFields = toFields([
+                let itemPayload = EncryptionService.packPayload([
                     "name": item.name,
                     "tier": item.tier,
-                    "price": item.price as Any?,
+                    "price": item.price,
                     "currency": item.currency,
-                    "url": item.url ?? "",
-                    "coverEmoji": item.coverEmoji ?? "",
+                    "url": item.url,
+                    "coverEmoji": item.coverEmoji
+                ])
+                let encryptedItem = try EncryptionService.encrypt(itemPayload, using: key)
+
+                let itemFields = toFields([
+                    "encryptedPayload": encryptedItem as Any,
                     "sortIndex": item.sortIndex as Any,
                     "isArchived": item.isArchived as Any,
                     "createdAt": Date() as Any,
@@ -351,36 +415,50 @@ final class FirestoreService {
         }
     }
 
-    func updateSharedWishlist(wishlistID: String, name: String, emoji: String?, coverImageData: Data? = nil) async throws {
-        var data: [String: Any?] = [
+    func updateSharedWishlist(wishlistID: String, name: String, emoji: String?, coverImageData: Data? = nil, ownerName: String?, key: SymmetricKey) async throws {
+        let payload = EncryptionService.packPayload([
             "name": name,
-            "coverEmoji": emoji ?? "",
+            "coverEmoji": emoji,
+            "coverImageData": coverImageData,
+            "ownerName": ownerName
+        ])
+        let encrypted = try EncryptionService.encrypt(payload, using: key)
+
+        let data: [String: Any?] = [
+            "encryptedPayload": encrypted,
             "updatedAt": Date() as Any
         ]
-        var maskPaths = "updateMask.fieldPaths=name&updateMask.fieldPaths=coverEmoji&updateMask.fieldPaths=updatedAt"
-        if let coverImageData {
-            data["coverImageData"] = coverImageData
-            maskPaths += "&updateMask.fieldPaths=coverImageData"
-        }
+        let maskPaths = "updateMask.fieldPaths=encryptedPayload&updateMask.fieldPaths=updatedAt"
         let fields = toFields(data)
         let _ = try await request("PATCH", path: "shared_wishlists/\(wishlistID)?\(maskPaths)", body: ["fields": fields])
     }
 
-    func fetchSharedWishlistItems(wishlistID: String) async throws -> [SharedItemInfo] {
+    func fetchSharedWishlistItems(wishlistID: String, key: SymmetricKey) async throws -> [SharedItemInfo] {
         let docs = try await listDocuments(parentPath: "shared_wishlists/\(wishlistID)/items")
-        return docs.map { parseItemFromDoc($0) }.sorted { $0.sortIndex < $1.sortIndex }
+        var items: [SharedItemInfo] = []
+        for doc in docs {
+            if let item = try? parseEncryptedItemFromDoc(doc, key: key) {
+                items.append(item)
+            }
+        }
+        return items.sorted { $0.sortIndex < $1.sortIndex }
     }
 
     // MARK: - Shared Items CRUD (shared_wishlists/{wid}/items)
 
-    func createSharedItem(wishlistID: String, itemID: String, name: String, tier: String, price: Double?, currency: String, url: String?, emoji: String?, sortIndex: Double) async throws {
-        let fields = toFields([
+    func createSharedItem(wishlistID: String, itemID: String, name: String, tier: String, price: Double?, currency: String, url: String?, emoji: String?, sortIndex: Double, key: SymmetricKey) async throws {
+        let payload = EncryptionService.packPayload([
             "name": name,
             "tier": tier,
-            "price": price as Any?,
+            "price": price,
             "currency": currency,
-            "url": url ?? "",
-            "coverEmoji": emoji ?? "",
+            "url": url,
+            "coverEmoji": emoji
+        ])
+        let encrypted = try EncryptionService.encrypt(payload, using: key)
+
+        let fields = toFields([
+            "encryptedPayload": encrypted as Any,
             "sortIndex": sortIndex as Any,
             "isArchived": false as Any,
             "createdAt": Date() as Any,
@@ -389,14 +467,19 @@ final class FirestoreService {
         let _ = try await request("PATCH", path: "shared_wishlists/\(wishlistID)/items/\(itemID)", body: ["fields": fields])
     }
 
-    func updateSharedItem(wishlistID: String, itemID: String, name: String, tier: String, price: Double?, currency: String, url: String?, emoji: String?, sortIndex: Double, isArchived: Bool) async throws {
-        let fields = toFields([
+    func updateSharedItem(wishlistID: String, itemID: String, name: String, tier: String, price: Double?, currency: String, url: String?, emoji: String?, sortIndex: Double, isArchived: Bool, key: SymmetricKey) async throws {
+        let payload = EncryptionService.packPayload([
             "name": name,
             "tier": tier,
-            "price": price as Any?,
+            "price": price,
             "currency": currency,
-            "url": url ?? "",
-            "coverEmoji": emoji ?? "",
+            "url": url,
+            "coverEmoji": emoji
+        ])
+        let encrypted = try EncryptionService.encrypt(payload, using: key)
+
+        let fields = toFields([
+            "encryptedPayload": encrypted as Any,
             "sortIndex": sortIndex as Any,
             "isArchived": isArchived as Any,
             "updatedAt": Date() as Any
@@ -447,19 +530,37 @@ final class FirestoreService {
 
     // MARK: - Fetch Shared Wishlist
 
-    func fetchSharedWishlist(wishlistID: String) async throws -> SharedWishlistInfo {
+    func fetchSharedWishlist(wishlistID: String, key: SymmetricKey) async throws -> SharedWishlistInfo {
         // 1. Get wishlist document from shared_wishlists
         let doc = try await request("GET", path: "shared_wishlists/\(wishlistID)")
         guard let fields = doc["fields"] as? [String: Any] else {
             throw FirestoreError.notFound
         }
-        let data = parseFields(fields)
+        let parsed = parseFields(fields)
 
-        // 2. List items subcollection
-        let itemsDocs = try await listDocuments(parentPath: "shared_wishlists/\(wishlistID)/items")
-        let items = itemsDocs.map { parseItemFromDoc($0) }.sorted { $0.sortIndex < $1.sortIndex }
+        // 2. Decrypt content
+        guard let payloadData = parsed["encryptedPayload"] as? Data else {
+            throw FirestoreError.notFound
+        }
+        let content: [String: Any]
+        do {
+            content = try EncryptionService.decrypt(payloadData, using: key)
+        } catch {
+            logger.error("[Firestore] Failed to decrypt shared wishlist \(wishlistID, privacy: .public): \(error.localizedDescription, privacy: .public)")
+            throw FirestoreError.decryptionFailed
+        }
 
-        // 3. Query memberships where wishlistID == wishlistID
+        let name = content["name"] as? String ?? ""
+        let emojiRaw = content["coverEmoji"] as? String
+        let coverEmoji: String? = (emojiRaw?.isEmpty == false) ? emojiRaw : nil
+        let coverImageData = EncryptionService.dataField(content, "coverImageData")
+        let ownerNameRaw = content["ownerName"] as? String
+        let ownerName: String? = (ownerNameRaw?.isEmpty == false) ? ownerNameRaw : nil
+
+        // 3. List & decrypt items subcollection
+        let items = try await fetchSharedWishlistItems(wishlistID: wishlistID, key: key)
+
+        // 4. Query memberships where wishlistID == wishlistID (plaintext metadata)
         let membersResults = try await runQuery(collectionId: "memberships", field: "wishlistID", op: "EQUAL", value: wishlistID)
         let members = membersResults.compactMap { entry -> (userUID: String, role: String)? in
             guard let doc = entry["document"] as? [String: Any],
@@ -470,13 +571,13 @@ final class FirestoreService {
 
         return SharedWishlistInfo(
             wishlistID: wishlistID,
-            name: data["name"] as? String ?? "",
-            coverEmoji: (data["coverEmoji"] as? String)?.isEmpty == true ? nil : data["coverEmoji"] as? String,
-            coverImageData: data["coverImageData"] as? Data,
-            ownerUID: data["ownerUID"] as? String ?? "",
-            ownerName: (data["ownerName"] as? String)?.isEmpty == true ? nil : data["ownerName"] as? String,
-            gradientSeed: data["gradientSeed"] as? Int ?? 0,
-            isArchived: data["isArchived"] as? Bool ?? false,
+            name: name,
+            coverEmoji: coverEmoji,
+            coverImageData: coverImageData,
+            ownerUID: parsed["ownerUID"] as? String ?? "",
+            ownerName: ownerName,
+            gradientSeed: parsed["gradientSeed"] as? Int ?? 0,
+            isArchived: parsed["isArchived"] as? Bool ?? false,
             members: members,
             items: items
         )
@@ -484,7 +585,10 @@ final class FirestoreService {
 
     // MARK: - Fetch My Shared Wishlists
 
-    func fetchMySharedWishlists(userUID: String) async throws -> [SharedWishlistInfo] {
+    /// Возвращает все shared-вишлисты, где пользователь является участником.
+    /// Ключи извлекаются через `keyProvider(wishlistID)`. Вишлисты, для которых нет ключа
+    /// или не получилось расшифровать, пропускаются.
+    func fetchMySharedWishlists(userUID: String, keyProvider: (String) -> SymmetricKey?) async throws -> [SharedWishlistInfo] {
         let results = try await runQuery(collectionId: "memberships", field: "userUID", op: "EQUAL", value: userUID)
 
         let memberships = results.compactMap { entry -> (wishlistID: String, role: String)? in
@@ -498,7 +602,11 @@ final class FirestoreService {
 
         var list: [SharedWishlistInfo] = []
         for membership in memberships {
-            guard let info = try? await fetchSharedWishlist(wishlistID: membership.wishlistID) else { continue }
+            guard let key = keyProvider(membership.wishlistID) else {
+                logger.debug("[Firestore] No key for shared wishlist \(membership.wishlistID, privacy: .public), skipping")
+                continue
+            }
+            guard let info = try? await fetchSharedWishlist(wishlistID: membership.wishlistID, key: key) else { continue }
             list.append(info)
         }
         return list
@@ -533,25 +641,35 @@ final class FirestoreService {
 
     // MARK: - Invite Links
 
+    /// Создаёт invite-link. Все user-facing preview-поля (wishlistName, wishlistEmoji, coverImageData, ownerName, itemCount)
+    /// шифруются ключом wishlist'а — увидеть превью можно только применив ключ из URL fragment.
     func createInviteLink(
         shortID: String,
         wishlistID: String,
         wishlistName: String,
         wishlistEmoji: String?,
+        wishlistCoverImageData: Data?,
         ownerName: String?,
         role: String,
         itemCount: Int,
         gradientSeed: Int,
         canInvite: Bool,
-        expiresAt: Date?
+        expiresAt: Date?,
+        key: SymmetricKey
     ) async throws {
-        var data: [String: Any?] = [
-            "wishlistID": wishlistID,
+        let payload = EncryptionService.packPayload([
             "wishlistName": wishlistName,
-            "wishlistEmoji": wishlistEmoji ?? "",
-            "ownerName": ownerName ?? "",
+            "wishlistEmoji": wishlistEmoji,
+            "coverImageData": wishlistCoverImageData,
+            "ownerName": ownerName,
+            "itemCount": itemCount
+        ])
+        let encrypted = try EncryptionService.encrypt(payload, using: key)
+
+        var data: [String: Any?] = [
+            "encryptedPayload": encrypted,
+            "wishlistID": wishlistID,
             "role": role,
-            "itemCount": itemCount,
             "gradientSeed": gradientSeed as Any,
             "canInvite": canInvite as Any,
             "createdAt": Date() as Any
@@ -563,7 +681,7 @@ final class FirestoreService {
         let _ = try await request("PATCH", path: "inviteLinks/\(shortID)", body: ["fields": fields])
     }
 
-    func resolveInviteLink(shortID: String) async throws -> ShareLinkInfo? {
+    func resolveInviteLink(shortID: String, key: SymmetricKey) async throws -> ShareLinkInfo? {
         let doc: [String: Any]
         do {
             doc = try await request("GET", path: "inviteLinks/\(shortID)")
@@ -573,10 +691,10 @@ final class FirestoreService {
             throw error
         }
         guard let fields = doc["fields"] as? [String: Any] else { return nil }
-        let data = parseFields(fields)
+        let parsed = parseFields(fields)
 
         // Check expiry
-        if let tsString = data["expiresAt"] as? String {
+        if let tsString = parsed["expiresAt"] as? String {
             let formatter = ISO8601DateFormatter()
             if let expiryDate = formatter.date(from: tsString), expiryDate < .now {
                 try? await request("DELETE", path: "inviteLinks/\(shortID)")
@@ -584,15 +702,36 @@ final class FirestoreService {
             }
         }
 
+        guard let payloadData = parsed["encryptedPayload"] as? Data else { return nil }
+        let content: [String: Any]
+        do {
+            content = try EncryptionService.decrypt(payloadData, using: key)
+        } catch {
+            logger.error("[Firestore] Failed to decrypt invite link \(shortID, privacy: .public): \(error.localizedDescription, privacy: .public)")
+            return nil
+        }
+
+        let wishlistName = content["wishlistName"] as? String ?? ""
+        let wishlistEmojiRaw = content["wishlistEmoji"] as? String
+        let wishlistEmoji: String? = (wishlistEmojiRaw?.isEmpty == false) ? wishlistEmojiRaw : nil
+        let coverImageData = EncryptionService.dataField(content, "coverImageData")
+        let ownerNameRaw = content["ownerName"] as? String
+        let ownerName: String? = (ownerNameRaw?.isEmpty == false) ? ownerNameRaw : nil
+        let itemCount: Int
+        if let i = content["itemCount"] as? Int { itemCount = i }
+        else if let d = content["itemCount"] as? Double { itemCount = Int(d) }
+        else { itemCount = 0 }
+
         return ShareLinkInfo(
-            wishlistID: data["wishlistID"] as? String ?? "",
-            wishlistName: data["wishlistName"] as? String ?? "",
-            wishlistEmoji: (data["wishlistEmoji"] as? String)?.isEmpty == true ? nil : data["wishlistEmoji"] as? String,
-            ownerName: (data["ownerName"] as? String)?.isEmpty == true ? nil : data["ownerName"] as? String,
-            role: data["role"] as? String ?? "viewer",
-            itemCount: data["itemCount"] as? Int ?? 0,
-            gradientSeed: data["gradientSeed"] as? Int ?? 0,
-            canInvite: data["canInvite"] as? Bool ?? false
+            wishlistID: parsed["wishlistID"] as? String ?? "",
+            wishlistName: wishlistName,
+            wishlistEmoji: wishlistEmoji,
+            coverImageData: coverImageData,
+            ownerName: ownerName,
+            role: parsed["role"] as? String ?? "viewer",
+            itemCount: itemCount,
+            gradientSeed: parsed["gradientSeed"] as? Int ?? 0,
+            canInvite: parsed["canInvite"] as? Bool ?? false
         )
     }
 
@@ -662,21 +801,27 @@ final class FirestoreService {
 
     // MARK: - User Profile
 
+    /// DEPRECATED: имя owner теперь хранится зашифрованно в invite link / shared wishlist payload.
+    /// Stub оставлен чтобы не сломать существующие callsite'ы (`ParticipantsView`).
+    /// TODO: replace callers with local `AuthService.userName` / data из `SharedWishlistInfo.ownerName`.
     func fetchUserName(uid: String) async -> String? {
-        guard let doc = try? await request("GET", path: "users/\(uid)"),
-              let fields = doc["fields"] as? [String: Any] else { return nil }
-        let data = parseFields(fields)
-        let name = data["name"] as? String
-        return (name?.isEmpty == true) ? nil : name
+        nil
     }
 
-    /// Parse a Firestore REST document dict into SharedItemInfo.
-    private func parseItemFromDoc(_ doc: [String: Any]) -> SharedItemInfo {
+    /// Parse a Firestore REST item document with encryptedPayload into SharedItemInfo.
+    /// Throws if no encryptedPayload or decryption fails — caller should swallow per-item failures.
+    private func parseEncryptedItemFromDoc(_ doc: [String: Any], key: SymmetricKey) throws -> SharedItemInfo {
         let docName = doc["name"] as? String ?? ""
         let docID = documentID(from: docName)
         let fields = doc["fields"] as? [String: Any] ?? [:]
-        let data = parseFields(fields)
-        let rawPrice = data["price"]
+        let parsed = parseFields(fields)
+
+        guard let payloadData = parsed["encryptedPayload"] as? Data else {
+            throw FirestoreError.notFound
+        }
+        let content = try EncryptionService.decrypt(payloadData, using: key)
+
+        let rawPrice = content["price"]
         let price: Double?
         if let d = rawPrice as? Double {
             price = d
@@ -685,16 +830,21 @@ final class FirestoreService {
         } else {
             price = nil
         }
+        let urlRaw = content["url"] as? String
+        let url: String? = (urlRaw?.isEmpty == false) ? urlRaw : nil
+        let emojiRaw = content["coverEmoji"] as? String
+        let coverEmoji: String? = (emojiRaw?.isEmpty == false) ? emojiRaw : nil
+
         return SharedItemInfo(
             itemID: docID,
-            name: data["name"] as? String ?? "",
-            tier: data["tier"] as? String ?? "idea",
+            name: content["name"] as? String ?? "",
+            tier: content["tier"] as? String ?? "idea",
             price: price,
-            currency: data["currency"] as? String ?? "RUB",
-            url: (data["url"] as? String)?.isEmpty == true ? nil : data["url"] as? String,
-            coverEmoji: (data["coverEmoji"] as? String)?.isEmpty == true ? nil : data["coverEmoji"] as? String,
-            sortIndex: data["sortIndex"] as? Double ?? 0,
-            isArchived: data["isArchived"] as? Bool ?? false
+            currency: content["currency"] as? String ?? "RUB",
+            url: url,
+            coverEmoji: coverEmoji,
+            sortIndex: parsed["sortIndex"] as? Double ?? 0,
+            isArchived: parsed["isArchived"] as? Bool ?? false
         )
     }
 }

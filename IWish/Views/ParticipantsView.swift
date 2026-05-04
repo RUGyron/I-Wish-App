@@ -171,25 +171,37 @@ struct ParticipantsView: View {
     private func fetchMembers() async {
         do {
             let sharedID = wishlist.sharedWishlistID ?? wishlist.id.uuidString
+            // Ключ wishlist'а нужен для расшифровки encryptedPayload (включая ownerName).
+            // Без ключа просто пропускаем — последний известный список members останется.
+            guard let key = KeychainService.load(for: sharedID) else {
+                isLoading = false
+                return
+            }
             let info = try await services.firestore.fetchSharedWishlist(
-                wishlistID: sharedID
+                wishlistID: sharedID,
+                key: key
             )
 
-            // Set owner info
+            // Set owner info: ownerName приходит расшифрованным из payload SharedWishlistInfo.
             ownerUID = info.ownerUID
-            if let name = info.ownerName {
-                ownerName = name
-            } else {
-                ownerName = await services.firestore.fetchUserName(uid: info.ownerUID) ?? "Владелец"
-            }
+            ownerName = info.ownerName ?? "Владелец"
 
             // Filter out the owner — they're shown in the owner section
             let nonOwnerMembers = info.members.filter { $0.userUID != info.ownerUID }
 
-            // Fetch names for each member
+            // Имена members сейчас зашифрованно нигде не лежат (см. TODO в FirestoreService:
+            // member-имена требуют отдельного key-exchange механизма). Для self берём локальное
+            // userName, для остальных — fallback "Участник".
+            let myUID = services.auth.uid
+            let myName = services.auth.userName
             var resolved: [(userUID: String, role: String, name: String)] = []
             for member in nonOwnerMembers {
-                let name = await services.firestore.fetchUserName(uid: member.userUID) ?? "Участник"
+                let name: String
+                if member.userUID == myUID, let myName, !myName.isEmpty {
+                    name = myName
+                } else {
+                    name = "Участник"
+                }
                 resolved.append((userUID: member.userUID, role: member.role, name: name))
             }
             members = resolved

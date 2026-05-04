@@ -28,6 +28,10 @@ struct RootView: View {
             }
             if !didConfigure {
                 services.configure(modelContext: context)
+                // Однократно сносим локальный store + Keychain после перехода на E2E:
+                // старая Firestore-схема несовместима с новой (encryptedPayload), поэтому
+                // тянуть будем только то, что появилось в новом формате после миграции.
+                services.data?.wipeLocalIfNeeded()
                 didConfigure = true
             }
         }

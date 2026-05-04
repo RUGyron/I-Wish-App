@@ -289,7 +289,12 @@ struct WishlistDetailView: View {
                 Task {
                     await services.data?.refreshItems(for: wishlist.id.uuidString)
                     if wishlist.isShared, let sharedID = wishlist.sharedWishlistID {
-                        if let info = try? await services.firestore.fetchSharedWishlist(wishlistID: sharedID) {
+                        // Owner-флаг можем взять из локально сохранённого ownerRecordID —
+                        // не нужен сетевой fetchSharedWishlist (и его ключ-зависимость).
+                        if let owner = wishlist.ownerRecordID {
+                            isCurrentUserOwner = owner == services.auth.uid
+                        } else if let key = KeychainService.load(for: sharedID),
+                                  let info = try? await services.firestore.fetchSharedWishlist(wishlistID: sharedID, key: key) {
                             isCurrentUserOwner = info.ownerUID == services.auth.uid
                         }
                     }
