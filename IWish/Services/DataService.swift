@@ -76,18 +76,18 @@ final class DataService {
 
     // MARK: - Wishlists
 
-    func createWishlist(name: String, emoji: String?) async throws -> Wishlist {
+    func createWishlist(name: String, emoji: String?, coverImageData: Data? = nil) async throws -> Wishlist {
         let currentUID = try uid
         let wishlist = Wishlist(
             name: name,
+            coverImageData: coverImageData,
             coverEmoji: emoji,
-            gradientSeed: 0 // will be set below
+            gradientSeed: 0
         )
         let seed = DefaultCoverGenerator.stableHash(wishlist.id.uuidString)
         wishlist.gradientSeed = seed
         let wishlistID = wishlist.id.uuidString
 
-        // Firestore first
         await acquireLock()
         isSyncing = true
         syncError = nil
@@ -98,7 +98,8 @@ final class DataService {
                 wishlistID: wishlistID,
                 name: name,
                 emoji: emoji,
-                gradientSeed: seed
+                gradientSeed: seed,
+                coverImageData: coverImageData
             )
         } catch {
             isSyncing = false

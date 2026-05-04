@@ -72,6 +72,7 @@ final class ShareManager {
                 wishlistID: wishlist.id.uuidString,
                 name: wishlist.name,
                 emoji: wishlist.coverEmoji,
+                coverImageData: wishlist.coverImageData,
                 gradientSeed: wishlist.gradientSeed,
                 ownerUID: ownerUID,
                 ownerName: ownerName,
