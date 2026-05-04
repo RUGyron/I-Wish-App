@@ -67,6 +67,9 @@ final class ShareManager {
 
             // 1. Publish wishlist + items to Firestore (encrypted with wishlist key)
             let localItems = (wishlist.items ?? []).filter { !$0.isArchived }
+            // При первой публикации в shared переносим существующих авторов из локальных items.
+                // Для personal items, добавленных ДО внедрения авторства, поля будут nil — UI это терпит
+            // и не покажет "от <имя>", что корректно (мы не выдумываем автора задним числом).
             let sharedItems = localItems.map { item in
                 FirestoreService.SharedItemInfo(
                     itemID: item.id.uuidString,
@@ -77,7 +80,9 @@ final class ShareManager {
                     url: item.url,
                     coverEmoji: item.coverEmoji,
                     sortIndex: item.sortIndex,
-                    isArchived: item.isArchived
+                    isArchived: item.isArchived,
+                    addedByUID: item.addedByUID,
+                    addedByName: item.addedByName
                 )
             }
             try await firestore.createSharedWishlist(

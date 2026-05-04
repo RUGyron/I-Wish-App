@@ -21,6 +21,7 @@ struct IWishApp: App {
         FirebaseApp.configure()
         self.container = ModelContainerFactory.makeProductionContainer()
         configureAppearance()
+        KeyboardDismissBarInstaller.install()
         preheatKeyboard()
     }
 

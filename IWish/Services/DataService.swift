@@ -366,6 +366,9 @@ final class DataService {
 
     func addItem(to wishlistID: String, name: String, tier: ItemTier, price: Double?, currency: String, url: String?, emoji: String?, sortIndex: Double, descriptionText: String? = nil, probationEndAt: Date? = nil, coverImageData: Data? = nil) async throws -> Item {
         let currentUID = try uid
+        // Имя автора фиксируем на момент добавления — если юзер потом сменит имя в Apple ID,
+        // существующие items сохранят оригинальное "от <имя>".
+        let currentUserName = auth.userName
 
         let item = Item(
             name: name,
@@ -376,7 +379,9 @@ final class DataService {
             descriptionText: descriptionText,
             url: url,
             coverImageData: coverImageData,
-            coverEmoji: emoji
+            coverEmoji: emoji,
+            addedByUID: currentUID,
+            addedByName: currentUserName
         )
         if let probationEndAt {
             item.probationEndAt = probationEndAt
@@ -412,9 +417,9 @@ final class DataService {
         do {
             if wishlistIsShared(wishlist), let sharedID = wishlist.sharedWishlistID {
                 try await verifyEditorRole(wishlistID: sharedID)
-                try await firestore.createSharedItem(wishlistID: sharedID, itemID: itemID, name: name, tier: tier.rawValue, price: price, currency: currency, url: url, emoji: emoji, sortIndex: sortIndex, key: key)
+                try await firestore.createSharedItem(wishlistID: sharedID, itemID: itemID, name: name, tier: tier.rawValue, price: price, currency: currency, url: url, emoji: emoji, sortIndex: sortIndex, addedByUID: currentUID, addedByName: currentUserName, key: key)
             } else {
-                try await firestore.createPersonalItem(uid: currentUID, wishlistID: wishlistID, itemID: itemID, name: name, tier: tier.rawValue, price: price, currency: currency, url: url, emoji: emoji, sortIndex: sortIndex, key: key)
+                try await firestore.createPersonalItem(uid: currentUID, wishlistID: wishlistID, itemID: itemID, name: name, tier: tier.rawValue, price: price, currency: currency, url: url, emoji: emoji, sortIndex: sortIndex, addedByUID: currentUID, addedByName: currentUserName, key: key)
             }
         } catch {
             isSyncing = false
@@ -453,12 +458,17 @@ final class DataService {
             throw FirestoreService.FirestoreError.requestFailed("Ключ шифрования не найден")
         }
 
+        // Preserve авторские поля при update — encryptedPayload пишется целиком, поэтому
+        // если не передать существующие addedByUID/addedByName, они затрутся nil.
+        let preservedAddedByUID = item.addedByUID
+        let preservedAddedByName = item.addedByName
+
         do {
             if isShared, let sharedID {
                 try await verifyEditorRole(wishlistID: sharedID)
-                try await firestore.updateSharedItem(wishlistID: sharedID, itemID: id, name: name, tier: tier.rawValue, price: price, currency: currency, url: url, emoji: emoji, sortIndex: sortIndex, isArchived: isArchived, key: key)
+                try await firestore.updateSharedItem(wishlistID: sharedID, itemID: id, name: name, tier: tier.rawValue, price: price, currency: currency, url: url, emoji: emoji, sortIndex: sortIndex, isArchived: isArchived, addedByUID: preservedAddedByUID, addedByName: preservedAddedByName, key: key)
             } else {
-                try await firestore.updatePersonalItem(uid: currentUID, wishlistID: wishlistID, itemID: id, name: name, tier: tier.rawValue, price: price, currency: currency, url: url, emoji: emoji, sortIndex: sortIndex, isArchived: isArchived, key: key)
+                try await firestore.updatePersonalItem(uid: currentUID, wishlistID: wishlistID, itemID: id, name: name, tier: tier.rawValue, price: price, currency: currency, url: url, emoji: emoji, sortIndex: sortIndex, isArchived: isArchived, addedByUID: preservedAddedByUID, addedByName: preservedAddedByName, key: key)
             }
         } catch {
             isSyncing = false
@@ -545,9 +555,9 @@ final class DataService {
         do {
             if isShared, let sharedID {
                 try await verifyEditorRole(wishlistID: sharedID)
-                try await firestore.updateSharedItem(wishlistID: sharedID, itemID: id, name: item.name, tier: item.tier.rawValue, price: item.price, currency: item.currency, url: item.url, emoji: item.coverEmoji, sortIndex: item.sortIndex, isArchived: true, key: key)
+                try await firestore.updateSharedItem(wishlistID: sharedID, itemID: id, name: item.name, tier: item.tier.rawValue, price: item.price, currency: item.currency, url: item.url, emoji: item.coverEmoji, sortIndex: item.sortIndex, isArchived: true, addedByUID: item.addedByUID, addedByName: item.addedByName, key: key)
             } else {
-                try await firestore.updatePersonalItem(uid: currentUID, wishlistID: wishlistID, itemID: id, name: item.name, tier: item.tier.rawValue, price: item.price, currency: item.currency, url: item.url, emoji: item.coverEmoji, sortIndex: item.sortIndex, isArchived: true, key: key)
+                try await firestore.updatePersonalItem(uid: currentUID, wishlistID: wishlistID, itemID: id, name: item.name, tier: item.tier.rawValue, price: item.price, currency: item.currency, url: item.url, emoji: item.coverEmoji, sortIndex: item.sortIndex, isArchived: true, addedByUID: item.addedByUID, addedByName: item.addedByName, key: key)
             }
         } catch {
             isSyncing = false
@@ -740,7 +750,9 @@ final class DataService {
                                 currency: sharedItem.currency,
                                 price: sharedItem.price,
                                 url: sharedItem.url,
-                                coverEmoji: sharedItem.coverEmoji
+                                coverEmoji: sharedItem.coverEmoji,
+                                addedByUID: sharedItem.addedByUID,
+                                addedByName: sharedItem.addedByName
                             )
                             item.isArchived = sharedItem.isArchived
                             item.wishlist = newWL
@@ -858,6 +870,10 @@ final class DataService {
                 local.coverEmoji = remote.coverEmoji
                 local.sortIndex = remote.sortIndex
                 local.isArchived = remote.isArchived
+                // Авторские поля у legacy items могут быть nil — не затираем существующее
+                // локальное значение остатком расшифровки, если remote вернулся без автора.
+                if let uid = remote.addedByUID { local.addedByUID = uid }
+                if let nm = remote.addedByName { local.addedByName = nm }
                 local.updatedAt = .now
             } else {
                 let item = Item(
@@ -867,7 +883,9 @@ final class DataService {
                     currency: remote.currency,
                     price: remote.price,
                     url: remote.url,
-                    coverEmoji: remote.coverEmoji
+                    coverEmoji: remote.coverEmoji,
+                    addedByUID: remote.addedByUID,
+                    addedByName: remote.addedByName
                 )
                 item.isArchived = remote.isArchived
                 item.wishlist = wishlist

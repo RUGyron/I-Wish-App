@@ -626,7 +626,23 @@ struct WishlistDetailView: View {
                 Image(systemName: "clock")
                 Text(String(format: NSLocalizedString("%lld дней", comment: ""), days))
             }
+            // "от <имя>" — только в shared-вишлистах с активным membership.
+            // Для личных списков юзер сам добавлял всё — атрибуция не нужна.
+            if wishlist.isShared, wishlist.myRole != nil, let authorLabel = authorLabel(for: item) {
+                Text("\u{00B7}")
+                Text(authorLabel)
+            }
         }
+    }
+
+    /// Текст "от <имя>" для item в shared wishlist. Если автор — текущий юзер, показываем "Вы".
+    /// Если addedByName отсутствует (legacy item, добавленный до внедрения авторства) — возвращаем nil.
+    private func authorLabel(for item: Item) -> String? {
+        guard let name = item.addedByName, !name.isEmpty else { return nil }
+        if let myUID = services.auth.uid, item.addedByUID == myUID {
+            return "от Вас"
+        }
+        return "от \(name)"
     }
 
     // MARK: - Reorder helpers

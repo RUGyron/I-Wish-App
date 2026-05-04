@@ -265,7 +265,9 @@ struct JoinWishlistSheet: View {
                         currency: sharedItem.currency,
                         price: sharedItem.price,
                         url: sharedItem.url,
-                        coverEmoji: sharedItem.coverEmoji
+                        coverEmoji: sharedItem.coverEmoji,
+                        addedByUID: sharedItem.addedByUID,
+                        addedByName: sharedItem.addedByName
                     )
                     item.isArchived = sharedItem.isArchived
                     item.wishlist = wishlist

@@ -18,6 +18,10 @@ final class Item {
     var isArchived: Bool = false
     var createdAt: Date = Date()
     var updatedAt: Date = Date()
+    /// UID юзера, который добавил item (для проверок). Опционально — у legacy items нет.
+    var addedByUID: String?
+    /// displayName юзера на момент добавления (для отображения "от <имя>"). Опционально.
+    var addedByName: String?
     var wishlist: Wishlist?
 
     var tier: ItemTier {
@@ -39,7 +43,9 @@ final class Item {
         descriptionText: String? = nil,
         url: String? = nil,
         coverImageData: Data? = nil,
-        coverEmoji: String? = nil
+        coverEmoji: String? = nil,
+        addedByUID: String? = nil,
+        addedByName: String? = nil
     ) {
         let now = Date.now
         self.id = UUID()
@@ -55,5 +61,7 @@ final class Item {
         self.isArchived = false
         self.createdAt = now
         self.updatedAt = now
+        self.addedByUID = addedByUID
+        self.addedByName = addedByName
     }
 }

@@ -21,6 +21,7 @@ enum KeychainError: LocalizedError {
 enum KeychainService {
 
     private static let service = "RUGyron.IWish.WishlistKeys"
+    fileprivate static let userProfileService = "RUGyron.IWish.UserProfile"
 
     /// Сохранить ключ wishlist в iCloud Keychain.
     static func save(key: SymmetricKey, for wishlistID: String) throws {
@@ -84,6 +85,65 @@ enum KeychainService {
         let query: [String: Any] = [
             kSecClass as String: kSecClassGenericPassword,
             kSecAttrService as String: service,
+            kSecAttrSynchronizable as String: kSecAttrSynchronizableAny
+        ]
+        SecItemDelete(query as CFDictionary)
+
+        let profileQuery: [String: Any] = [
+            kSecClass as String: kSecClassGenericPassword,
+            kSecAttrService as String: userProfileService,
+            kSecAttrSynchronizable as String: kSecAttrSynchronizableAny
+        ]
+        SecItemDelete(profileQuery as CFDictionary)
+    }
+}
+
+extension KeychainService {
+
+    /// Сохранить displayName юзера в iCloud Keychain (sync между Apple ID девайсами).
+    static func saveUserName(_ name: String) {
+        let data = Data(name.utf8)
+        let deleteQuery: [String: Any] = [
+            kSecClass as String: kSecClassGenericPassword,
+            kSecAttrService as String: userProfileService,
+            kSecAttrAccount as String: "displayName",
+            kSecAttrSynchronizable as String: kSecAttrSynchronizableAny
+        ]
+        SecItemDelete(deleteQuery as CFDictionary)
+
+        let addQuery: [String: Any] = [
+            kSecClass as String: kSecClassGenericPassword,
+            kSecAttrService as String: userProfileService,
+            kSecAttrAccount as String: "displayName",
+            kSecAttrSynchronizable as String: kCFBooleanTrue!,
+            kSecAttrAccessible as String: kSecAttrAccessibleAfterFirstUnlock,
+            kSecValueData as String: data
+        ]
+        _ = SecItemAdd(addQuery as CFDictionary, nil)
+    }
+
+    /// Загрузить displayName юзера (sync между Apple ID девайсами через iCloud Keychain).
+    static func loadUserName() -> String? {
+        let query: [String: Any] = [
+            kSecClass as String: kSecClassGenericPassword,
+            kSecAttrService as String: userProfileService,
+            kSecAttrAccount as String: "displayName",
+            kSecAttrSynchronizable as String: kSecAttrSynchronizableAny,
+            kSecReturnData as String: true,
+            kSecMatchLimit as String: kSecMatchLimitOne
+        ]
+        var result: AnyObject?
+        let status = SecItemCopyMatching(query as CFDictionary, &result)
+        guard status == errSecSuccess, let data = result as? Data else { return nil }
+        return String(data: data, encoding: .utf8)
+    }
+
+    /// Удалить displayName юзера (на всех Apple ID девайсах через iCloud).
+    static func deleteUserName() {
+        let query: [String: Any] = [
+            kSecClass as String: kSecClassGenericPassword,
+            kSecAttrService as String: userProfileService,
+            kSecAttrAccount as String: "displayName",
             kSecAttrSynchronizable as String: kSecAttrSynchronizableAny
         ]
         SecItemDelete(query as CFDictionary)

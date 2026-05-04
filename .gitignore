@@ -33,3 +33,4 @@ fastlane/test_output
 
 # Internal AI working notes — never push
 CLAUDE.md
+firebase-debug.log

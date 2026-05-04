@@ -24,7 +24,20 @@ final class AuthService: NSObject {
 
     override init() {
         super.init()
-        userName = UserDefaults.standard.string(forKey: "auth_userName")
+
+        // Migration: перенести legacy UserDefaults["auth_userName"] в iCloud Keychain
+        if KeychainService.loadUserName() == nil,
+           let legacyName = UserDefaults.standard.string(forKey: "auth_userName"),
+           !legacyName.isEmpty {
+            KeychainService.saveUserName(legacyName)
+            UserDefaults.standard.removeObject(forKey: "auth_userName")
+        }
+
+        // Основной источник имени — iCloud Keychain (sync между Apple ID девайсами).
+        // Fallback на UserDefaults если Keychain ещё не синкнулся (но новые записи туда НЕ пишем).
+        userName = KeychainService.loadUserName()
+            ?? UserDefaults.standard.string(forKey: "auth_userName")
+
         if let user = Auth.auth().currentUser, !user.isAnonymous {
             _uid = user.uid
             print("[Auth] Found Keychain session: \(user.uid)")
@@ -38,18 +51,16 @@ final class AuthService: NSObject {
         }
     }
 
-    /// Restore session. Trust Firebase SDK + UserDefaults.
-    /// Only verify Firestore if we have no cached name (first launch after sign-in).
+    /// Restore session. Trust Firebase SDK + iCloud Keychain.
+    /// Имя приходит из iCloud Keychain (синкается между девайсами того же Apple ID).
+    /// Если Keychain пустой — оставляем nil, SettingsView покажет fallback ("Apple ID").
     private func verifyAndRestore(uid: String) async {
         _isAppleSignedIn = true
         await refreshToken()
 
-        // Try to update name from Firestore (best-effort, don't sign out on failure)
-        if let token = _idToken, userName == nil || userName == "Пользователь" {
-            if let name = await fetchNameFromFirestore(uid: uid, token: token) {
-                userName = name
-                UserDefaults.standard.set(name, forKey: "auth_userName")
-            }
+        // На случай если Keychain синкнулся уже после init() — перечитываем.
+        if userName == nil {
+            userName = KeychainService.loadUserName()
         }
         print("[Auth] Restored: \(uid), name: \(userName ?? "nil")")
     }
@@ -137,7 +148,7 @@ final class AuthService: NSObject {
             // Extract name — Apple only sends it on FIRST sign-in ever
             var resolvedName: String?
 
-            // 1. Try Apple credential
+            // 1. Try Apple credential (только при первом sign-in c этим Apple ID)
             if let givenName = credential.fullName?.givenName {
                 resolvedName = [givenName, credential.fullName?.familyName]
                     .compactMap { $0 }
@@ -149,17 +160,12 @@ final class AuthService: NSObject {
                 resolvedName = dn
             }
 
-            // 3. Try Firestore users/{uid} doc
-            if resolvedName == nil, let token = _idToken {
-                resolvedName = await fetchNameFromFirestore(uid: authResult.user.uid, token: token)
-            }
-
-            // 4. Try UserDefaults
+            // 3. Try iCloud Keychain (если юзер уже логинился на этом или другом девайсе)
             if resolvedName == nil {
-                resolvedName = UserDefaults.standard.string(forKey: "auth_userName")
+                resolvedName = KeychainService.loadUserName()
             }
 
-            // 5. Try email as last resort
+            // 4. Try email as last resort
             if resolvedName == nil {
                 if let email = authResult.user.email, !email.isEmpty {
                     resolvedName = email.components(separatedBy: "@").first
@@ -168,8 +174,9 @@ final class AuthService: NSObject {
 
             let finalName = resolvedName ?? "Пользователь"
             userName = finalName
-            UserDefaults.standard.set(finalName, forKey: "auth_userName")
-            saveProfileToFirestore(uid: authResult.user.uid, name: finalName)
+            // Сохраняем приватно в iCloud Keychain — sync между Apple ID девайсами,
+            // разраб (Firebase Console) имя не видит.
+            KeychainService.saveUserName(finalName)
 
         case .failure(let error):
             throw error
@@ -183,6 +190,7 @@ final class AuthService: NSObject {
         _refreshToken = nil
         _isAppleSignedIn = false
         userName = nil
+        KeychainService.deleteUserName()
         UserDefaults.standard.removeObject(forKey: "auth_userName")
     }
 
@@ -196,35 +204,6 @@ final class AuthService: NSObject {
             case .notAuthenticated: return "Необходимо войти через Apple ID"
             }
         }
-    }
-
-    private func saveProfileToFirestore(uid: String, name: String) {
-        Task {
-            let fields: [String: Any] = [
-                "name": ["stringValue": name],
-                "uid": ["stringValue": uid]
-            ]
-            let url = URL(string: "https://firestore.googleapis.com/v1/projects/rewardpierwebpush/databases/(default)/documents/users/\(uid)")!
-            var req = URLRequest(url: url)
-            req.httpMethod = "PATCH"
-            req.setValue("Bearer \(self._idToken ?? "")", forHTTPHeaderField: "Authorization")
-            req.setValue("application/json", forHTTPHeaderField: "Content-Type")
-            req.httpBody = try? JSONSerialization.data(withJSONObject: ["fields": fields])
-            _ = try? await URLSession.shared.data(for: req)
-        }
-    }
-
-    private func fetchNameFromFirestore(uid: String, token: String) async -> String? {
-        let url = URL(string: "https://firestore.googleapis.com/v1/projects/rewardpierwebpush/databases/(default)/documents/users/\(uid)")!
-        var req = URLRequest(url: url)
-        req.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
-        guard let (data, _) = try? await URLSession.shared.data(for: req),
-              let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
-              let fields = json["fields"] as? [String: Any],
-              let nameField = fields["name"] as? [String: Any],
-              let name = nameField["stringValue"] as? String,
-              !name.isEmpty else { return nil }
-        return name
     }
 
     // MARK: - Helpers

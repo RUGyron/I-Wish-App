@@ -59,6 +59,10 @@ final class FirestoreService {
         let coverEmoji: String?
         let sortIndex: Double
         let isArchived: Bool
+        /// UID юзера, который добавил item. Хранится в зашифрованном payload.
+        let addedByUID: String?
+        /// displayName юзера на момент добавления. Хранится в зашифрованном payload.
+        let addedByName: String?
     }
 
     enum FirestoreError: LocalizedError {
@@ -327,14 +331,16 @@ final class FirestoreService {
 
     // MARK: - Personal Items (users/{uid}/wishlists/{wid}/items)
 
-    func createPersonalItem(uid: String, wishlistID: String, itemID: String, name: String, tier: String, price: Double?, currency: String, url: String?, emoji: String?, sortIndex: Double, key: SymmetricKey) async throws {
+    func createPersonalItem(uid: String, wishlistID: String, itemID: String, name: String, tier: String, price: Double?, currency: String, url: String?, emoji: String?, sortIndex: Double, addedByUID: String? = nil, addedByName: String? = nil, key: SymmetricKey) async throws {
         let payload = EncryptionService.packPayload([
             "name": name,
             "tier": tier,
             "price": price,
             "currency": currency,
             "url": url,
-            "coverEmoji": emoji
+            "coverEmoji": emoji,
+            "addedByUID": addedByUID,
+            "addedByName": addedByName
         ])
         let encrypted = try EncryptionService.encrypt(payload, using: key)
 
@@ -348,14 +354,20 @@ final class FirestoreService {
         let _ = try await request("PATCH", path: "users/\(uid)/wishlists/\(wishlistID)/items/\(itemID)", body: ["fields": fields])
     }
 
-    func updatePersonalItem(uid: String, wishlistID: String, itemID: String, name: String, tier: String, price: Double?, currency: String, url: String?, emoji: String?, sortIndex: Double, isArchived: Bool, key: SymmetricKey) async throws {
+    /// Update personal item. Поля `addedByUID`/`addedByName` НЕ затираются: автор фиксируется при создании
+    /// и не меняется при последующих правках. Если callsite не передал эти поля — мы их также не пишем
+    /// (re-encrypt без них), чтобы избежать legacy collision; при чтении обнуление воспринимается как nil.
+    /// FIXME: если в будущем понадобится строго preserve через PATCH, понадобится pre-fetch + decrypt существующего payload.
+    func updatePersonalItem(uid: String, wishlistID: String, itemID: String, name: String, tier: String, price: Double?, currency: String, url: String?, emoji: String?, sortIndex: Double, isArchived: Bool, addedByUID: String? = nil, addedByName: String? = nil, key: SymmetricKey) async throws {
         let payload = EncryptionService.packPayload([
             "name": name,
             "tier": tier,
             "price": price,
             "currency": currency,
             "url": url,
-            "coverEmoji": emoji
+            "coverEmoji": emoji,
+            "addedByUID": addedByUID,
+            "addedByName": addedByName
         ])
         let encrypted = try EncryptionService.encrypt(payload, using: key)
 
@@ -416,7 +428,9 @@ final class FirestoreService {
                     "price": item.price,
                     "currency": item.currency,
                     "url": item.url,
-                    "coverEmoji": item.coverEmoji
+                    "coverEmoji": item.coverEmoji,
+                    "addedByUID": item.addedByUID,
+                    "addedByName": item.addedByName
                 ])
                 let encryptedItem = try EncryptionService.encrypt(itemPayload, using: key)
 
@@ -470,14 +484,16 @@ final class FirestoreService {
 
     // MARK: - Shared Items CRUD (shared_wishlists/{wid}/items)
 
-    func createSharedItem(wishlistID: String, itemID: String, name: String, tier: String, price: Double?, currency: String, url: String?, emoji: String?, sortIndex: Double, key: SymmetricKey) async throws {
+    func createSharedItem(wishlistID: String, itemID: String, name: String, tier: String, price: Double?, currency: String, url: String?, emoji: String?, sortIndex: Double, addedByUID: String? = nil, addedByName: String? = nil, key: SymmetricKey) async throws {
         let payload = EncryptionService.packPayload([
             "name": name,
             "tier": tier,
             "price": price,
             "currency": currency,
             "url": url,
-            "coverEmoji": emoji
+            "coverEmoji": emoji,
+            "addedByUID": addedByUID,
+            "addedByName": addedByName
         ])
         let encrypted = try EncryptionService.encrypt(payload, using: key)
 
@@ -491,14 +507,21 @@ final class FirestoreService {
         let _ = try await request("PATCH", path: "shared_wishlists/\(wishlistID)/items/\(itemID)", body: ["fields": fields])
     }
 
-    func updateSharedItem(wishlistID: String, itemID: String, name: String, tier: String, price: Double?, currency: String, url: String?, emoji: String?, sortIndex: Double, isArchived: Bool, key: SymmetricKey) async throws {
+    /// Update shared item. Поля `addedByUID`/`addedByName` НЕ меняются при правке (автор фиксируется
+    /// при создании). Callsite в DataService.updateItem пробрасывает существующие значения автора
+    /// из локального Item, чтобы не потерять их при PATCH (encryptedPayload пишется целиком).
+    /// FIXME: если callsite забудет передать author — поля затрутся nil. Лучше переделать на pre-fetch
+    /// + merge, но это +1 read на каждый update, что бьёт по Firestore quota.
+    func updateSharedItem(wishlistID: String, itemID: String, name: String, tier: String, price: Double?, currency: String, url: String?, emoji: String?, sortIndex: Double, isArchived: Bool, addedByUID: String? = nil, addedByName: String? = nil, key: SymmetricKey) async throws {
         let payload = EncryptionService.packPayload([
             "name": name,
             "tier": tier,
             "price": price,
             "currency": currency,
             "url": url,
-            "coverEmoji": emoji
+            "coverEmoji": emoji,
+            "addedByUID": addedByUID,
+            "addedByName": addedByName
         ])
         let encrypted = try EncryptionService.encrypt(payload, using: key)
 
@@ -885,6 +908,10 @@ final class FirestoreService {
         let url: String? = (urlRaw?.isEmpty == false) ? urlRaw : nil
         let emojiRaw = content["coverEmoji"] as? String
         let coverEmoji: String? = (emojiRaw?.isEmpty == false) ? emojiRaw : nil
+        let addedByUIDRaw = content["addedByUID"] as? String
+        let addedByUID: String? = (addedByUIDRaw?.isEmpty == false) ? addedByUIDRaw : nil
+        let addedByNameRaw = content["addedByName"] as? String
+        let addedByName: String? = (addedByNameRaw?.isEmpty == false) ? addedByNameRaw : nil
 
         return SharedItemInfo(
             itemID: docID,
@@ -895,7 +922,9 @@ final class FirestoreService {
             url: url,
             coverEmoji: coverEmoji,
             sortIndex: parsed["sortIndex"] as? Double ?? 0,
-            isArchived: parsed["isArchived"] as? Bool ?? false
+            isArchived: parsed["isArchived"] as? Bool ?? false,
+            addedByUID: addedByUID,
+            addedByName: addedByName
         )
     }
 }
