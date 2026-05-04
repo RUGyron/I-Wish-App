@@ -17,6 +17,8 @@ final class AppSettings {
 
     // Invite defaults
     var defaultInviteTTLRaw: String = "15m"
+    /// "editor" / "viewer" — какую роль предложит ShareWishlistSheet по умолчанию.
+    var defaultShareRoleRaw: String = "editor"
 
     // App icon
     var selectedAppIconRaw: String = "light"
@@ -31,6 +33,11 @@ final class AppSettings {
     var defaultInviteTTL: InviteTTL {
         get { InviteTTL(rawValue: defaultInviteTTLRaw) ?? .minutes15 }
         set { defaultInviteTTLRaw = newValue.rawValue }
+    }
+
+    var defaultShareRole: ShareRole {
+        get { ShareRole(rawValue: defaultShareRoleRaw) ?? .editor }
+        set { defaultShareRoleRaw = newValue.rawValue }
     }
 
     var selectedAppIcon: AppIconVariant {

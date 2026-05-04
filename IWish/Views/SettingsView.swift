@@ -176,6 +176,11 @@ struct SettingsView: View {
 
     private var invitesSection: some View {
         Section("Приглашения") {
+            Picker("Роль по умолчанию", selection: shareRoleBinding) {
+                ForEach(ShareRole.allCases) { role in
+                    Text(role.label).tag(role)
+                }
+            }
             Picker("Срок действия по умолчанию", selection: inviteTTLBinding) {
                 ForEach(InviteTTL.allCases) { ttl in
                     Text(ttl.label).tag(ttl)
@@ -192,14 +197,19 @@ struct SettingsView: View {
                 Label("Как мы храним данные", systemImage: "lock.shield")
             }
             NavigationLink {
-                MarkdownDocView(title: "Политика приватности", resourceName: "privacy")
+                MarkdownDocView(title: "Политика конфиденциальности", resourceName: "privacy")
             } label: {
-                Label("Политика приватности", systemImage: "doc.text")
+                Label("Политика конфиденциальности", systemImage: "doc.text")
             }
             NavigationLink {
                 MarkdownDocView(title: "Пользовательское соглашение", resourceName: "terms")
             } label: {
                 Label("Пользовательское соглашение", systemImage: "doc.plaintext")
+            }
+            Button {
+                openFeedbackMail()
+            } label: {
+                Label("Обратная связь", systemImage: "envelope")
             }
         } header: {
             Text("О приложении")
@@ -310,6 +320,29 @@ struct SettingsView: View {
                 try? context.save()
             }
         )
+    }
+
+    private var shareRoleBinding: Binding<ShareRole> {
+        Binding(
+            get: { settings.defaultShareRole },
+            set: {
+                settings.defaultShareRole = $0
+                try? context.save()
+            }
+        )
+    }
+
+    private func openFeedbackMail() {
+        let version = Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "?"
+        let build = Bundle.main.infoDictionary?["CFBundleVersion"] as? String ?? "?"
+        let subject = "I Wish — обратная связь"
+        let body = "\n\n\n———\nВерсия: \(version) (\(build))\niOS: \(UIDevice.current.systemVersion)"
+        guard
+            let s = subject.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed),
+            let b = body.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed),
+            let url = URL(string: "mailto:pivosh098@gmail.com?subject=\(s)&body=\(b)")
+        else { return }
+        UIApplication.shared.open(url)
     }
 }
 

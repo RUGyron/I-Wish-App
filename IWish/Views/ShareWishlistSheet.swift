@@ -95,6 +95,7 @@ struct ShareWishlistSheet: View {
             .onAppear {
                 if let settings = settingsList.first {
                     selectedTTL = settings.defaultInviteTTL
+                    selectedRole = settings.defaultShareRole
                 }
                 Task {
                     guard services.auth.isAuthenticated else {
