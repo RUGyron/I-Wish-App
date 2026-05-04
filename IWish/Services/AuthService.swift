@@ -194,6 +194,15 @@ final class AuthService: NSObject {
         }
     }
 
+    /// Ручная установка имени пользователем (через Settings).
+    /// Сохраняем в iCloud Keychain — синкается между Apple ID девайсами.
+    func setUserName(_ name: String) {
+        let trimmed = name.trimmingCharacters(in: .whitespaces)
+        guard !trimmed.isEmpty else { return }
+        userName = trimmed
+        KeychainService.saveUserName(trimmed)
+    }
+
     func signOut() throws {
         try Auth.auth().signOut()
         _uid = nil
