@@ -45,6 +45,7 @@ struct WishlistDetailView: View {
     @State private var showingParticipants = false
     @State private var showingDeleteConfirmation = false
     @State private var editingItem: Item?
+    @State private var detailItem: Item?
     @State private var showingEditWishlist = false
     @State private var editMode: EditMode = .inactive
     @State private var sortSnapshot: [UUID: Double] = [:]
@@ -251,6 +252,9 @@ struct WishlistDetailView: View {
         .sheet(item: $editingItem) { item in
             EditItemSheet(item: item)
                 .applyTheme()
+        }
+        .sheet(item: $detailItem) { item in
+            ItemDetailSheet(item: item, wishlist: wishlist)
         }
         .sheet(isPresented: $showingEditWishlist) {
             EditWishlistSheet(wishlist: wishlist)
@@ -571,49 +575,82 @@ struct WishlistDetailView: View {
     // MARK: - Item Row
 
     private func itemRow(_ item: Item) -> some View {
-        HStack(alignment: .top, spacing: 12) {
-            DefaultCoverView(
-                id: item.id,
-                imageData: item.coverImageData,
-                emoji: item.coverEmoji
-            )
-            .frame(width: 52, height: 52)
+        // Telegram-style: автор+дата сверху, имя жирно, мета-строка снизу.
+        // Слева — цветная полоска по tier (вместо эмодзи в тексте).
+        // Все три строки имеют фиксированную высоту, поэтому опциональные
+        // поля (нет цены / url / автора / probation) не «прыгают» список.
+        HStack(alignment: .top, spacing: 0) {
+            RoundedRectangle(cornerRadius: 2, style: .continuous)
+                .fill(item.tier.stripeColor)
+                .frame(width: 4)
 
-            VStack(alignment: .leading, spacing: 4) {
-                HStack(alignment: .firstTextBaseline) {
-                    Text(item.name)
-                        .font(.body)
-                        .lineLimit(2)
+            HStack(alignment: .top, spacing: 12) {
+                DefaultCoverView(
+                    id: item.id,
+                    imageData: item.coverImageData,
+                    emoji: item.coverEmoji
+                )
+                .frame(width: 52, height: 52)
 
-                    Spacer(minLength: 4)
-
-                    if let price = item.price {
-                        Text(formatPrice(price, currency: item.currency))
-                            .font(.subheadline)
-                            .foregroundStyle(.secondary)
-                            .layoutPriority(1)
-                    }
+                VStack(alignment: .leading, spacing: 2) {
+                    topRow(for: item)
+                    titleRow(for: item)
+                    bottomRow(for: item)
                 }
+                .frame(maxWidth: .infinity, alignment: .leading)
+            }
+            .padding(.leading, 10)
+        }
+        .padding(.vertical, 8)
+        .contentShape(Rectangle())
+        .onTapGesture { detailItem = item }
+    }
 
-                itemMetadataRow(item)
-                    .font(.caption)
+    private func topRow(for item: Item) -> some View {
+        HStack(spacing: 6) {
+            if wishlist.isShared, let author = authorLabel(for: item) {
+                Text(author)
+                    .font(.caption2)
                     .foregroundStyle(.secondary)
+                    .lineLimit(1)
+                Text("·")
+                    .font(.caption2)
+                    .foregroundStyle(.tertiary)
+            }
+            Text(item.createdAt.formatted(.dateTime.day().month(.abbreviated)))
+                .font(.caption2)
+                .foregroundStyle(.tertiary)
+
+            Spacer(minLength: 4)
+
+            if let price = item.price {
+                Text(formatPrice(price, currency: item.currency))
+                    .font(.subheadline.weight(.semibold))
+                    .foregroundStyle(.primary)
+                    .layoutPriority(1)
+                    .lineLimit(1)
             }
         }
-        .padding(.vertical, 6)
+        .frame(height: 16)
+    }
+
+    private func titleRow(for item: Item) -> some View {
+        Text(item.name)
+            .font(.body.weight(.semibold))
+            .lineLimit(1)
+            .truncationMode(.tail)
+            .frame(height: 22, alignment: .leading)
+            .frame(maxWidth: .infinity, alignment: .leading)
     }
 
     @ViewBuilder
-    private func itemMetadataRow(_ item: Item) -> some View {
-        HStack(spacing: 4) {
-            Text(item.tier.emoji)
-            Text(item.createdAt.formatted(.dateTime.day().month(.abbreviated)))
+    private func bottomRow(for item: Item) -> some View {
+        HStack(spacing: 8) {
             if let urlString = item.url, !urlString.isEmpty, let url = URL(string: urlString) {
-                Text("\u{00B7}")
                 Button {
                     UIApplication.shared.open(url)
                 } label: {
-                    HStack(spacing: 2) {
+                    HStack(spacing: 3) {
                         Image(systemName: "link")
                         Text(extractDomain(from: urlString) ?? "ссылка")
                     }
@@ -622,28 +659,27 @@ struct WishlistDetailView: View {
                 .buttonStyle(.plain)
             }
             if let days = probationDaysLeft(item) {
-                Text("\u{00B7}")
-                Image(systemName: "clock")
-                Text(String(format: NSLocalizedString("%lld дней", comment: ""), days))
+                HStack(spacing: 3) {
+                    Image(systemName: "clock")
+                    Text("\(days) дн.")
+                }
+                .foregroundStyle(.secondary)
             }
-            // "от <имя>" — только в shared-вишлистах. Для личных списков юзер сам
-            // добавлял всё — атрибуция не нужна. myRole не проверяем, т.к. у owner'а
-            // он может быть nil сразу после share, до первого refresh membership'ов.
-            if wishlist.isShared, let authorLabel = authorLabel(for: item) {
-                Text("\u{00B7}")
-                Text(authorLabel)
-            }
+            Spacer(minLength: 0)
         }
+        .font(.caption)
+        .frame(height: 16)
     }
 
-    /// Текст "от <имя>" для item в shared wishlist. Если автор — текущий юзер, показываем "Вы".
+    /// Имя автора item в shared wishlist (без префикса "от " — он отрисовывается отдельно).
+    /// Возвращает "Вы" если item добавлен текущим юзером.
     /// Если addedByName отсутствует (legacy item, добавленный до внедрения авторства) — возвращаем nil.
     private func authorLabel(for item: Item) -> String? {
-        guard let name = item.addedByName, !name.isEmpty else { return nil }
         if let myUID = services.auth.uid, item.addedByUID == myUID {
-            return "от Вас"
+            return "Вы"
         }
-        return "от \(name)"
+        guard let name = item.addedByName, !name.isEmpty else { return nil }
+        return name
     }
 
     // MARK: - Reorder helpers
