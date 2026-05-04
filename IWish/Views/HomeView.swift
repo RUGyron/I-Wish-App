@@ -447,7 +447,9 @@ struct HomeView: View {
     // MARK: - Polling
 
     private func startPolling() {
-        pollTimer = Timer.scheduledTimer(withTimeInterval: 10.0, repeats: true) { _ in
+        // 30 сек — экономим Firestore quota; throttle в DataService всё равно отсечёт
+        // более частые вызовы.
+        pollTimer = Timer.scheduledTimer(withTimeInterval: 30.0, repeats: true) { _ in
             Task { @MainActor in
                 await services.data?.refreshWishlists()
             }

@@ -156,7 +156,8 @@ struct ParticipantsView: View {
     // MARK: - Polling
 
     private func startPolling() {
-        pollTimer = Timer.scheduledTimer(withTimeInterval: 5.0, repeats: true) { _ in
+        // 30 сек — список участников меняется редко, нет смысла поллить чаще.
+        pollTimer = Timer.scheduledTimer(withTimeInterval: 30.0, repeats: true) { _ in
             Task { @MainActor in
                 await fetchMembers()
             }

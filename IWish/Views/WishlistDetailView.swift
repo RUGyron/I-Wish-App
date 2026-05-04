@@ -635,7 +635,8 @@ struct WishlistDetailView: View {
     // MARK: - Polling
 
     private func startPolling() {
-        pollTimer = Timer.scheduledTimer(withTimeInterval: 5.0, repeats: true) { _ in
+        // 15 сек — экономим Firestore quota; throttle в DataService отсечёт более частые.
+        pollTimer = Timer.scheduledTimer(withTimeInterval: 15.0, repeats: true) { _ in
             Task { @MainActor in
                 // Check if wishlist still exists (might be deleted by another device)
                 if wishlist.isDeleted || wishlist.modelContext == nil {

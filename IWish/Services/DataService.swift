@@ -19,6 +19,11 @@ final class DataService {
     /// Serializes all Firestore operations — no parallel mutations/polls
     private var operationLock = false
 
+    /// Throttle для refreshWishlists — auto-polling не чаще раз в N сек.
+    private var lastRefreshWishlistsAt: Date?
+    /// Throttle для refreshItems(for:) — per wishlistID.
+    private var lastRefreshItemsAt: [String: Date] = [:]
+
     /// Wait for any running operation to finish, then acquire lock
     func acquireLock() async {
         while operationLock {
@@ -107,6 +112,18 @@ final class DataService {
 
     func createWishlist(name: String, emoji: String?, coverImageData: Data? = nil) async throws -> Wishlist {
         let currentUID = try uid
+
+        // Лимит на количество активных (не-архивных) wishlist'ов на юзера.
+        // Чек локальный: SwiftData отражает Firestore после refresh.
+        let allDescriptor = FetchDescriptor<Wishlist>()
+        let allLocal = (try? modelContext.fetch(allDescriptor)) ?? []
+        let activeCount = allLocal.filter { !$0.isArchived }.count
+        guard activeCount < InputLimits.maxWishlistsPerUser else {
+            throw FirestoreService.FirestoreError.requestFailed(
+                "Достигнут лимит — \(InputLimits.maxWishlistsPerUser) активных списков. Удалите или архивируйте старые."
+            )
+        }
+
         let wishlist = Wishlist(
             name: name,
             coverImageData: coverImageData,
@@ -377,6 +394,15 @@ final class DataService {
             throw FirestoreService.FirestoreError.notFound
         }
 
+        // Лимит на количество активных items в одном wishlist.
+        let activeItemsCount = (wishlist.items ?? []).filter { !$0.isArchived }.count
+        guard activeItemsCount < InputLimits.maxItemsPerWishlist else {
+            isSyncing = false
+            throw FirestoreService.FirestoreError.requestFailed(
+                "В списке достигнут лимит — \(InputLimits.maxItemsPerWishlist) желаний. Удалите ненужные."
+            )
+        }
+
         // Все items в одном wishlist шифруются одним ключом — берём его по wishlistID (parent).
         guard let key = KeychainService.load(for: wishlistID) else {
             isSyncing = false
@@ -538,9 +564,17 @@ final class DataService {
 
     func refreshWishlists() async {
         guard let currentUID = auth.uid else { return }
+
+        // Throttle: не чаще раз в N сек, иначе быстро вышибаем дневную квоту Firestore.
+        if let last = lastRefreshWishlistsAt,
+           Date().timeIntervalSince(last) < InputLimits.minWishlistsRefreshInterval {
+            return
+        }
+
         guard tryAcquireLock() else { return } // Skip if busy
         defer { releaseLock() }
 
+        lastRefreshWishlistsAt = Date()
         isSyncing = true
         syncError = nil
 
@@ -730,9 +764,17 @@ final class DataService {
 
     func refreshItems(for wishlistID: String) async {
         guard let currentUID = auth.uid else { return }
+
+        // Throttle per-wishlist: не чаще раз в N сек.
+        if let last = lastRefreshItemsAt[wishlistID],
+           Date().timeIntervalSince(last) < InputLimits.minItemsRefreshInterval {
+            return
+        }
+
         guard tryAcquireLock() else { return } // Skip if busy
         defer { releaseLock() }
 
+        lastRefreshItemsAt[wishlistID] = Date()
         isSyncing = true
         syncError = nil
 
@@ -844,4 +886,120 @@ final class DataService {
     // Legacy `shareWishlist(...)` и `acceptInvite(...)` удалены — UI работает через
     // ShareManager (генерация шары) и JoinWishlistSheet (приём). Дублирование убрано,
     // чтобы не дрейфовать сигнатуры между двумя реализациями.
+
+    // MARK: - Owner: Member role management
+    //
+    // Permission-модель (CLIENT-SIDE only):
+    //  - Только owner shared wishlist'а может менять роли и кикать участников.
+    //  - newRole ∈ {"editor", "viewer"} — менять роль на "owner" нельзя.
+    //  - Кикнуть самого owner'а нельзя (используйте deleteWishlist).
+    //
+    // FIXME (security): сейчас Firestore Security Rules не настроены, поэтому проверка
+    // owner-а только клиентская. Любой залогиненный юзер с REST-токеном может обойти и
+    // PATCH/DELETE membership напрямую. Запланировано: написать Firestore Rules,
+    // которые проверяют request.auth.uid == shared_wishlists/{wid}.ownerUID.
+    // См. /Users/rugyron/ObsidianVault/projects/iwish/решения/2026-05-04-owner-role-management.md
+
+    /// Owner меняет роль participant'а. Acquires lock, валидирует owner-а через локальный
+    /// `wishlist.ownerRecordID`. После успешного PATCH локально обновляет `wishlist.memberCount`
+    /// (число не меняется, но триггерит SwiftData update — UI рефрешнётся).
+    func changeMemberRole(wishlistID: String, memberUID: String, newRole: String) async throws {
+        let currentUID = try uid
+
+        // Whitelist допустимых ролей. "owner" сюда не входит.
+        guard newRole == "editor" || newRole == "viewer" else {
+            throw FirestoreService.FirestoreError.requestFailed("Недопустимая роль")
+        }
+
+        // Найти локальный shared wishlist по sharedWishlistID
+        let descriptor = FetchDescriptor<Wishlist>()
+        let allLocal = (try? modelContext.fetch(descriptor)) ?? []
+        guard let wishlist = allLocal.first(where: { $0.sharedWishlistID == wishlistID }) else {
+            throw FirestoreService.FirestoreError.notFound
+        }
+
+        // Owner-check: ownerRecordID хранит UID владельца. Если по какой-то причине его нет —
+        // fallback на myRole == "owner".
+        let isOwner: Bool = {
+            if let owner = wishlist.ownerRecordID { return owner == currentUID }
+            return wishlist.myRole == "owner"
+        }()
+        guard isOwner else {
+            throw FirestoreService.FirestoreError.requestFailed("Только владелец может изменять роли")
+        }
+
+        // Запретить менять роль самому себе через этот метод (нет смысла — owner не может стать viewer).
+        guard memberUID != currentUID else {
+            throw FirestoreService.FirestoreError.requestFailed("Нельзя изменить собственную роль")
+        }
+
+        await acquireLock()
+        isSyncing = true
+        syncError = nil
+        defer { releaseLock() }
+
+        do {
+            try await firestore.updateMembershipRole(
+                wishlistID: wishlistID,
+                userUID: memberUID,
+                role: newRole
+            )
+        } catch {
+            isSyncing = false
+            throw error
+        }
+
+        // Локальный wishlist не хранит список members — только memberCount + myRole для текущего юзера.
+        // Поэтому ничего не меняем в SwiftData; ParticipantsView сам перезапросит fetchMembers().
+        wishlist.updatedAt = .now
+        try? modelContext.save()
+        isSyncing = false
+    }
+
+    /// Owner кикает participant'а. Acquires lock, валидирует owner-а через локальный
+    /// `wishlist.ownerRecordID`, удаляет membership document.
+    func kickMember(wishlistID: String, memberUID: String) async throws {
+        let currentUID = try uid
+
+        // Найти локальный shared wishlist
+        let descriptor = FetchDescriptor<Wishlist>()
+        let allLocal = (try? modelContext.fetch(descriptor)) ?? []
+        guard let wishlist = allLocal.first(where: { $0.sharedWishlistID == wishlistID }) else {
+            throw FirestoreService.FirestoreError.notFound
+        }
+
+        // Owner-check
+        let isOwner: Bool = {
+            if let owner = wishlist.ownerRecordID { return owner == currentUID }
+            return wishlist.myRole == "owner"
+        }()
+        guard isOwner else {
+            throw FirestoreService.FirestoreError.requestFailed("Только владелец может удалять участников")
+        }
+
+        // Нельзя кикнуть самого owner'а — для удаления списка есть deleteWishlist.
+        guard memberUID != currentUID else {
+            throw FirestoreService.FirestoreError.requestFailed("Владелец не может удалить себя — удалите список целиком")
+        }
+
+        await acquireLock()
+        isSyncing = true
+        syncError = nil
+        defer { releaseLock() }
+
+        do {
+            try await firestore.kickMember(wishlistID: wishlistID, userUID: memberUID)
+        } catch {
+            isSyncing = false
+            throw error
+        }
+
+        // Декремент memberCount; реальный список members перезапросится из ParticipantsView.
+        if wishlist.memberCount > 1 {
+            wishlist.memberCount -= 1
+        }
+        wishlist.updatedAt = .now
+        try? modelContext.save()
+        isSyncing = false
+    }
 }

@@ -66,6 +66,7 @@ final class FirestoreService {
         case notAuthenticated
         case requestFailed(String)
         case decryptionFailed
+        case rateLimited
 
         var errorDescription: String? {
             switch self {
@@ -77,7 +78,28 @@ final class FirestoreService {
                 return "Ошибка запроса: \(msg)"
             case .decryptionFailed:
                 return "Не удалось расшифровать данные"
+            case .rateLimited:
+                return "Слишком много запросов. Попробуйте через минуту."
             }
+        }
+    }
+
+    // MARK: - Rate limiter
+
+    /// Скользящее окно последних 60 секунд — отсекает burst'ы и runaway loops,
+    /// чтобы не выйти за пределы Spark plan (50K reads/day).
+    private var recentRequestTimestamps: [Date] = []
+    private let rateLimiterQueue = DispatchQueue(label: "RUGyron.IWish.firestore.ratelimit")
+
+    private func checkRateLimit() throws {
+        try rateLimiterQueue.sync {
+            let now = Date()
+            recentRequestTimestamps.removeAll { now.timeIntervalSince($0) >= 60 }
+            guard recentRequestTimestamps.count < InputLimits.maxFirestoreRequestsPerMinute else {
+                logger.warning("[Firestore] Rate limit hit: \(self.recentRequestTimestamps.count) reqs in last 60s")
+                throw FirestoreError.rateLimited
+            }
+            recentRequestTimestamps.append(now)
         }
     }
 
@@ -100,6 +122,7 @@ final class FirestoreService {
 
     /// Generic request: sends HTTP method to `baseURL/path`, returns decoded JSON dict.
     private func request(_ method: String, path: String, body: [String: Any]? = nil) async throws -> [String: Any] {
+        try checkRateLimit()
         let token = try await getAuthToken()
         var urlString = path.hasPrefix("http") ? path : "\(baseURL)/\(path)"
         // Trim trailing slash
@@ -125,6 +148,7 @@ final class FirestoreService {
 
     /// POST to a URL that returns an array (e.g. runQuery).
     private func requestArray(_ path: String, body: [String: Any]) async throws -> [[String: Any]] {
+        try checkRateLimit()
         let token = try await getAuthToken()
         let urlString = path.hasPrefix("http") ? path : "\(baseURL)/\(path)"
         guard let url = URL(string: urlString) else {
@@ -754,6 +778,33 @@ final class FirestoreService {
     func leaveWishlist(wishlistID: String, userUID: String) async throws {
         let membershipID = "\(userUID)_\(wishlistID)"
         let _ = try await request("DELETE", path: "memberships/\(membershipID)")
+    }
+
+    // MARK: - Membership management (owner-only operations)
+
+    /// Обновить роль участника. Permission-check (owner-only) делается на уровне DataService —
+    /// здесь только REST-вызов с маской `updateMask.fieldPaths=role`, чтобы не затереть остальные
+    /// поля membership (canInvite/joinedAt/wishlistID/userUID).
+    /// FIXME: server-side это сейчас не защищено — любой залогиненный юзер может PATCH membership
+    /// через REST. См. Obsidian → projects/iwish/решения/2026-05-04-owner-role-management.md.
+    func updateMembershipRole(wishlistID: String, userUID: String, role: String) async throws {
+        let membershipID = "\(userUID)_\(wishlistID)"
+        let fields = toFields([
+            "role": role
+        ])
+        let _ = try await request(
+            "PATCH",
+            path: "memberships/\(membershipID)?updateMask.fieldPaths=role",
+            body: ["fields": fields]
+        )
+    }
+
+    /// Кикнуть участника из shared wishlist. Технически идентичен `leaveWishlist` —
+    /// тот же DELETE на `memberships/{userUID}_{wishlistID}`. Отдельный метод нужен только
+    /// для семантической ясности в callsites (kick от лица owner vs. self-leave).
+    /// Permission-check (owner-only) выполняется в DataService.
+    func kickMember(wishlistID: String, userUID: String) async throws {
+        try await leaveWishlist(wishlistID: wishlistID, userUID: userUID)
     }
 
     // MARK: - Private Query Helpers
