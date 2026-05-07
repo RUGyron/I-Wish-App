@@ -9,6 +9,7 @@ final class Item {
     var coverImageData: Data?
     var coverEmoji: String?
     var priceValue: Double?
+    var priceMaxValue: Double?
     var currency: String = "RUB"
     var url: String?
     var linkMetadataData: Data?
@@ -34,12 +35,34 @@ final class Item {
         set { priceValue = newValue }
     }
 
+    var priceMax: Double? {
+        get { priceMaxValue }
+        set { priceMaxValue = newValue }
+    }
+
+    enum PriceMode {
+        case none
+        case exact(Double)
+        case range(min: Double, max: Double)
+    }
+
+    var priceMode: PriceMode {
+        switch (priceValue, priceMaxValue) {
+        case (nil, nil): return .none
+        case (let p?, nil): return .exact(p)
+        case (let p?, let m?) where m > p: return .range(min: p, max: m)
+        case (let p?, let m?): return .range(min: m, max: p)
+        case (nil, let m?): return .range(min: 0, max: m)
+        }
+    }
+
     init(
         name: String,
         tier: ItemTier = .maybe,
         sortIndex: Double = 1000.0,
         currency: String = "RUB",
         price: Double? = nil,
+        priceMax: Double? = nil,
         descriptionText: String? = nil,
         url: String? = nil,
         coverImageData: Data? = nil,
@@ -54,6 +77,7 @@ final class Item {
         self.coverImageData = coverImageData
         self.coverEmoji = coverEmoji
         self.priceValue = price
+        self.priceMaxValue = priceMax
         self.currency = currency
         self.url = url
         self.tierRaw = tier.rawValue

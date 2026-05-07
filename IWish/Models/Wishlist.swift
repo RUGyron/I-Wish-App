@@ -14,6 +14,7 @@ final class Wishlist {
     var isArchived: Bool = false
     var sharedWishlistID: String?
     var gradientSeed: Int = 0
+    var gradientHue: Double?
     /// "owner", "editor", "viewer", nil (personal)
     var myRole: String?
     /// Whether the current user can invite others to this shared wishlist
@@ -32,7 +33,8 @@ final class Wishlist {
         isShared: Bool = false,
         isArchived: Bool = false,
         sharedWishlistID: String? = nil,
-        gradientSeed: Int? = nil
+        gradientSeed: Int? = nil,
+        gradientHue: Double? = nil
     ) {
         let now = Date.now
         self.id = UUID()
@@ -46,6 +48,7 @@ final class Wishlist {
         self.isArchived = isArchived
         self.sharedWishlistID = sharedWishlistID
         self.gradientSeed = gradientSeed ?? DefaultCoverGenerator.stableHash(self.id.uuidString)
+        self.gradientHue = gradientHue
     }
 }
 
