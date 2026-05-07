@@ -10,6 +10,7 @@
 		C90617942F9249AD005AC61C /* QRCode in Frameworks */ = {isa = PBXBuildFile; productRef = AA00CA022FA0000000000002 /* QRCode */; };
 		FB00CA012FB0000000000001 /* FirebaseAuth in Frameworks */ = {isa = PBXBuildFile; productRef = FB00CA032FB0000000000001 /* FirebaseAuth */; };
 		FB00CA022FB0000000000001 /* FirebaseFirestore in Frameworks */ = {isa = PBXBuildFile; productRef = FB00CA042FB0000000000001 /* FirebaseFirestore */; };
+		FB00CA062FB0000000000001 /* FirebaseRemoteConfig in Frameworks */ = {isa = PBXBuildFile; productRef = FB00CA052FB0000000000001 /* FirebaseRemoteConfig */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -61,6 +62,7 @@
 				C90617942F9249AD005AC61C /* QRCode in Frameworks */,
 				FB00CA012FB0000000000001 /* FirebaseAuth in Frameworks */,
 				FB00CA022FB0000000000001 /* FirebaseFirestore in Frameworks */,
+				FB00CA062FB0000000000001 /* FirebaseRemoteConfig in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -115,6 +117,7 @@
 				AA00CA022FA0000000000002 /* QRCode */,
 				FB00CA032FB0000000000001 /* FirebaseAuth */,
 				FB00CA042FB0000000000001 /* FirebaseFirestore */,
+				FB00CA052FB0000000000001 /* FirebaseRemoteConfig */,
 			);
 			productName = IWish;
 			productReference = C90615EF2F8D5AC1005AC61C /* IWish.app */;
@@ -537,6 +540,11 @@
 			isa = XCSwiftPackageProductDependency;
 			package = FB00CA002FB0000000000001 /* XCRemoteSwiftPackageReference "firebase-ios-sdk" */;
 			productName = FirebaseFirestore;
+		};
+		FB00CA052FB0000000000001 /* FirebaseRemoteConfig */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = FB00CA002FB0000000000001 /* XCRemoteSwiftPackageReference "firebase-ios-sdk" */;
+			productName = FirebaseRemoteConfig;
 		};
 /* End XCSwiftPackageProductDependency section */
 	};
