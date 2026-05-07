@@ -8,9 +8,11 @@ final class AppServices {
     let auth = AuthService()
     let firestore = FirestoreService()
     var data: DataService!
+    var accountDeletion: AccountDeletionService!
 
     func configure(modelContext: ModelContext) {
         data = DataService(firestore: firestore, modelContext: modelContext, auth: auth)
+        accountDeletion = AccountDeletionService(auth: auth, firestore: firestore, data: data)
     }
 }
 

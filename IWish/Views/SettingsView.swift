@@ -10,6 +10,8 @@ struct SettingsView: View {
     @Environment(\.toast) private var toast
     @Query private var settingsList: [AppSettings]
     @State private var showingAppleSignIn = false
+    @State private var showingDeleteConfirm = false
+    @State private var showingDeleteSheet = false
     private var settings: AppSettings {
         settingsList.first ?? AppSettings.loadOrCreate(in: context)
     }
@@ -38,6 +40,27 @@ struct SettingsView: View {
                 }
             }
             .presentationDetents([.medium])
+        }
+        .sheet(isPresented: $showingDeleteSheet) {
+            DeleteAccountSheet { result in
+                switch result {
+                case .success:
+                    toast.success("Аккаунт удалён")
+                    dismiss()
+                case .failure:
+                    // Сообщение об ошибке покажет сам sheet — здесь молчим.
+                    break
+                }
+            }
+            .presentationDetents([.large])
+        }
+        .alert("Удалить аккаунт?", isPresented: $showingDeleteConfirm) {
+            Button("Отмена", role: .cancel) {}
+            Button("Удалить", role: .destructive) {
+                showingDeleteSheet = true
+            }
+        } message: {
+            Text("Все ваши списки, участия и ключи шифрования будут удалены безвозвратно. Действие нельзя отменить.")
         }
         .warmBackground()
         .navigationTitle("Настройки")
@@ -79,6 +102,12 @@ struct SettingsView: View {
                     try? services.auth.signOut()
                 } label: {
                     Label("Выйти из аккаунта", systemImage: "rectangle.portrait.and.arrow.right")
+                }
+                Button(role: .destructive) {
+                    showingDeleteConfirm = true
+                } label: {
+                    Label("Удалить аккаунт", systemImage: "trash")
+                        .foregroundStyle(.red)
                 }
             } else {
                 Button {
