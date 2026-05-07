@@ -69,8 +69,9 @@ struct WishlistDetailView: View {
         collapsedTiersRaw = set.joined(separator: ",")
     }
 
-    private var totalActivePrice: Double {
-        activeItems.compactMap(\.price).reduce(0, +)
+    private var totalActivePriceText: String? {
+        let currency = activeItems.first(where: { $0.priceValue != nil })?.currency ?? "RUB"
+        return totalPriceText(for: activeItems, currency: currency)
     }
 
     // MARK: - Debug
@@ -409,8 +410,8 @@ struct WishlistDetailView: View {
                 HStack(spacing: 4) {
                     Text(String(format: NSLocalizedString("%lld желаний", comment: ""), activeItems.count))
                         .foregroundStyle(.secondary)
-                    if totalActivePrice > 0 {
-                        Text("\u{00B7} \(formatPrice(totalActivePrice, currency: activeItems.first(where: { $0.price != nil })?.currency ?? "RUB"))")
+                    if let totalText = totalActivePriceText {
+                        Text("\u{00B7} \(totalText)")
                             .foregroundStyle(.secondary)
                     }
                 }
@@ -471,17 +472,58 @@ struct WishlistDetailView: View {
     }
 
     private func tierHeaderContent(tier: ItemTier, items: [Item]) -> some View {
-        let total = items.compactMap(\.price).reduce(0.0, +)
         let currency = items.first?.currency ?? "RUB"
-        let priceText = total > 0 ? " \u{00B7} \(formatPrice(total, currency: currency))" : ""
+        let totalText = totalPriceText(for: items, currency: currency)
+        let priceSuffix = totalText.map { " \u{00B7} \($0)" } ?? ""
 
         return HStack(spacing: 4) {
             Text(tier.emoji)
-            Text("\(tier.label)\(priceText) \u{00B7} \(items.count)")
+            Text("\(tier.label)\(priceSuffix) \u{00B7} \(items.count)")
         }
         .font(.subheadline.weight(.medium))
         .foregroundStyle(.secondary)
         .textCase(nil)
+    }
+
+    /// Сумма items с учётом range. Если есть хотя бы один item-диапазон — "Σmin — Σmax".
+    /// Если все exact — простая сумма. Возвращает nil если ни у одного item нет цены.
+    private func totalPriceText(for items: [Item], currency: String) -> String? {
+        let priced = items.filter {
+            if case .none = $0.priceMode { return false }
+            return true
+        }
+        guard !priced.isEmpty else { return nil }
+
+        let hasRange = priced.contains {
+            if case .range = $0.priceMode { return true }
+            return false
+        }
+
+        if hasRange {
+            let totalMin = priced.reduce(0.0) { acc, item in
+                switch item.priceMode {
+                case .none: return acc
+                case .exact(let p): return acc + p
+                case .range(let min, _): return acc + min
+                }
+            }
+            let totalMax = priced.reduce(0.0) { acc, item in
+                switch item.priceMode {
+                case .none: return acc
+                case .exact(let p): return acc + p
+                case .range(_, let max): return acc + max
+                }
+            }
+            return "\(formatPrice(totalMin, currency: currency)) — \(formatPrice(totalMax, currency: currency))"
+        } else {
+            let total = priced.reduce(0.0) { acc, item in
+                switch item.priceMode {
+                case .exact(let p): return acc + p
+                default: return acc
+                }
+            }
+            return total > 0 ? formatPrice(total, currency: currency) : nil
+        }
     }
 
     private func reorderItems(in tier: ItemTier, from source: IndexSet, to destination: Int) {
@@ -505,12 +547,17 @@ struct WishlistDetailView: View {
                         wishlistID: wishlist.id.uuidString,
                         name: item.name,
                         tier: item.tier,
-                        price: item.price,
+                        price: item.priceValue,
+                        priceMax: item.priceMaxValue,
                         currency: item.currency,
                         url: item.url,
                         emoji: item.coverEmoji,
                         sortIndex: item.sortIndex,
-                        isArchived: item.isArchived
+                        isArchived: item.isArchived,
+                        descriptionText: item.descriptionText,
+                        coverImageData: item.coverImageData,
+                        linkMetadataData: item.linkMetadataData,
+                        probationEndAt: item.probationEndAt
                     )
                 } catch {
                     toast.error(error.localizedDescription)
@@ -558,7 +605,7 @@ struct WishlistDetailView: View {
             return activeItems.sorted { $0.createdAt > $1.createdAt }
         case .price:
             return activeItems.sorted { lhs, rhs in
-                switch (lhs.price, rhs.price) {
+                switch (avgPrice(lhs), avgPrice(rhs)) {
                 case let (.some(l), .some(r)): return l > r
                 case (.some, .none): return true
                 case (.none, .some): return false
@@ -569,6 +616,15 @@ struct WishlistDetailView: View {
             return activeItems.sorted {
                 $0.name.localizedStandardCompare($1.name) == .orderedAscending
             }
+        }
+    }
+
+    /// Для сортировки по цене — точная даёт само значение, диапазон — среднее min/max.
+    private func avgPrice(_ item: Item) -> Double? {
+        switch item.priceMode {
+        case .none: return nil
+        case .exact(let p): return p
+        case .range(let min, let max): return (min + max) / 2
         }
     }
 
@@ -609,8 +665,11 @@ struct WishlistDetailView: View {
         .contentShape(Rectangle())
         .onTapGesture { detailItem = item }
         .listRowInsets(EdgeInsets())
-        .listRowBackground(Color(.secondarySystemGroupedBackground))
-        .alignmentGuide(.listRowSeparatorLeading) { _ in 78 }
+        .listRowBackground(
+            RoundedRectangle(cornerRadius: 8, style: .continuous)
+                .fill(Color(.secondarySystemGroupedBackground))
+        )
+        .listRowSeparator(.hidden)
     }
 
     private func hasBottomMeta(_ item: Item) -> Bool {
@@ -635,8 +694,8 @@ struct WishlistDetailView: View {
 
             Spacer(minLength: 4)
 
-            if let price = item.price {
-                Text(formatPrice(price, currency: item.currency))
+            if let priceText = priceCardText(for: item) {
+                Text(priceText)
                     .font(.subheadline.weight(.semibold))
                     .foregroundStyle(.primary)
                     .layoutPriority(1)
@@ -644,6 +703,16 @@ struct WishlistDetailView: View {
             }
         }
         .frame(height: 16)
+    }
+
+    /// На карточке желания: точная цена или "до Y" для диапазона (только верхняя граница —
+    /// места мало). В детальном экране (ItemDetailSheet) показываем полный "X — Y".
+    private func priceCardText(for item: Item) -> String? {
+        switch item.priceMode {
+        case .none: return nil
+        case .exact(let p): return formatPrice(p, currency: item.currency)
+        case .range(_, let max): return "до \(formatPrice(max, currency: item.currency))"
+        }
     }
 
     private func titleRow(for item: Item) -> some View {
@@ -832,26 +901,29 @@ private extension View {
                                     wishlistID: wishlistID,
                                     name: item.name,
                                     tier: tier,
-                                    price: item.price,
+                                    price: item.priceValue,
+                                    priceMax: item.priceMaxValue,
                                     currency: item.currency,
                                     url: item.url,
                                     emoji: item.coverEmoji,
                                     sortIndex: item.sortIndex,
-                                    isArchived: item.isArchived
+                                    isArchived: item.isArchived,
+                                    descriptionText: item.descriptionText,
+                                    coverImageData: item.coverImageData,
+                                    linkMetadataData: item.linkMetadataData,
+                                    probationEndAt: item.probationEndAt
                                 )
                             } catch {
                                 toast.error(error.localizedDescription)
                             }
                         }
                     } label: {
-                        if item.tier == tier {
-                            Label {
-                                Text(tier.label)
-                            } icon: {
+                        // Эмодзи всегда виден; checkmark рядом с выбранной опцией.
+                        HStack {
+                            Text("\(tier.emoji) \(tier.label)")
+                            if item.tier == tier {
                                 Image(systemName: "checkmark")
                             }
-                        } else {
-                            Text("\(tier.emoji) \(tier.label)")
                         }
                     }
                 }
