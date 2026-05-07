@@ -199,6 +199,12 @@ struct JoinWishlistSheet: View {
                     return
                 }
 
+                guard let userName = services.auth.userName, !userName.isEmpty, userName != "Пользователь" else {
+                    showingInvitePreview = false
+                    toast.error("Не удалось получить ваше имя — войдите заново")
+                    return
+                }
+
                 // КРИТИЧНО: сохраняем ключ в Keychain ДО первого membership/fetch.
                 // Без него последующие fetchSharedWishlist (включая background sync) не смогут расшифровать.
                 try KeychainService.save(key: key, for: info.wishlistID)
@@ -217,6 +223,7 @@ struct JoinWishlistSheet: View {
                 try await services.firestore.joinWishlist(
                     wishlistID: info.wishlistID,
                     userUID: uid,
+                    userName: userName,
                     role: info.role,
                     canInvite: info.canInvite
                 )

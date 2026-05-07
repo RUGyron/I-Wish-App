@@ -181,7 +181,7 @@ final class DataService {
 
     // MARK: - Wishlists
 
-    func createWishlist(name: String, emoji: String?, coverImageData: Data? = nil) async throws -> Wishlist {
+    func createWishlist(name: String, emoji: String?, coverImageData: Data? = nil, gradientHue: Double? = nil) async throws -> Wishlist {
         let currentUID = try uid
 
         // Лимит на количество активных (не-архивных) wishlist'ов на юзера.
@@ -199,7 +199,8 @@ final class DataService {
             name: name,
             coverImageData: coverImageData,
             coverEmoji: emoji,
-            gradientSeed: 0
+            gradientSeed: 0,
+            gradientHue: gradientHue
         )
         let seed = DefaultCoverGenerator.stableHash(wishlist.id.uuidString)
         wishlist.gradientSeed = seed
@@ -228,6 +229,7 @@ final class DataService {
                 name: name,
                 emoji: emoji,
                 gradientSeed: seed,
+                gradientHue: gradientHue,
                 coverImageData: coverImageData,
                 key: key
             )
@@ -245,7 +247,7 @@ final class DataService {
         return wishlist
     }
 
-    func updateWishlist(id: String, name: String, emoji: String?, coverImageData: Data? = nil) async throws {
+    func updateWishlist(id: String, name: String, emoji: String?, coverImageData: Data? = nil, gradientHue: Double? = nil) async throws {
         let currentUID = try uid
 
         await acquireLock()
@@ -253,7 +255,6 @@ final class DataService {
         syncError = nil
         defer { releaseLock() }
 
-        // Find local wishlist
         guard let uuid = UUID(uuidString: id) else { throw FirestoreService.FirestoreError.notFound }
         let descriptor = FetchDescriptor<Wishlist>(predicate: #Predicate { $0.id == uuid })
         guard let wishlist = try modelContext.fetch(descriptor).first else {
@@ -261,8 +262,6 @@ final class DataService {
             throw FirestoreService.FirestoreError.notFound
         }
 
-        // E2E-ключ берётся по wishlistID. sharedWishlistID == id.uuidString после share, поэтому
-        // для shared/personal ключ хранится под одним и тем же account'ом в Keychain.
         guard let key = KeychainService.load(for: id) else {
             isSyncing = false
             throw FirestoreService.FirestoreError.requestFailed("Ключ шифрования не найден")
@@ -270,8 +269,6 @@ final class DataService {
 
         do {
             if wishlistIsShared(wishlist), let sharedID = wishlist.sharedWishlistID {
-                // Owner-check без обращения к Firestore: используем локально сохранённый ownerRecordID.
-                // Если по какой-то причине его нет — fallback на myRole == "owner".
                 let isOwner: Bool = {
                     if let owner = wishlist.ownerRecordID { return owner == currentUID }
                     return wishlist.myRole == "owner"
@@ -285,6 +282,7 @@ final class DataService {
                     name: name,
                     emoji: emoji,
                     coverImageData: coverImageData,
+                    gradientHue: gradientHue,
                     ownerName: auth.userName,
                     key: key
                 )
@@ -295,6 +293,7 @@ final class DataService {
                     name: name,
                     emoji: emoji,
                     coverImageData: coverImageData,
+                    gradientHue: gradientHue,
                     key: key
                 )
             }
@@ -306,6 +305,7 @@ final class DataService {
         wishlist.name = name
         wishlist.coverEmoji = emoji
         wishlist.coverImageData = coverImageData
+        if let gradientHue { wishlist.gradientHue = gradientHue }
         wishlist.updatedAt = .now
         try? modelContext.save()
         isSyncing = false
@@ -435,7 +435,21 @@ final class DataService {
 
     // MARK: - Items
 
-    func addItem(to wishlistID: String, name: String, tier: ItemTier, price: Double?, currency: String, url: String?, emoji: String?, sortIndex: Double, descriptionText: String? = nil, probationEndAt: Date? = nil, coverImageData: Data? = nil) async throws -> Item {
+    func addItem(
+        to wishlistID: String,
+        name: String,
+        tier: ItemTier,
+        price: Double?,
+        priceMax: Double? = nil,
+        currency: String,
+        url: String?,
+        emoji: String?,
+        sortIndex: Double,
+        descriptionText: String? = nil,
+        probationEndAt: Date? = nil,
+        coverImageData: Data? = nil,
+        linkMetadataData: Data? = nil
+    ) async throws -> Item {
         let currentUID = try uid
         // Имя автора фиксируем на момент добавления. bestDisplayName() добирает имя
         // из Keychain → Firebase displayName → email-prefix, чтобы атрибуция работала
@@ -448,6 +462,7 @@ final class DataService {
             sortIndex: sortIndex,
             currency: currency,
             price: price,
+            priceMax: priceMax,
             descriptionText: descriptionText,
             url: url,
             coverImageData: coverImageData,
@@ -455,6 +470,7 @@ final class DataService {
             addedByUID: currentUID,
             addedByName: currentUserName
         )
+        item.linkMetadataData = linkMetadataData
         if let probationEndAt {
             item.probationEndAt = probationEndAt
         }
@@ -489,9 +505,46 @@ final class DataService {
         do {
             if wishlistIsShared(wishlist), let sharedID = wishlist.sharedWishlistID {
                 try await verifyEditorRole(wishlistID: sharedID)
-                try await firestore.createSharedItem(wishlistID: sharedID, itemID: itemID, name: name, tier: tier.rawValue, price: price, currency: currency, url: url, emoji: emoji, sortIndex: sortIndex, addedByUID: currentUID, addedByName: currentUserName, key: key)
+                try await firestore.createSharedItem(
+                    wishlistID: sharedID,
+                    itemID: itemID,
+                    name: name,
+                    tier: tier.rawValue,
+                    price: price,
+                    priceMax: priceMax,
+                    currency: currency,
+                    url: url,
+                    emoji: emoji,
+                    sortIndex: sortIndex,
+                    descriptionText: descriptionText,
+                    coverImageData: coverImageData,
+                    linkMetadataData: linkMetadataData,
+                    probationEndAt: probationEndAt,
+                    addedByUID: currentUID,
+                    addedByName: currentUserName,
+                    key: key
+                )
             } else {
-                try await firestore.createPersonalItem(uid: currentUID, wishlistID: wishlistID, itemID: itemID, name: name, tier: tier.rawValue, price: price, currency: currency, url: url, emoji: emoji, sortIndex: sortIndex, addedByUID: currentUID, addedByName: currentUserName, key: key)
+                try await firestore.createPersonalItem(
+                    uid: currentUID,
+                    wishlistID: wishlistID,
+                    itemID: itemID,
+                    name: name,
+                    tier: tier.rawValue,
+                    price: price,
+                    priceMax: priceMax,
+                    currency: currency,
+                    url: url,
+                    emoji: emoji,
+                    sortIndex: sortIndex,
+                    descriptionText: descriptionText,
+                    coverImageData: coverImageData,
+                    linkMetadataData: linkMetadataData,
+                    probationEndAt: probationEndAt,
+                    addedByUID: currentUID,
+                    addedByName: currentUserName,
+                    key: key
+                )
             }
         } catch {
             isSyncing = false
@@ -505,7 +558,23 @@ final class DataService {
         return item
     }
 
-    func updateItem(id: String, wishlistID: String, name: String, tier: ItemTier, price: Double?, currency: String, url: String?, emoji: String?, sortIndex: Double, isArchived: Bool, descriptionText: String? = nil, coverImageData: Data? = nil, probationEndAt: Date? = nil) async throws {
+    func updateItem(
+        id: String,
+        wishlistID: String,
+        name: String,
+        tier: ItemTier,
+        price: Double?,
+        priceMax: Double? = nil,
+        currency: String,
+        url: String?,
+        emoji: String?,
+        sortIndex: Double,
+        isArchived: Bool,
+        descriptionText: String? = nil,
+        coverImageData: Data? = nil,
+        linkMetadataData: Data? = nil,
+        probationEndAt: Date? = nil
+    ) async throws {
         let currentUID = try uid
 
         await acquireLock()
@@ -524,23 +593,62 @@ final class DataService {
         let isShared = wishlist.map { wishlistIsShared($0) } ?? false
         let sharedID = wishlist?.sharedWishlistID
 
-        // Ключ берётся по wishlistID — все items в одном wishlist шифруются одним ключом.
         guard let key = KeychainService.load(for: wishlistID) else {
             isSyncing = false
             throw FirestoreService.FirestoreError.requestFailed("Ключ шифрования не найден")
         }
 
-        // Preserve авторские поля при update — encryptedPayload пишется целиком, поэтому
-        // если не передать существующие addedByUID/addedByName, они затрутся nil.
+        // preserve-unknown-keys паттерн в FirestoreService.updateXxxItem делает GET → merge →
+        // re-encrypt, поэтому addedBy* и любые будущие keys сохраняются автоматически. Передаём
+        // их явно из локального Item чтобы не зависеть только от remote state.
         let preservedAddedByUID = item.addedByUID
         let preservedAddedByName = item.addedByName
 
         do {
             if isShared, let sharedID {
                 try await verifyEditorRole(wishlistID: sharedID)
-                try await firestore.updateSharedItem(wishlistID: sharedID, itemID: id, name: name, tier: tier.rawValue, price: price, currency: currency, url: url, emoji: emoji, sortIndex: sortIndex, isArchived: isArchived, addedByUID: preservedAddedByUID, addedByName: preservedAddedByName, key: key)
+                try await firestore.updateSharedItem(
+                    wishlistID: sharedID,
+                    itemID: id,
+                    name: name,
+                    tier: tier.rawValue,
+                    price: price,
+                    priceMax: priceMax,
+                    currency: currency,
+                    url: url,
+                    emoji: emoji,
+                    sortIndex: sortIndex,
+                    isArchived: isArchived,
+                    descriptionText: descriptionText,
+                    coverImageData: coverImageData,
+                    linkMetadataData: linkMetadataData,
+                    probationEndAt: probationEndAt,
+                    addedByUID: preservedAddedByUID,
+                    addedByName: preservedAddedByName,
+                    key: key
+                )
             } else {
-                try await firestore.updatePersonalItem(uid: currentUID, wishlistID: wishlistID, itemID: id, name: name, tier: tier.rawValue, price: price, currency: currency, url: url, emoji: emoji, sortIndex: sortIndex, isArchived: isArchived, addedByUID: preservedAddedByUID, addedByName: preservedAddedByName, key: key)
+                try await firestore.updatePersonalItem(
+                    uid: currentUID,
+                    wishlistID: wishlistID,
+                    itemID: id,
+                    name: name,
+                    tier: tier.rawValue,
+                    price: price,
+                    priceMax: priceMax,
+                    currency: currency,
+                    url: url,
+                    emoji: emoji,
+                    sortIndex: sortIndex,
+                    isArchived: isArchived,
+                    descriptionText: descriptionText,
+                    coverImageData: coverImageData,
+                    linkMetadataData: linkMetadataData,
+                    probationEndAt: probationEndAt,
+                    addedByUID: preservedAddedByUID,
+                    addedByName: preservedAddedByName,
+                    key: key
+                )
             }
         } catch {
             isSyncing = false
@@ -549,7 +657,8 @@ final class DataService {
 
         item.name = name
         item.tier = tier
-        item.price = price
+        item.priceValue = price
+        item.priceMaxValue = priceMax
         item.currency = currency
         item.url = url
         item.coverEmoji = emoji
@@ -557,6 +666,7 @@ final class DataService {
         item.isArchived = isArchived
         item.descriptionText = descriptionText
         item.coverImageData = coverImageData
+        item.linkMetadataData = linkMetadataData
         item.probationEndAt = probationEndAt
         item.updatedAt = .now
         try? modelContext.save()
@@ -627,9 +737,48 @@ final class DataService {
         do {
             if isShared, let sharedID {
                 try await verifyEditorRole(wishlistID: sharedID)
-                try await firestore.updateSharedItem(wishlistID: sharedID, itemID: id, name: item.name, tier: item.tier.rawValue, price: item.price, currency: item.currency, url: item.url, emoji: item.coverEmoji, sortIndex: item.sortIndex, isArchived: true, addedByUID: item.addedByUID, addedByName: item.addedByName, key: key)
+                try await firestore.updateSharedItem(
+                    wishlistID: sharedID,
+                    itemID: id,
+                    name: item.name,
+                    tier: item.tier.rawValue,
+                    price: item.priceValue,
+                    priceMax: item.priceMaxValue,
+                    currency: item.currency,
+                    url: item.url,
+                    emoji: item.coverEmoji,
+                    sortIndex: item.sortIndex,
+                    isArchived: true,
+                    descriptionText: item.descriptionText,
+                    coverImageData: item.coverImageData,
+                    linkMetadataData: item.linkMetadataData,
+                    probationEndAt: item.probationEndAt,
+                    addedByUID: item.addedByUID,
+                    addedByName: item.addedByName,
+                    key: key
+                )
             } else {
-                try await firestore.updatePersonalItem(uid: currentUID, wishlistID: wishlistID, itemID: id, name: item.name, tier: item.tier.rawValue, price: item.price, currency: item.currency, url: item.url, emoji: item.coverEmoji, sortIndex: item.sortIndex, isArchived: true, addedByUID: item.addedByUID, addedByName: item.addedByName, key: key)
+                try await firestore.updatePersonalItem(
+                    uid: currentUID,
+                    wishlistID: wishlistID,
+                    itemID: id,
+                    name: item.name,
+                    tier: item.tier.rawValue,
+                    price: item.priceValue,
+                    priceMax: item.priceMaxValue,
+                    currency: item.currency,
+                    url: item.url,
+                    emoji: item.coverEmoji,
+                    sortIndex: item.sortIndex,
+                    isArchived: true,
+                    descriptionText: item.descriptionText,
+                    coverImageData: item.coverImageData,
+                    linkMetadataData: item.linkMetadataData,
+                    probationEndAt: item.probationEndAt,
+                    addedByUID: item.addedByUID,
+                    addedByName: item.addedByName,
+                    key: key
+                )
             }
         } catch {
             isSyncing = false
@@ -703,9 +852,9 @@ final class DataService {
                         local.coverImageData = remoteImage
                     }
                     local.gradientSeed = r.gradientSeed
+                    local.gradientHue = r.gradientHue
                     local.isArchived = r.isArchived
                     local.updatedAt = .now
-                    // items в этом wishlist шифруются ключом самого wishlist'а
                     if let itemKey = KeychainService.load(for: r.id) {
                         let personalItems = try await firestore.fetchPersonalItems(uid: currentUID, wishlistID: r.id, key: itemKey)
                         mergeItems(personalItems, into: local)
@@ -717,7 +866,8 @@ final class DataService {
                         coverImageData: r.coverImageData,
                         coverEmoji: r.emoji,
                         isArchived: r.isArchived,
-                        gradientSeed: r.gradientSeed
+                        gradientSeed: r.gradientSeed,
+                        gradientHue: r.gradientHue
                     )
                     newWL.id = uuid
                     modelContext.insert(newWL)
@@ -786,6 +936,7 @@ final class DataService {
                             local.coverImageData = remoteImage
                         }
                         local.gradientSeed = info.gradientSeed
+                        local.gradientHue = info.gradientHue
                         local.isArchived = info.isArchived
                         local.ownerRecordID = info.ownerUID
                         local.myRole = membership.role
@@ -794,7 +945,6 @@ final class DataService {
                         local.isShared = true
                         local.sharedWishlistID = info.wishlistID
                         local.updatedAt = .now
-                        // Merge remote items into existing shared wishlist
                         mergeItems(info.items, into: local)
                     } else if let uuid = UUID(uuidString: info.wishlistID) {
                         let newWL = Wishlist(
@@ -805,7 +955,8 @@ final class DataService {
                             isShared: true,
                             isArchived: info.isArchived,
                             sharedWishlistID: info.wishlistID,
-                            gradientSeed: info.gradientSeed
+                            gradientSeed: info.gradientSeed,
+                            gradientHue: info.gradientHue
                         )
                         newWL.myRole = membership.role
                         newWL.canInvite = membership.canInvite
@@ -813,7 +964,6 @@ final class DataService {
                         newWL.id = uuid
                         modelContext.insert(newWL)
 
-                        // Also insert items
                         for sharedItem in info.items {
                             let item = Item(
                                 name: sharedItem.name,
@@ -821,11 +971,16 @@ final class DataService {
                                 sortIndex: sharedItem.sortIndex,
                                 currency: sharedItem.currency,
                                 price: sharedItem.price,
+                                priceMax: sharedItem.priceMax,
+                                descriptionText: sharedItem.descriptionText,
                                 url: sharedItem.url,
+                                coverImageData: sharedItem.coverImageData,
                                 coverEmoji: sharedItem.coverEmoji,
                                 addedByUID: sharedItem.addedByUID,
                                 addedByName: sharedItem.addedByName
                             )
+                            item.linkMetadataData = sharedItem.linkMetadataData
+                            item.probationEndAt = sharedItem.probationEndAt
                             item.isArchived = sharedItem.isArchived
                             item.wishlist = newWL
                             if let itemUUID = UUID(uuidString: sharedItem.itemID) {
@@ -922,30 +1077,33 @@ final class DataService {
         }, uniquingKeysWith: { _, new in new })
         let remoteIDs = Set(remoteItems.map(\.itemID))
 
-        // Delete items that no longer exist remotely
         for local in localItems {
             if !remoteIDs.contains(local.id.uuidString) {
                 modelContext.delete(local)
             }
         }
 
-        // Add new or update changed items
         for remote in remoteItems {
             let tier = ItemTier(rawValue: remote.tier) ?? .maybe
 
             if let local = localByID[remote.itemID] {
                 local.name = remote.name
                 local.tier = tier
-                local.price = remote.price
+                local.priceValue = remote.price
+                local.priceMaxValue = remote.priceMax
                 local.currency = remote.currency
                 local.url = remote.url
                 local.coverEmoji = remote.coverEmoji
                 local.sortIndex = remote.sortIndex
                 local.isArchived = remote.isArchived
-                // Авторские поля у legacy items могут быть nil — не затираем существующее
-                // локальное значение остатком расшифровки, если remote вернулся без автора.
+                // Поля у legacy items могут отсутствовать в payload — не затираем local
+                // если remote вернулся без значения (старая версия писала payload без них).
                 if let uid = remote.addedByUID { local.addedByUID = uid }
                 if let nm = remote.addedByName { local.addedByName = nm }
+                if let img = remote.coverImageData { local.coverImageData = img }
+                if let lm = remote.linkMetadataData { local.linkMetadataData = lm }
+                if let desc = remote.descriptionText { local.descriptionText = desc }
+                if let prob = remote.probationEndAt { local.probationEndAt = prob }
                 local.updatedAt = .now
             } else {
                 let item = Item(
@@ -954,11 +1112,16 @@ final class DataService {
                     sortIndex: remote.sortIndex,
                     currency: remote.currency,
                     price: remote.price,
+                    priceMax: remote.priceMax,
+                    descriptionText: remote.descriptionText,
                     url: remote.url,
+                    coverImageData: remote.coverImageData,
                     coverEmoji: remote.coverEmoji,
                     addedByUID: remote.addedByUID,
                     addedByName: remote.addedByName
                 )
+                item.linkMetadataData = remote.linkMetadataData
+                item.probationEndAt = remote.probationEndAt
                 item.isArchived = remote.isArchived
                 item.wishlist = wishlist
                 if let itemUUID = UUID(uuidString: remote.itemID) {
@@ -1091,5 +1254,77 @@ final class DataService {
         wishlist.updatedAt = .now
         try? modelContext.save()
         isSyncing = false
+    }
+
+    // MARK: - v1.1 Migration backfill
+
+    /// One-time backfill при первом старте v1.1: пройти по local items с непустыми
+    /// "missing" полями (description/coverImageData/linkMeta/probationEndAt) и переслать
+    /// в Firestore чтобы они попали в encryptedPayload. Также backfill memberships userName.
+    /// Идемпотентно. Маркер UserDefaults; при partial failure повторим в следующем старте.
+    func runV11BackfillIfNeeded() async {
+        let key = "iwish_v11_backfill_done"
+        guard !UserDefaults.standard.bool(forKey: key) else { return }
+        guard auth.uid != nil else { return }
+
+        var allOK = true
+
+        let items = (try? modelContext.fetch(FetchDescriptor<Item>())) ?? []
+        for item in items {
+            let needsBackfill = (item.descriptionText?.isEmpty == false)
+                || item.coverImageData != nil
+                || item.linkMetadataData != nil
+                || item.probationEndAt != nil
+            guard needsBackfill else { continue }
+            guard let wishlist = item.wishlist else { continue }
+
+            do {
+                try await updateItem(
+                    id: item.id.uuidString,
+                    wishlistID: wishlist.id.uuidString,
+                    name: item.name,
+                    tier: item.tier,
+                    price: item.priceValue,
+                    priceMax: item.priceMaxValue,
+                    currency: item.currency,
+                    url: item.url,
+                    emoji: item.coverEmoji,
+                    sortIndex: item.sortIndex,
+                    isArchived: item.isArchived,
+                    descriptionText: item.descriptionText,
+                    coverImageData: item.coverImageData,
+                    linkMetadataData: item.linkMetadataData,
+                    probationEndAt: item.probationEndAt
+                )
+            } catch {
+                dsLog.warning("v1.1 backfill: failed for item \(item.id.uuidString, privacy: .public): \(error.localizedDescription, privacy: .public)")
+                allOK = false
+            }
+        }
+
+        // Backfill memberships userName — у меня могут быть memberships без userName.
+        if let myUID = auth.uid, let myName = auth.userName, !myName.isEmpty, myName != "Пользователь" {
+            do {
+                let memberships = try await firestore.fetchMyMemberships(userUID: myUID)
+                for m in memberships {
+                    do {
+                        try await firestore.updateMembershipUserName(wishlistID: m.wishlistID, userUID: myUID, userName: myName)
+                    } catch {
+                        dsLog.warning("v1.1 backfill: membership userName failed: \(error.localizedDescription, privacy: .public)")
+                        allOK = false
+                    }
+                }
+            } catch {
+                dsLog.warning("v1.1 backfill: fetchMyMemberships failed: \(error.localizedDescription, privacy: .public)")
+                allOK = false
+            }
+        }
+
+        if allOK {
+            UserDefaults.standard.set(true, forKey: key)
+            dsLog.info("v1.1 backfill: completed and marked done")
+        } else {
+            dsLog.info("v1.1 backfill: partial — will retry on next start")
+        }
     }
 }

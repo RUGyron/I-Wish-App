@@ -75,10 +75,15 @@ final class ShareManager {
                     itemID: item.id.uuidString,
                     name: item.name,
                     tier: item.tier.rawValue,
-                    price: item.price,
+                    price: item.priceValue,
+                    priceMax: item.priceMaxValue,
                     currency: item.currency,
                     url: item.url,
                     coverEmoji: item.coverEmoji,
+                    coverImageData: item.coverImageData,
+                    linkMetadataData: item.linkMetadataData,
+                    descriptionText: item.descriptionText,
+                    probationEndAt: item.probationEndAt,
                     sortIndex: item.sortIndex,
                     isArchived: item.isArchived,
                     addedByUID: item.addedByUID,
@@ -91,6 +96,7 @@ final class ShareManager {
                 emoji: wishlist.coverEmoji,
                 coverImageData: wishlist.coverImageData,
                 gradientSeed: wishlist.gradientSeed,
+                gradientHue: wishlist.gradientHue,
                 ownerUID: ownerUID,
                 ownerName: ownerName,
                 items: sharedItems,
@@ -128,7 +134,7 @@ final class ShareManager {
             self.wishlistRef = wishlist
 
             // 5. Create owner membership (owner always canInvite). Membership — plaintext, ключ не нужен.
-            try await firestore.joinWishlist(wishlistID: wishlist.id.uuidString, userUID: ownerUID, role: "owner", canInvite: true)
+            try await firestore.joinWishlist(wishlistID: wishlist.id.uuidString, userUID: ownerUID, userName: ownerName ?? "", role: "owner", canInvite: true)
 
             // 5. Mark wishlist as shared locally
             wishlist.isShared = true

@@ -258,9 +258,9 @@ struct ParticipantsView: View {
             // Filter out the owner — they're shown in the owner section
             let nonOwnerMembers = info.members.filter { $0.userUID != info.ownerUID }
 
-            // Имена members сейчас зашифрованно нигде не лежат (см. TODO в FirestoreService:
-            // member-имена требуют отдельного key-exchange механизма). Для self берём локальное
-            // userName, для остальных — fallback "Участник".
+            // Имена members теперь приходят из memberships document (поле userName,
+            // backfill в v1.1). Для self берём актуальное services.auth.userName, для
+            // legacy memberships без userName — fallback "Участник".
             let myUID = services.auth.uid
             let myName = services.auth.userName
             var resolved: [(userUID: String, role: String, name: String)] = []
@@ -268,6 +268,8 @@ struct ParticipantsView: View {
                 let name: String
                 if member.userUID == myUID, let myName, !myName.isEmpty {
                     name = myName
+                } else if let memberName = member.userName, !memberName.isEmpty {
+                    name = memberName
                 } else {
                     name = "Участник"
                 }
