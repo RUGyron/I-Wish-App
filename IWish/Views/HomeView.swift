@@ -5,6 +5,7 @@ struct HomeView: View {
     @Environment(\.modelContext) private var context
     @Environment(\.appServices) private var services
     @Environment(\.toast) private var toast
+    @Environment(\.horizontalSizeClass) private var sizeClass
     @Query(sort: \Wishlist.createdAt, order: .reverse) private var wishlists: [Wishlist]
     @State private var showingAddSheet = false
     @State private var showingSettings = false
@@ -44,6 +45,18 @@ struct HomeView: View {
         !activeWishlists.isEmpty
     }
 
+    private var gridColumns: [GridItem] {
+        let count: Int
+        switch sizeClass {
+        case .compact: count = 2
+        case .regular:
+            // iPad portrait — 3 колонки, landscape — 4
+            count = (UIScreen.main.bounds.width > 1000) ? 4 : 3
+        default: count = 2
+        }
+        return Array(repeating: GridItem(.flexible(), spacing: 12), count: count)
+    }
+
     var body: some View {
         Group {
             if hasAnyWishlists {
@@ -52,6 +65,9 @@ struct HomeView: View {
                 emptyState
             }
         }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .warmBackground()
+        .ignoresSafeArea(edges: .bottom)
         .navigationTitle("Вишлисты")
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {
@@ -290,10 +306,7 @@ struct HomeView: View {
                     .padding(.top, 8)
                     .padding(.bottom, 12)
 
-                LazyVGrid(
-                    columns: [GridItem(.flexible(), spacing: 12), GridItem(.flexible(), spacing: 12)],
-                    spacing: 12
-                ) {
+                LazyVGrid(columns: gridColumns, spacing: 12) {
                     ForEach(activeWishlists) { wishlist in
                         WishlistTileView(
                             wishlist: wishlist,
@@ -323,7 +336,6 @@ struct HomeView: View {
             }
             .padding(.bottom, 80)
         }
-        .warmBackground()
     }
 
     private func wishlistTile(_ wishlist: Wishlist) -> some View {
