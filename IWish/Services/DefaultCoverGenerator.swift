@@ -67,4 +67,25 @@ enum DefaultCoverGenerator {
     static func colors(forSeed seed: Int) -> [Color] {
         palettes[paletteIndex(forSeed: seed)]
     }
+
+    /// 3 цвета вокруг базового hue (±0.08 hue diff) для богатого MeshGradient.
+    /// Использует HSB чтобы юзер мог управлять оттенком через ползунок 0..1.
+    static func colors(forHue hue: Double) -> [Color] {
+        let h = max(0, min(1, hue))
+        let h1 = (h - 0.08).truncatingRemainder(dividingBy: 1)
+        let h3 = (h + 0.08).truncatingRemainder(dividingBy: 1)
+        return [
+            Color(hue: h1 < 0 ? h1 + 1 : h1, saturation: 0.75, brightness: 0.85),
+            Color(hue: h,                    saturation: 0.65, brightness: 0.92),
+            Color(hue: h3 > 1 ? h3 - 1 : h3, saturation: 0.70, brightness: 0.82)
+        ]
+    }
+
+    /// Резолвер цвета для wishlist: hue если задан, иначе palette by seed.
+    static func colors(for wishlist: Wishlist) -> [Color] {
+        if let hue = wishlist.gradientHue {
+            return colors(forHue: hue)
+        }
+        return colors(forSeed: wishlist.gradientSeed != 0 ? wishlist.gradientSeed : stableHash(wishlist.id.uuidString))
+    }
 }

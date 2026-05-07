@@ -98,7 +98,7 @@ struct WishlistTileView: View {
                 .resizable()
                 .scaledToFill()
         } else {
-            let colors = DefaultCoverGenerator.colors(forSeed: wishlist.gradientSeed != 0 ? wishlist.gradientSeed : DefaultCoverGenerator.stableHash(wishlist.id.uuidString))
+            let colors = DefaultCoverGenerator.colors(for: wishlist)
             ZStack {
                 MeshGradient(
                     width: 3, height: 3,

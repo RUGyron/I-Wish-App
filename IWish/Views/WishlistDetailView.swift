@@ -385,7 +385,8 @@ struct WishlistDetailView: View {
                 id: wishlist.id,
                 imageData: wishlist.coverImageData,
                 emoji: wishlist.coverEmoji,
-                gradientSeed: wishlist.gradientSeed
+                gradientSeed: wishlist.gradientSeed,
+                gradientHue: wishlist.gradientHue
             )
             .frame(width: 64, height: 64)
 

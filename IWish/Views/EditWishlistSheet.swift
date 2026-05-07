@@ -12,6 +12,7 @@ struct EditWishlistSheet: View {
     @State private var name: String = ""
     @State private var coverImageData: Data?
     @State private var coverEmoji: String?
+    @State private var gradientHue: Double = 0.5
     @State private var isSaving = false
 
     var body: some View {
@@ -23,6 +24,13 @@ struct EditWishlistSheet: View {
                 }
 
                 CoverPickerSection(imageData: $coverImageData, emoji: $coverEmoji)
+
+                if coverImageData == nil {
+                    Section("Цвет обложки") {
+                        GradientHuePicker(hue: $gradientHue)
+                            .padding(.vertical, 8)
+                    }
+                }
             }
             .warmBackground()
             .navigationTitle("Изменить список")
@@ -42,6 +50,7 @@ struct EditWishlistSheet: View {
                 name = wishlist.name
                 coverImageData = wishlist.coverImageData
                 coverEmoji = wishlist.coverEmoji
+                gradientHue = wishlist.gradientHue ?? Double.random(in: 0...1)
             }
         }
         .loadingOverlay(isSaving)
@@ -57,7 +66,8 @@ struct EditWishlistSheet: View {
         isSaving = true
         Task {
             do {
-                try await services.data.updateWishlist(id: wishlist.id.uuidString, name: trimmed, emoji: coverEmoji, coverImageData: coverImageData)
+                let hueToSave: Double? = coverImageData == nil ? gradientHue : nil
+                try await services.data.updateWishlist(id: wishlist.id.uuidString, name: trimmed, emoji: coverEmoji, coverImageData: coverImageData, gradientHue: hueToSave)
                 dismiss()
             } catch {
                 toast.error(error.localizedDescription)

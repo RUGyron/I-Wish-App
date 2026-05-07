@@ -413,7 +413,7 @@ struct HomeView: View {
                     .clipped()
             }
         } else {
-            let colors = DefaultCoverGenerator.colors(forSeed: wishlist.gradientSeed != 0 ? wishlist.gradientSeed : DefaultCoverGenerator.stableHash(wishlist.id.uuidString))
+            let colors = DefaultCoverGenerator.colors(for: wishlist)
             GeometryReader { geo in
                 ZStack {
                     MeshGradient(

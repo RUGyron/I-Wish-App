@@ -10,6 +10,7 @@ struct AddWishlistSheet: View {
     @State private var name: String = ""
     @State private var coverImageData: Data?
     @State private var coverEmoji: String?
+    @State private var gradientHue: Double = Double.random(in: 0...1)
     @State private var errorMessage: String?
     @State private var isSaving = false
 
@@ -28,6 +29,13 @@ struct AddWishlistSheet: View {
                     imageData: $coverImageData,
                     emoji: $coverEmoji
                 )
+
+                if coverImageData == nil {
+                    Section("Цвет обложки") {
+                        GradientHuePicker(hue: $gradientHue)
+                            .padding(.vertical, 8)
+                    }
+                }
             }
             .warmBackground()
             .navigationTitle("Новый список")
@@ -94,8 +102,9 @@ struct AddWishlistSheet: View {
         isSaving = true
         Task {
             do {
-                let wishlist = try await services.data.createWishlist(name: finalName, emoji: coverEmoji)
-                // Apply cover image locally (not stored in Firestore)
+                // gradientHue только если нет фото (фото — главная обложка).
+                let hueToSave: Double? = coverImageData == nil ? gradientHue : nil
+                let wishlist = try await services.data.createWishlist(name: finalName, emoji: coverEmoji, gradientHue: hueToSave)
                 if let coverImageData {
                     wishlist.coverImageData = coverImageData
                     try? context.save()
