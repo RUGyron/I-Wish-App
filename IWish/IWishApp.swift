@@ -42,6 +42,11 @@ struct IWishApp: App {
                 .sheet(isPresented: $showingJoinFromLink) {
                     JoinWishlistSheet(initialURL: pendingShareURL)
                 }
+                .task {
+                    // v1.1 one-time migration backfill — гонится в фоне, не блокирует UI.
+                    // updateItem использует preserve-unknown-keys → не теряет ничего.
+                    await AppServices.shared.data?.runV11BackfillIfNeeded()
+                }
         }
         .modelContainer(container)
     }

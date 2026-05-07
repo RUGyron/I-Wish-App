@@ -5,15 +5,21 @@ struct RootView: View {
     @Environment(\.modelContext) private var context
     @Environment(\.colorScheme) private var detectedSystemScheme
     @Environment(\.appServices) private var services
+    @Environment(\.horizontalSizeClass) private var sizeClass
     @Query private var settingsList: [AppSettings]
     @State private var didConfigure = false
+    @State private var rc = RemoteConfigService()
 
     var body: some View {
         Group {
-            if services.auth.isLoading {
+            if rc.isLoading || services.auth.isLoading {
                 splashView
+            } else if rc.requiresForceUpdate {
+                ForceUpdateBlockingView(message: rc.forceUpdateMessage)
             } else if !services.auth.isAuthenticated {
                 signInView
+            } else if services.auth.requiresNameRecovery {
+                NameRecoveryView()
             } else {
                 mainContent
             }
@@ -35,17 +41,50 @@ struct RootView: View {
                 didConfigure = true
             }
         }
+        .task {
+            await rc.fetch()
+        }
         .toastOverlay()
     }
 
+    @ViewBuilder
     private var mainContent: some View {
-        NavigationStack {
-            HomeView()
+        if sizeClass == .regular {
+            // iPad / iPhone landscape — split layout
+            NavigationSplitView {
+                HomeView()
+                    .navigationSplitViewColumnWidth(min: 320, ideal: 380, max: 500)
+            } detail: {
+                emptyDetail
+            }
+            .navigationSplitViewStyle(.balanced)
+            .toolbarBackground(Theme.warmOverlay, for: .navigationBar)
+            .task {
+                await services.data?.refreshWishlists()
+            }
+        } else {
+            // iPhone portrait — push stack
+            NavigationStack {
+                HomeView()
+            }
+            .toolbarBackground(Theme.warmOverlay, for: .navigationBar)
+            .task {
+                await services.data?.refreshWishlists()
+            }
         }
-        .toolbarBackground(Theme.warmOverlay, for: .navigationBar)
-        .task {
-            await services.data?.refreshWishlists()
+    }
+
+    private var emptyDetail: some View {
+        VStack(spacing: 12) {
+            Image(systemName: "list.bullet.rectangle")
+                .font(.system(size: 56))
+                .foregroundStyle(.tertiary)
+            Text("Выберите список")
+                .font(.title3)
+                .foregroundStyle(.secondary)
         }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .background(Theme.background.ignoresSafeArea())
     }
 
     private var splashView: some View {
