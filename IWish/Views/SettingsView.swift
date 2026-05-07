@@ -285,9 +285,7 @@ struct SettingsView: View {
     // MARK: - Helpers
 
     private var appVersion: String {
-        let version = Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "–"
-        let build = Bundle.main.infoDictionary?["CFBundleVersion"] as? String ?? "–"
-        return "\(version) (\(build))"
+        Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "–"
     }
 
     // MARK: - Bindings

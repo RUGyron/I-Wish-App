@@ -54,14 +54,6 @@ struct AddItemSheet: View {
             .navigationBarTitleDisplayMode(.inline)
             .scrollDismissesKeyboard(.interactively)
             .toolbar {
-                ToolbarItemGroup(placement: .keyboard) {
-                    Spacer()
-                    Button {
-                        UIApplication.shared.sendAction(#selector(UIResponder.resignFirstResponder), to: nil, from: nil, for: nil)
-                    } label: {
-                        Image(systemName: "keyboard.chevron.compact.down")
-                    }
-                }
                 ToolbarItem(placement: .cancellationAction) {
                     Button("Отмена") { dismiss() }
                 }
@@ -307,7 +299,7 @@ struct AddItemSheet: View {
     private func parsePrice(_ string: String) -> Double? {
         let trimmed = string.trimmingCharacters(in: .whitespaces)
         guard !trimmed.isEmpty else { return nil }
-        return Double(trimmed)
+        return Int(trimmed).map(Double.init)
     }
 
 }

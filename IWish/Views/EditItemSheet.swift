@@ -79,14 +79,6 @@ struct EditItemSheet: View {
             .fontDesign(.rounded)
             .scrollDismissesKeyboard(.interactively)
             .toolbar {
-                ToolbarItemGroup(placement: .keyboard) {
-                    Spacer()
-                    Button {
-                        UIApplication.shared.sendAction(#selector(UIResponder.resignFirstResponder), to: nil, from: nil, for: nil)
-                    } label: {
-                        Image(systemName: "keyboard.chevron.compact.down")
-                    }
-                }
                 ToolbarItem(placement: .cancellationAction) {
                     Button("Отмена") { dismiss() }
                 }
@@ -116,7 +108,7 @@ struct EditItemSheet: View {
         coverImageData = item.coverImageData
         coverEmoji = item.coverEmoji
         tier = item.tier
-        priceString = item.price.map { "\($0)" } ?? ""
+        priceString = item.priceValue.map { String(Int($0)) } ?? ""
         currency = item.currency
         urlString = item.url ?? ""
         probationEnabled = item.probationEndAt != nil
@@ -142,7 +134,7 @@ struct EditItemSheet: View {
                     wishlistID: wishlistID,
                     name: name.trimmingCharacters(in: .whitespaces),
                     tier: tier,
-                    price: Double(priceString),
+                    price: parsePrice(priceString),
                     currency: currency,
                     url: urlString.isEmpty ? nil : urlString,
                     emoji: coverEmoji,
@@ -150,6 +142,7 @@ struct EditItemSheet: View {
                     isArchived: item.isArchived,
                     descriptionText: descriptionText.isEmpty ? nil : descriptionText,
                     coverImageData: coverImageData,
+                    linkMetadataData: item.linkMetadataData,
                     probationEndAt: probEnd
                 )
                 dismiss()
@@ -158,5 +151,11 @@ struct EditItemSheet: View {
             }
             isSaving = false
         }
+    }
+
+    private func parsePrice(_ string: String) -> Double? {
+        let trimmed = string.trimmingCharacters(in: .whitespaces)
+        guard !trimmed.isEmpty else { return nil }
+        return Int(trimmed).map(Double.init)
     }
 }
