@@ -8,6 +8,9 @@ import CryptoKit
 final class AuthService: NSObject {
     var userName: String?
     var isLoading: Bool = true
+    /// v1.1: gate — если юзер залогинен, но имя не получено, требуется re-auth.
+    /// Сценарий: повторный sign-in после удаления Keychain — Apple credential.fullName == nil.
+    var requiresNameRecovery: Bool = false
     /// True only after Sign in with Apple (not anonymous)
     var isAuthenticated: Bool { _isAppleSignedIn }
     var hasToken: Bool { _idToken != nil }
@@ -30,6 +33,13 @@ final class AuthService: NSObject {
            let legacyName = UserDefaults.standard.string(forKey: "auth_userName"),
            !legacyName.isEmpty {
             KeychainService.saveUserName(legacyName)
+            UserDefaults.standard.removeObject(forKey: "auth_userName")
+        }
+
+        // v1.1: стереть legacy "Пользователь" мусор (был fallback в старых версиях AuthService).
+        // Этот же литерал шифровался в ownerName/addedByName payload'ы и распространялся в shared.
+        if KeychainService.loadUserName() == "Пользователь" {
+            KeychainService.deleteUserName()
             UserDefaults.standard.removeObject(forKey: "auth_userName")
         }
 
@@ -71,6 +81,14 @@ final class AuthService: NSObject {
             userName = dn
             KeychainService.saveUserName(dn)
             print("[Auth] Restored name from Firebase displayName: \(dn)")
+        }
+
+        // v1.1: имя — обязательное условие. Если не получили — gate на re-auth.
+        if userName == nil || userName == "Пользователь" {
+            requiresNameRecovery = true
+            print("[Auth] No usable name after restore — requiring name recovery")
+        } else {
+            requiresNameRecovery = false
         }
 
         print("[Auth] Restored: \(uid), name: \(userName ?? "nil")")
@@ -171,9 +189,13 @@ final class AuthService: NSObject {
                 resolvedName = dn
             }
 
-            // 3. Try iCloud Keychain (если юзер уже логинился на этом или другом девайсе)
+            // 3. Try iCloud Keychain (если юзер уже логинился на этом или другом девайсе).
+            // v1.1: legacy "Пользователь" в Keychain игнорируем — это мусор.
             if resolvedName == nil {
-                resolvedName = KeychainService.loadUserName()
+                let kc = KeychainService.loadUserName()
+                if let kc, !kc.isEmpty, kc != "Пользователь" {
+                    resolvedName = kc
+                }
             }
 
             // 4. Try email as last resort
@@ -183,11 +205,17 @@ final class AuthService: NSObject {
                 }
             }
 
-            let finalName = resolvedName ?? "Пользователь"
-            userName = finalName
-            // Сохраняем приватно в iCloud Keychain — sync между Apple ID девайсами,
-            // разраб (Firebase Console) имя не видит.
-            KeychainService.saveUserName(finalName)
+            // v1.1: имя — обязательное условие. Без него gate на re-auth, не fallback на "Пользователь".
+            if let finalName = resolvedName, !finalName.isEmpty, finalName != "Пользователь" {
+                userName = finalName
+                KeychainService.saveUserName(finalName)
+                requiresNameRecovery = false
+            } else {
+                userName = nil
+                KeychainService.deleteUserName()
+                requiresNameRecovery = true
+                print("[Auth] Sign-in без имени — переход в name recovery flow")
+            }
 
         case .failure(let error):
             throw error
@@ -216,6 +244,7 @@ final class AuthService: NSObject {
         _refreshToken = nil
         _isAppleSignedIn = false
         userName = nil
+        requiresNameRecovery = false
         KeychainService.deleteUserName()
         UserDefaults.standard.removeObject(forKey: "auth_userName")
     }
