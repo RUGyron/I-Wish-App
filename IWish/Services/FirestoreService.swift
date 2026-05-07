@@ -44,8 +44,9 @@ final class FirestoreService {
         let ownerUID: String
         let ownerName: String?
         let gradientSeed: Int
+        let gradientHue: Double?
         let isArchived: Bool
-        let members: [(userUID: String, role: String)]
+        let members: [(userUID: String, role: String, userName: String?)]
         let items: [SharedItemInfo]
     }
 
@@ -54,9 +55,14 @@ final class FirestoreService {
         let name: String
         let tier: String
         let price: Double?
+        let priceMax: Double?
         let currency: String
         let url: String?
         let coverEmoji: String?
+        let coverImageData: Data?
+        let linkMetadataData: Data?
+        let descriptionText: String?
+        let probationEndAt: Date?
         let sortIndex: Double
         let isArchived: Bool
         /// UID юзера, который добавил item. Хранится в зашифрованном payload.
@@ -223,7 +229,16 @@ final class FirestoreService {
 
     // MARK: - Personal Wishlists (users/{uid}/wishlists)
 
-    func createPersonalWishlist(uid: String, wishlistID: String, name: String, emoji: String?, gradientSeed: Int, coverImageData: Data? = nil, key: SymmetricKey) async throws {
+    func createPersonalWishlist(
+        uid: String,
+        wishlistID: String,
+        name: String,
+        emoji: String?,
+        gradientSeed: Int,
+        gradientHue: Double? = nil,
+        coverImageData: Data? = nil,
+        key: SymmetricKey
+    ) async throws {
         let payload = EncryptionService.packPayload([
             "name": name,
             "coverEmoji": emoji,
@@ -231,30 +246,62 @@ final class FirestoreService {
         ])
         let encrypted = try EncryptionService.encrypt(payload, using: key)
 
-        let data: [String: Any?] = [
+        var data: [String: Any?] = [
             "encryptedPayload": encrypted,
             "gradientSeed": gradientSeed as Any,
             "isArchived": false as Any,
             "createdAt": Date() as Any,
             "updatedAt": Date() as Any
         ]
+        if let gradientHue { data["gradientHue"] = gradientHue }
         let fields = toFields(data)
         let _ = try await request("PATCH", path: "users/\(uid)/wishlists/\(wishlistID)", body: ["fields": fields])
     }
 
-    func updatePersonalWishlist(uid: String, wishlistID: String, name: String, emoji: String?, coverImageData: Data? = nil, key: SymmetricKey) async throws {
-        let payload = EncryptionService.packPayload([
+    func updatePersonalWishlist(
+        uid: String,
+        wishlistID: String,
+        name: String,
+        emoji: String?,
+        coverImageData: Data? = nil,
+        gradientHue: Double? = nil,
+        key: SymmetricKey
+    ) async throws {
+        var existingPayload: [String: Any] = [:]
+        if let existingDoc = try? await request("GET", path: "users/\(uid)/wishlists/\(wishlistID)"),
+           let fields = existingDoc["fields"] as? [String: Any],
+           let encryptedData = parseFields(fields)["encryptedPayload"] as? Data,
+           let decrypted = try? EncryptionService.decrypt(encryptedData, using: key) {
+            existingPayload = decrypted
+        }
+
+        let updates: [String: Any?] = [
             "name": name,
             "coverEmoji": emoji,
             "coverImageData": coverImageData
-        ])
-        let encrypted = try EncryptionService.encrypt(payload, using: key)
+        ]
 
-        let data: [String: Any?] = [
+        var merged = existingPayload
+        for (k, v) in updates {
+            if let v {
+                if let d = v as? Data { merged[k] = d.base64EncodedString() } else { merged[k] = v }
+            } else {
+                merged.removeValue(forKey: k)
+            }
+        }
+
+        let encrypted = try EncryptionService.encrypt(merged, using: key)
+
+        var data: [String: Any?] = [
             "encryptedPayload": encrypted,
             "updatedAt": Date() as Any
         ]
-        let maskPaths = "updateMask.fieldPaths=encryptedPayload&updateMask.fieldPaths=updatedAt"
+        var maskFields = ["encryptedPayload", "updatedAt"]
+        if let gradientHue {
+            data["gradientHue"] = gradientHue
+            maskFields.append("gradientHue")
+        }
+        let maskPaths = maskFields.map { "updateMask.fieldPaths=\($0)" }.joined(separator: "&")
         let fields = toFields(data)
         let _ = try await request("PATCH", path: "users/\(uid)/wishlists/\(wishlistID)?\(maskPaths)", body: ["fields": fields])
     }
@@ -295,9 +342,9 @@ final class FirestoreService {
     /// Возвращает personal-вишлисты пользователя. Для расшифровки содержимого каждого
     /// вишлиста запрашивает ключ через `keyProvider(wishlistID)`. Если ключ не найден или
     /// расшифровка не удалась — wishlist пропускается (зашифрованные данные без ключа бесполезны).
-    func fetchPersonalWishlists(uid: String, keyProvider: (String) -> SymmetricKey?) async throws -> [(id: String, name: String, emoji: String?, coverImageData: Data?, gradientSeed: Int, isArchived: Bool)] {
+    func fetchPersonalWishlists(uid: String, keyProvider: (String) -> SymmetricKey?) async throws -> [(id: String, name: String, emoji: String?, coverImageData: Data?, gradientSeed: Int, gradientHue: Double?, isArchived: Bool)] {
         let docs = try await listDocuments(parentPath: "users/\(uid)/wishlists")
-        var results: [(id: String, name: String, emoji: String?, coverImageData: Data?, gradientSeed: Int, isArchived: Bool)] = []
+        var results: [(id: String, name: String, emoji: String?, coverImageData: Data?, gradientSeed: Int, gradientHue: Double?, isArchived: Bool)] = []
         for doc in docs {
             guard let docName = doc["name"] as? String else { continue }
             let docID = documentID(from: docName)
@@ -322,23 +369,48 @@ final class FirestoreService {
             let emoji: String? = (emojiRaw?.isEmpty == false) ? emojiRaw : nil
             let coverImageData = EncryptionService.dataField(content, "coverImageData")
             let seed = parsed["gradientSeed"] as? Int ?? 0
+            let hue = parsed["gradientHue"] as? Double
             let isArchived = parsed["isArchived"] as? Bool ?? false
 
-            results.append((id: docID, name: name, emoji: emoji, coverImageData: coverImageData, gradientSeed: seed, isArchived: isArchived))
+            results.append((id: docID, name: name, emoji: emoji, coverImageData: coverImageData, gradientSeed: seed, gradientHue: hue, isArchived: isArchived))
         }
         return results
     }
 
     // MARK: - Personal Items (users/{uid}/wishlists/{wid}/items)
 
-    func createPersonalItem(uid: String, wishlistID: String, itemID: String, name: String, tier: String, price: Double?, currency: String, url: String?, emoji: String?, sortIndex: Double, addedByUID: String? = nil, addedByName: String? = nil, key: SymmetricKey) async throws {
+    func createPersonalItem(
+        uid: String,
+        wishlistID: String,
+        itemID: String,
+        name: String,
+        tier: String,
+        price: Double?,
+        priceMax: Double? = nil,
+        currency: String,
+        url: String?,
+        emoji: String?,
+        sortIndex: Double,
+        descriptionText: String? = nil,
+        coverImageData: Data? = nil,
+        linkMetadataData: Data? = nil,
+        probationEndAt: Date? = nil,
+        addedByUID: String? = nil,
+        addedByName: String? = nil,
+        key: SymmetricKey
+    ) async throws {
         let payload = EncryptionService.packPayload([
             "name": name,
             "tier": tier,
             "price": price,
+            "priceMax": priceMax,
             "currency": currency,
             "url": url,
             "coverEmoji": emoji,
+            "coverImageData": coverImageData,
+            "linkMeta": linkMetadataData,
+            "description": descriptionText,
+            "probationEndAt": probationEndAt.map { ISO8601DateFormatter().string(from: $0) },
             "addedByUID": addedByUID,
             "addedByName": addedByName
         ])
@@ -354,23 +426,67 @@ final class FirestoreService {
         let _ = try await request("PATCH", path: "users/\(uid)/wishlists/\(wishlistID)/items/\(itemID)", body: ["fields": fields])
     }
 
-    /// Update personal item. Поля `addedByUID`/`addedByName` НЕ затираются: автор фиксируется при создании
-    /// и не меняется при последующих правках. Если callsite не передал эти поля — мы их также не пишем
-    /// (re-encrypt без них), чтобы избежать legacy collision; при чтении обнуление воспринимается как nil.
-    /// FIXME: если в будущем понадобится строго preserve через PATCH, понадобится pre-fetch + decrypt существующего payload.
-    func updatePersonalItem(uid: String, wishlistID: String, itemID: String, name: String, tier: String, price: Double?, currency: String, url: String?, emoji: String?, sortIndex: Double, isArchived: Bool, addedByUID: String? = nil, addedByName: String? = nil, key: SymmetricKey) async throws {
-        let payload = EncryptionService.packPayload([
+    /// Update personal item с preserve-unknown-keys: GET → decrypt → merge → re-encrypt + PATCH.
+    /// Это защищает forward-compat: если будущие версии добавят новые поля, наш клиент их сохранит.
+    func updatePersonalItem(
+        uid: String,
+        wishlistID: String,
+        itemID: String,
+        name: String,
+        tier: String,
+        price: Double?,
+        priceMax: Double? = nil,
+        currency: String,
+        url: String?,
+        emoji: String?,
+        sortIndex: Double,
+        isArchived: Bool,
+        descriptionText: String? = nil,
+        coverImageData: Data? = nil,
+        linkMetadataData: Data? = nil,
+        probationEndAt: Date? = nil,
+        addedByUID: String? = nil,
+        addedByName: String? = nil,
+        key: SymmetricKey
+    ) async throws {
+        var existingPayload: [String: Any] = [:]
+        if let existingDoc = try? await request("GET", path: "users/\(uid)/wishlists/\(wishlistID)/items/\(itemID)"),
+           let fields = existingDoc["fields"] as? [String: Any],
+           let encryptedData = parseFields(fields)["encryptedPayload"] as? Data,
+           let decrypted = try? EncryptionService.decrypt(encryptedData, using: key) {
+            existingPayload = decrypted
+        }
+
+        let updates: [String: Any?] = [
             "name": name,
             "tier": tier,
             "price": price,
+            "priceMax": priceMax,
             "currency": currency,
             "url": url,
             "coverEmoji": emoji,
+            "coverImageData": coverImageData,
+            "linkMeta": linkMetadataData,
+            "description": descriptionText,
+            "probationEndAt": probationEndAt.map { ISO8601DateFormatter().string(from: $0) },
             "addedByUID": addedByUID,
             "addedByName": addedByName
-        ])
-        let encrypted = try EncryptionService.encrypt(payload, using: key)
+        ]
 
+        var merged = existingPayload
+        for (k, v) in updates {
+            if let v {
+                if let d = v as? Data {
+                    merged[k] = d.base64EncodedString()
+                } else {
+                    merged[k] = v
+                }
+            } else {
+                merged.removeValue(forKey: k)
+            }
+        }
+
+        let encrypted = try EncryptionService.encrypt(merged, using: key)
         let fields = toFields([
             "encryptedPayload": encrypted as Any,
             "sortIndex": sortIndex as Any,
@@ -397,7 +513,18 @@ final class FirestoreService {
 
     // MARK: - Shared Wishlists (shared_wishlists/)
 
-    func createSharedWishlist(wishlistID: String, name: String, emoji: String?, coverImageData: Data? = nil, gradientSeed: Int, ownerUID: String, ownerName: String?, items: [SharedItemInfo], key: SymmetricKey) async throws {
+    func createSharedWishlist(
+        wishlistID: String,
+        name: String,
+        emoji: String?,
+        coverImageData: Data? = nil,
+        gradientSeed: Int,
+        gradientHue: Double? = nil,
+        ownerUID: String,
+        ownerName: String?,
+        items: [SharedItemInfo],
+        key: SymmetricKey
+    ) async throws {
         // 1. Write the wishlist document
         let wishlistPayload = EncryptionService.packPayload([
             "name": name,
@@ -407,7 +534,7 @@ final class FirestoreService {
         ])
         let encryptedWishlist = try EncryptionService.encrypt(wishlistPayload, using: key)
 
-        let data: [String: Any?] = [
+        var data: [String: Any?] = [
             "encryptedPayload": encryptedWishlist,
             "gradientSeed": gradientSeed as Any,
             "isArchived": false as Any,
@@ -415,6 +542,7 @@ final class FirestoreService {
             "createdAt": Date() as Any,
             "updatedAt": Date() as Any
         ]
+        if let gradientHue { data["gradientHue"] = gradientHue }
         let wishlistFields = toFields(data)
         let _ = try await request("PATCH", path: "shared_wishlists/\(wishlistID)", body: ["fields": wishlistFields])
 
@@ -426,9 +554,14 @@ final class FirestoreService {
                     "name": item.name,
                     "tier": item.tier,
                     "price": item.price,
+                    "priceMax": item.priceMax,
                     "currency": item.currency,
                     "url": item.url,
                     "coverEmoji": item.coverEmoji,
+                    "coverImageData": item.coverImageData,
+                    "linkMeta": item.linkMetadataData,
+                    "description": item.descriptionText,
+                    "probationEndAt": item.probationEndAt.map { ISO8601DateFormatter().string(from: $0) },
                     "addedByUID": item.addedByUID,
                     "addedByName": item.addedByName
                 ])
@@ -453,20 +586,51 @@ final class FirestoreService {
         }
     }
 
-    func updateSharedWishlist(wishlistID: String, name: String, emoji: String?, coverImageData: Data? = nil, ownerName: String?, key: SymmetricKey) async throws {
-        let payload = EncryptionService.packPayload([
+    func updateSharedWishlist(
+        wishlistID: String,
+        name: String,
+        emoji: String?,
+        coverImageData: Data? = nil,
+        gradientHue: Double? = nil,
+        ownerName: String?,
+        key: SymmetricKey
+    ) async throws {
+        var existingPayload: [String: Any] = [:]
+        if let existingDoc = try? await request("GET", path: "shared_wishlists/\(wishlistID)"),
+           let fields = existingDoc["fields"] as? [String: Any],
+           let encryptedData = parseFields(fields)["encryptedPayload"] as? Data,
+           let decrypted = try? EncryptionService.decrypt(encryptedData, using: key) {
+            existingPayload = decrypted
+        }
+
+        let updates: [String: Any?] = [
             "name": name,
             "coverEmoji": emoji,
             "coverImageData": coverImageData,
             "ownerName": ownerName
-        ])
-        let encrypted = try EncryptionService.encrypt(payload, using: key)
+        ]
 
-        let data: [String: Any?] = [
+        var merged = existingPayload
+        for (k, v) in updates {
+            if let v {
+                if let d = v as? Data { merged[k] = d.base64EncodedString() } else { merged[k] = v }
+            } else {
+                merged.removeValue(forKey: k)
+            }
+        }
+
+        let encrypted = try EncryptionService.encrypt(merged, using: key)
+
+        var data: [String: Any?] = [
             "encryptedPayload": encrypted,
             "updatedAt": Date() as Any
         ]
-        let maskPaths = "updateMask.fieldPaths=encryptedPayload&updateMask.fieldPaths=updatedAt"
+        var maskFields = ["encryptedPayload", "updatedAt"]
+        if let gradientHue {
+            data["gradientHue"] = gradientHue
+            maskFields.append("gradientHue")
+        }
+        let maskPaths = maskFields.map { "updateMask.fieldPaths=\($0)" }.joined(separator: "&")
         let fields = toFields(data)
         let _ = try await request("PATCH", path: "shared_wishlists/\(wishlistID)?\(maskPaths)", body: ["fields": fields])
     }
@@ -484,14 +648,37 @@ final class FirestoreService {
 
     // MARK: - Shared Items CRUD (shared_wishlists/{wid}/items)
 
-    func createSharedItem(wishlistID: String, itemID: String, name: String, tier: String, price: Double?, currency: String, url: String?, emoji: String?, sortIndex: Double, addedByUID: String? = nil, addedByName: String? = nil, key: SymmetricKey) async throws {
+    func createSharedItem(
+        wishlistID: String,
+        itemID: String,
+        name: String,
+        tier: String,
+        price: Double?,
+        priceMax: Double? = nil,
+        currency: String,
+        url: String?,
+        emoji: String?,
+        sortIndex: Double,
+        descriptionText: String? = nil,
+        coverImageData: Data? = nil,
+        linkMetadataData: Data? = nil,
+        probationEndAt: Date? = nil,
+        addedByUID: String? = nil,
+        addedByName: String? = nil,
+        key: SymmetricKey
+    ) async throws {
         let payload = EncryptionService.packPayload([
             "name": name,
             "tier": tier,
             "price": price,
+            "priceMax": priceMax,
             "currency": currency,
             "url": url,
             "coverEmoji": emoji,
+            "coverImageData": coverImageData,
+            "linkMeta": linkMetadataData,
+            "description": descriptionText,
+            "probationEndAt": probationEndAt.map { ISO8601DateFormatter().string(from: $0) },
             "addedByUID": addedByUID,
             "addedByName": addedByName
         ])
@@ -507,24 +694,66 @@ final class FirestoreService {
         let _ = try await request("PATCH", path: "shared_wishlists/\(wishlistID)/items/\(itemID)", body: ["fields": fields])
     }
 
-    /// Update shared item. Поля `addedByUID`/`addedByName` НЕ меняются при правке (автор фиксируется
-    /// при создании). Callsite в DataService.updateItem пробрасывает существующие значения автора
-    /// из локального Item, чтобы не потерять их при PATCH (encryptedPayload пишется целиком).
-    /// FIXME: если callsite забудет передать author — поля затрутся nil. Лучше переделать на pre-fetch
-    /// + merge, но это +1 read на каждый update, что бьёт по Firestore quota.
-    func updateSharedItem(wishlistID: String, itemID: String, name: String, tier: String, price: Double?, currency: String, url: String?, emoji: String?, sortIndex: Double, isArchived: Bool, addedByUID: String? = nil, addedByName: String? = nil, key: SymmetricKey) async throws {
-        let payload = EncryptionService.packPayload([
+    /// Update shared item с preserve-unknown-keys: GET → decrypt → merge → re-encrypt.
+    /// Защищает forward-compat для будущих версий с новыми payload keys.
+    func updateSharedItem(
+        wishlistID: String,
+        itemID: String,
+        name: String,
+        tier: String,
+        price: Double?,
+        priceMax: Double? = nil,
+        currency: String,
+        url: String?,
+        emoji: String?,
+        sortIndex: Double,
+        isArchived: Bool,
+        descriptionText: String? = nil,
+        coverImageData: Data? = nil,
+        linkMetadataData: Data? = nil,
+        probationEndAt: Date? = nil,
+        addedByUID: String? = nil,
+        addedByName: String? = nil,
+        key: SymmetricKey
+    ) async throws {
+        var existingPayload: [String: Any] = [:]
+        if let existingDoc = try? await request("GET", path: "shared_wishlists/\(wishlistID)/items/\(itemID)"),
+           let fields = existingDoc["fields"] as? [String: Any],
+           let encryptedData = parseFields(fields)["encryptedPayload"] as? Data,
+           let decrypted = try? EncryptionService.decrypt(encryptedData, using: key) {
+            existingPayload = decrypted
+        }
+
+        let updates: [String: Any?] = [
             "name": name,
             "tier": tier,
             "price": price,
+            "priceMax": priceMax,
             "currency": currency,
             "url": url,
             "coverEmoji": emoji,
+            "coverImageData": coverImageData,
+            "linkMeta": linkMetadataData,
+            "description": descriptionText,
+            "probationEndAt": probationEndAt.map { ISO8601DateFormatter().string(from: $0) },
             "addedByUID": addedByUID,
             "addedByName": addedByName
-        ])
-        let encrypted = try EncryptionService.encrypt(payload, using: key)
+        ]
 
+        var merged = existingPayload
+        for (k, v) in updates {
+            if let v {
+                if let d = v as? Data {
+                    merged[k] = d.base64EncodedString()
+                } else {
+                    merged[k] = v
+                }
+            } else {
+                merged.removeValue(forKey: k)
+            }
+        }
+
+        let encrypted = try EncryptionService.encrypt(merged, using: key)
         let fields = toFields([
             "encryptedPayload": encrypted as Any,
             "sortIndex": sortIndex as Any,
@@ -609,11 +838,16 @@ final class FirestoreService {
 
         // 4. Query memberships where wishlistID == wishlistID (plaintext metadata)
         let membersResults = try await runQuery(collectionId: "memberships", field: "wishlistID", op: "EQUAL", value: wishlistID)
-        let members = membersResults.compactMap { entry -> (userUID: String, role: String)? in
+        let members: [(userUID: String, role: String, userName: String?)] = membersResults.compactMap { entry in
             guard let doc = entry["document"] as? [String: Any],
                   let f = doc["fields"] as? [String: Any] else { return nil }
             let d = parseFields(f)
-            return (d["userUID"] as? String ?? "", d["role"] as? String ?? "viewer")
+            let userNameRaw = d["userName"] as? String
+            return (
+                userUID: d["userUID"] as? String ?? "",
+                role: d["role"] as? String ?? "viewer",
+                userName: (userNameRaw?.isEmpty == false) ? userNameRaw : nil
+            )
         }
 
         return SharedWishlistInfo(
@@ -624,6 +858,7 @@ final class FirestoreService {
             ownerUID: parsed["ownerUID"] as? String ?? "",
             ownerName: ownerName,
             gradientSeed: parsed["gradientSeed"] as? Int ?? 0,
+            gradientHue: parsed["gradientHue"] as? Double,
             isArchived: parsed["isArchived"] as? Bool ?? false,
             members: members,
             items: items
@@ -661,16 +896,29 @@ final class FirestoreService {
 
     // MARK: - Memberships
 
-    func joinWishlist(wishlistID: String, userUID: String, role: String, canInvite: Bool = false) async throws {
+    func joinWishlist(wishlistID: String, userUID: String, userName: String, role: String, canInvite: Bool = false) async throws {
         let membershipID = "\(userUID)_\(wishlistID)"
         let fields = toFields([
             "wishlistID": wishlistID,
             "userUID": userUID,
+            "userName": userName,
             "role": role,
             "canInvite": canInvite as Any,
             "joinedAt": Date() as Any
         ])
         let _ = try await request("PATCH", path: "memberships/\(membershipID)", body: ["fields": fields])
+    }
+
+    /// Обновить только userName в существующих memberships текущего пользователя.
+    /// Используется при backfill после миграции имени.
+    func updateMembershipUserName(wishlistID: String, userUID: String, userName: String) async throws {
+        let membershipID = "\(userUID)_\(wishlistID)"
+        let fields = toFields(["userName": userName])
+        let _ = try await request(
+            "PATCH",
+            path: "memberships/\(membershipID)?updateMask.fieldPaths=userName",
+            body: ["fields": fields]
+        )
     }
 
     func fetchMyMemberships(userUID: String) async throws -> [(wishlistID: String, role: String, canInvite: Bool)] {
@@ -895,15 +1143,13 @@ final class FirestoreService {
         }
         let content = try EncryptionService.decrypt(payloadData, using: key)
 
-        let rawPrice = content["price"]
-        let price: Double?
-        if let d = rawPrice as? Double {
-            price = d
-        } else if let i = rawPrice as? Int {
-            price = Double(i)
-        } else {
-            price = nil
+        func parseDouble(_ raw: Any?) -> Double? {
+            if let d = raw as? Double { return d }
+            if let i = raw as? Int { return Double(i) }
+            return nil
         }
+        let price = parseDouble(content["price"])
+        let priceMax = parseDouble(content["priceMax"])
         let urlRaw = content["url"] as? String
         let url: String? = (urlRaw?.isEmpty == false) ? urlRaw : nil
         let emojiRaw = content["coverEmoji"] as? String
@@ -913,14 +1159,26 @@ final class FirestoreService {
         let addedByNameRaw = content["addedByName"] as? String
         let addedByName: String? = (addedByNameRaw?.isEmpty == false) ? addedByNameRaw : nil
 
+        let descRaw = content["description"] as? String
+        let descriptionText: String? = (descRaw?.isEmpty == false) ? descRaw : nil
+        let coverImageData = EncryptionService.dataField(content, "coverImageData")
+        let linkMetadataData = EncryptionService.dataField(content, "linkMeta")
+        let probISO = content["probationEndAt"] as? String
+        let probationEndAt: Date? = probISO.flatMap { ISO8601DateFormatter().date(from: $0) }
+
         return SharedItemInfo(
             itemID: docID,
             name: content["name"] as? String ?? "",
             tier: content["tier"] as? String ?? "idea",
             price: price,
+            priceMax: priceMax,
             currency: content["currency"] as? String ?? "RUB",
             url: url,
             coverEmoji: coverEmoji,
+            coverImageData: coverImageData,
+            linkMetadataData: linkMetadataData,
+            descriptionText: descriptionText,
+            probationEndAt: probationEndAt,
             sortIndex: parsed["sortIndex"] as? Double ?? 0,
             isArchived: parsed["isArchived"] as? Bool ?? false,
             addedByUID: addedByUID,

@@ -17,9 +17,9 @@ enum InputLimits {
     static let maxEmptyWishlists = 3
 
     /// Сколько HTTP-запросов к Firestore приложение делает в минуту.
-    /// Защита от runaway loops и от исчерпания дневной квоты Spark plan
-    /// (50K reads/day = ~35 req/min sustained, мы держим запас под burst).
-    static let maxFirestoreRequestsPerMinute = 60
+    /// Защита от runaway loops. Spark plan day-quota (50K reads/day = ~33/min sustained)
+    /// в обычной жизни не пробивается; cap 300 обеспечивает запас под burst при частых правках.
+    static let maxFirestoreRequestsPerMinute = 300
 
     /// Минимальный интервал (сек) между авто-refresh'ами личных wishlist'ов
     /// и shared wishlists. Manual pull-to-refresh от юзера не подчиняется этому
