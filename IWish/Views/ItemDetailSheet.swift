@@ -74,11 +74,22 @@ struct ItemDetailSheet: View {
             Text(item.name)
                 .font(.title2.weight(.semibold))
                 .frame(maxWidth: .infinity, alignment: .leading)
-            if let price = item.price {
-                Text(formatPrice(price, currency: item.currency))
+            if let priceText = priceFullText {
+                Text(priceText)
                     .font(.title3.weight(.bold))
                     .foregroundStyle(.primary)
             }
+        }
+    }
+
+    /// Полное отображение цены: точная или "X — Y" для диапазона.
+    /// На карточке (WishlistDetailView) показываем сокращённо "до Y", здесь — целиком.
+    private var priceFullText: String? {
+        switch item.priceMode {
+        case .none: return nil
+        case .exact(let p): return formatPrice(p, currency: item.currency)
+        case .range(let min, let max):
+            return "\(formatPrice(min, currency: item.currency)) — \(formatPrice(max, currency: item.currency))"
         }
     }
 

@@ -15,12 +15,20 @@ struct EditItemSheet: View {
     @State private var coverImageData: Data?
     @State private var coverEmoji: String?
     @State private var tier: ItemTier = .maybe
-    @State private var priceString: String = ""
+    @State private var priceMinString: String = ""
+    @State private var priceMaxString: String = ""
+    @State private var priceMode: PriceModeUI = .exact
     @State private var currency: String = "RUB"
     @State private var urlString: String = ""
     @State private var probationEnabled: Bool = false
     @State private var probationDays: Int = 30
     @State private var isSaving = false
+
+    private enum PriceModeUI: String, CaseIterable, Identifiable {
+        case exact, range
+        var id: String { rawValue }
+        var label: String { self == .exact ? "Точная" : "Диапазон" }
+    }
 
     var body: some View {
         NavigationStack {
@@ -56,15 +64,40 @@ struct EditItemSheet: View {
                 }
 
                 Section("Цена") {
-                    HStack {
-                        TextField("0", text: $priceString)
-                            .keyboardType(.numberPad)
-                        Picker("Валюта", selection: $currency) {
-                            Text("\u{20BD}").tag("RUB")
-                            Text("$").tag("USD")
+                    Picker("Тип", selection: $priceMode) {
+                        ForEach(PriceModeUI.allCases) { mode in
+                            Text(mode.label).tag(mode)
                         }
-                        .labelsHidden()
-                        .pickerStyle(.menu)
+                    }
+                    .pickerStyle(.segmented)
+                    .padding(.vertical, 4)
+
+                    if priceMode == .exact {
+                        HStack {
+                            TextField("0", text: $priceMinString)
+                                .keyboardType(.numberPad)
+                            Picker("Валюта", selection: $currency) {
+                                Text("\u{20BD}").tag("RUB")
+                                Text("$").tag("USD")
+                            }
+                            .labelsHidden()
+                            .pickerStyle(.menu)
+                        }
+                    } else {
+                        HStack(spacing: 8) {
+                            TextField("От", text: $priceMinString)
+                                .keyboardType(.numberPad)
+                            Text("—")
+                                .foregroundStyle(.secondary)
+                            TextField("До", text: $priceMaxString)
+                                .keyboardType(.numberPad)
+                            Picker("Валюта", selection: $currency) {
+                                Text("\u{20BD}").tag("RUB")
+                                Text("$").tag("USD")
+                            }
+                            .labelsHidden()
+                            .pickerStyle(.menu)
+                        }
                     }
                 }
 
@@ -108,7 +141,9 @@ struct EditItemSheet: View {
         coverImageData = item.coverImageData
         coverEmoji = item.coverEmoji
         tier = item.tier
-        priceString = item.priceValue.map { String(Int($0)) } ?? ""
+        priceMinString = item.priceValue.map { String(Int($0)) } ?? ""
+        priceMaxString = item.priceMaxValue.map { String(Int($0)) } ?? ""
+        priceMode = item.priceMaxValue != nil ? .range : .exact
         currency = item.currency
         urlString = item.url ?? ""
         probationEnabled = item.probationEndAt != nil
@@ -129,12 +164,16 @@ struct EditItemSheet: View {
         isSaving = true
         Task {
             do {
+                let priceMin = parsePrice(priceMinString)
+                let priceMax: Double? = priceMode == .range ? parsePrice(priceMaxString) : nil
+
                 try await services.data.updateItem(
                     id: item.id.uuidString,
                     wishlistID: wishlistID,
                     name: name.trimmingCharacters(in: .whitespaces),
                     tier: tier,
-                    price: parsePrice(priceString),
+                    price: priceMin,
+                    priceMax: priceMax,
                     currency: currency,
                     url: urlString.isEmpty ? nil : urlString,
                     emoji: coverEmoji,

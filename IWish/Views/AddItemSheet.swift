@@ -16,11 +16,19 @@ struct AddItemSheet: View {
     @State private var coverImageData: Data?
     @State private var coverEmoji: String?
     @State private var tier: ItemTier = .maybe
-    @State private var priceString: String = ""
+    @State private var priceMinString: String = ""
+    @State private var priceMaxString: String = ""
+    @State private var priceMode: PriceModeUI = .exact
     @State private var currency: String = ""
     @State private var descriptionText: String = ""
     @State private var probationEnabled: Bool = false
     @State private var probationDays: Int = 30
+
+    private enum PriceModeUI: String, CaseIterable, Identifiable {
+        case exact, range
+        var id: String { rawValue }
+        var label: String { self == .exact ? "Точная" : "Диапазон" }
+    }
 
     @State private var urlStatus: URLPasteStatus = .idle
     @State private var isFetchingMetadata = false
@@ -163,16 +171,42 @@ struct AddItemSheet: View {
 
     private var priceSection: some View {
         Section("Цена") {
-            HStack {
-                TextField("0", text: $priceString)
-                    .keyboardType(.numberPad)
-
-                Picker("Валюта", selection: $currency) {
-                    Text("\u{20BD}").tag("RUB")
-                    Text("$").tag("USD")
+            Picker("Тип", selection: $priceMode) {
+                ForEach(PriceModeUI.allCases) { mode in
+                    Text(mode.label).tag(mode)
                 }
-                .labelsHidden()
-                .pickerStyle(.menu)
+            }
+            .pickerStyle(.segmented)
+            .padding(.vertical, 4)
+
+            if priceMode == .exact {
+                HStack {
+                    TextField("0", text: $priceMinString)
+                        .keyboardType(.numberPad)
+
+                    Picker("Валюта", selection: $currency) {
+                        Text("\u{20BD}").tag("RUB")
+                        Text("$").tag("USD")
+                    }
+                    .labelsHidden()
+                    .pickerStyle(.menu)
+                }
+            } else {
+                HStack(spacing: 8) {
+                    TextField("От", text: $priceMinString)
+                        .keyboardType(.numberPad)
+                    Text("—")
+                        .foregroundStyle(.secondary)
+                    TextField("До", text: $priceMaxString)
+                        .keyboardType(.numberPad)
+
+                    Picker("Валюта", selection: $currency) {
+                        Text("\u{20BD}").tag("RUB")
+                        Text("$").tag("USD")
+                    }
+                    .labelsHidden()
+                    .pickerStyle(.menu)
+                }
             }
         }
     }
@@ -267,11 +301,15 @@ struct AddItemSheet: View {
         isSaving = true
         Task {
             do {
-                let item = try await services.data.addItem(
+                let priceMin = parsePrice(priceMinString)
+                let priceMax: Double? = priceMode == .range ? parsePrice(priceMaxString) : nil
+
+                _ = try await services.data.addItem(
                     to: wishlist.id.uuidString,
                     name: trimmedName,
                     tier: tier,
-                    price: parsePrice(priceString),
+                    price: priceMin,
+                    priceMax: priceMax,
                     currency: currency.isEmpty ? "RUB" : currency,
                     url: trimmedURL.isEmpty ? nil : trimmedURL,
                     emoji: coverEmoji,
