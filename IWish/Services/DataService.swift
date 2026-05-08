@@ -909,6 +909,24 @@ final class DataService {
                     }
                     continue
                 }
+
+                // Auto-heal ownerName в encrypted payload: если я owner и payload содержит
+                // legacy "Пользователь" или пусто — переписываю на актуальное userName.
+                // Без флагов — на каждом refresh, идемпотентно (PATCH PATCH с тем же значением no-op).
+                if info.ownerUID == currentUID,
+                   let myName = auth.userName, !myName.isEmpty, myName != "Пользователь",
+                   info.ownerName != myName {
+                    try? await firestore.updateSharedWishlist(
+                        wishlistID: membership.wishlistID,
+                        name: info.name,
+                        emoji: info.coverEmoji,
+                        coverImageData: info.coverImageData,
+                        gradientHue: info.gradientHue,
+                        ownerName: myName,
+                        key: sharedKey
+                    )
+                    dsLog.info("auto-heal ownerName for \(membership.wishlistID, privacy: .public): \(info.ownerName ?? "nil", privacy: .public) → \(myName, privacy: .public)")
+                }
                 if true {
                     // Re-fetch local list after deletions
                     let currentLocal = (try? modelContext.fetch(FetchDescriptor<Wishlist>())) ?? []
