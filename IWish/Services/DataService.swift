@@ -1250,91 +1250,121 @@ final class DataService {
     /// в Firestore чтобы они попали в encryptedPayload. Также backfill memberships userName.
     /// Идемпотентно. Маркер UserDefaults; при partial failure повторим в следующем старте.
     func runV11BackfillIfNeeded() async {
-        let key = "iwish_v11_backfill_done"
-        guard !UserDefaults.standard.bool(forKey: key) else { return }
+        let backfillKey = "iwish_v11_backfill_done"
+        let ownerHealKey = "iwish_v11_owner_heal_done"
+        let backfillDone = UserDefaults.standard.bool(forKey: backfillKey)
+        let healDone = UserDefaults.standard.bool(forKey: ownerHealKey)
+        guard !backfillDone || !healDone else { return }
         guard auth.uid != nil else { return }
 
         var allOK = true
+        let runFullBackfill = !backfillDone
 
-        let items = (try? modelContext.fetch(FetchDescriptor<Item>())) ?? []
-        for item in items {
-            let needsBackfill = (item.descriptionText?.isEmpty == false)
-                || item.coverImageData != nil
-                || item.linkMetadataData != nil
-                || item.probationEndAt != nil
-            guard needsBackfill else { continue }
-            guard let wishlist = item.wishlist else { continue }
+        if runFullBackfill {
+            let items = (try? modelContext.fetch(FetchDescriptor<Item>())) ?? []
+            for item in items {
+                let needsBackfill = (item.descriptionText?.isEmpty == false)
+                    || item.coverImageData != nil
+                    || item.linkMetadataData != nil
+                    || item.probationEndAt != nil
+                guard needsBackfill else { continue }
+                guard let wishlist = item.wishlist else { continue }
 
-            do {
-                try await updateItem(
-                    id: item.id.uuidString,
-                    wishlistID: wishlist.id.uuidString,
-                    name: item.name,
-                    tier: item.tier,
-                    price: item.priceValue,
-                    priceMax: item.priceMaxValue,
-                    currency: item.currency,
-                    url: item.url,
-                    emoji: item.coverEmoji,
-                    sortIndex: item.sortIndex,
-                    isArchived: item.isArchived,
-                    descriptionText: item.descriptionText,
-                    coverImageData: item.coverImageData,
-                    linkMetadataData: item.linkMetadataData,
-                    probationEndAt: item.probationEndAt
-                )
-            } catch {
-                dsLog.warning("v1.1 backfill: failed for item \(item.id.uuidString, privacy: .public): \(error.localizedDescription, privacy: .public)")
-                allOK = false
-            }
-        }
-
-        // Backfill memberships userName — у меня могут быть memberships без userName.
-        if let myUID = auth.uid, let myName = auth.userName, !myName.isEmpty, myName != "Пользователь" {
-            do {
-                let memberships = try await firestore.fetchMyMemberships(userUID: myUID)
-                for m in memberships {
-                    do {
-                        try await firestore.updateMembershipUserName(wishlistID: m.wishlistID, userUID: myUID, userName: myName)
-                    } catch {
-                        dsLog.warning("v1.1 backfill: membership userName failed: \(error.localizedDescription, privacy: .public)")
-                        allOK = false
-                    }
-                }
-            } catch {
-                dsLog.warning("v1.1 backfill: fetchMyMemberships failed: \(error.localizedDescription, privacy: .public)")
-                allOK = false
-            }
-        }
-
-        // Backfill ownerName в shared wishlist'ах где я owner — старые версии шифровали
-        // в payload буквальное "Пользователь" если не было реального имени.
-        if let myUID = auth.uid, let myName = auth.userName, !myName.isEmpty, myName != "Пользователь" {
-            let allWishlists = (try? modelContext.fetch(FetchDescriptor<Wishlist>())) ?? []
-            for wl in allWishlists where wl.isShared && wl.ownerRecordID == myUID {
-                guard let sharedID = wl.sharedWishlistID,
-                      let key = KeychainService.load(for: wl.id.uuidString) else {
-                    continue
-                }
                 do {
-                    try await firestore.updateSharedWishlist(
-                        wishlistID: sharedID,
-                        name: wl.name,
-                        emoji: wl.coverEmoji,
-                        coverImageData: wl.coverImageData,
-                        gradientHue: wl.gradientHue,
-                        ownerName: myName,
-                        key: key
+                    try await updateItem(
+                        id: item.id.uuidString,
+                        wishlistID: wishlist.id.uuidString,
+                        name: item.name,
+                        tier: item.tier,
+                        price: item.priceValue,
+                        priceMax: item.priceMaxValue,
+                        currency: item.currency,
+                        url: item.url,
+                        emoji: item.coverEmoji,
+                        sortIndex: item.sortIndex,
+                        isArchived: item.isArchived,
+                        descriptionText: item.descriptionText,
+                        coverImageData: item.coverImageData,
+                        linkMetadataData: item.linkMetadataData,
+                        probationEndAt: item.probationEndAt
                     )
                 } catch {
-                    dsLog.warning("v1.1 backfill: ownerName for shared \(sharedID, privacy: .public) failed: \(error.localizedDescription, privacy: .public)")
+                    dsLog.warning("v1.1 backfill: failed for item \(item.id.uuidString, privacy: .public): \(error.localizedDescription, privacy: .public)")
+                    allOK = false
+                }
+            }
+
+            // Backfill memberships userName — у меня могут быть memberships без userName.
+            if let myUID = auth.uid, let myName = auth.userName, !myName.isEmpty, myName != "Пользователь" {
+                do {
+                    let memberships = try await firestore.fetchMyMemberships(userUID: myUID)
+                    for m in memberships {
+                        do {
+                            try await firestore.updateMembershipUserName(wishlistID: m.wishlistID, userUID: myUID, userName: myName)
+                        } catch {
+                            dsLog.warning("v1.1 backfill: membership userName failed: \(error.localizedDescription, privacy: .public)")
+                            allOK = false
+                        }
+                    }
+                } catch {
+                    dsLog.warning("v1.1 backfill: fetchMyMemberships failed: \(error.localizedDescription, privacy: .public)")
                     allOK = false
                 }
             }
         }
 
+        // Backfill ownerName в shared wishlist'ах где я owner — старые версии шифровали
+        // в payload буквальное "Пользователь" если не было реального имени.
+        // Заодно self-heal: убеждаемся что моя membership.role == "owner" для своих wishlist'ов.
+        // Legacy bug v1.0: у некоторых owner'ов membership создавалась с role != "owner",
+        // что приводило к isEditable=false и блокировке управления своим же списком.
+        if let myUID = auth.uid {
+            let allWishlists = (try? modelContext.fetch(FetchDescriptor<Wishlist>())) ?? []
+            for wl in allWishlists where wl.isShared && wl.ownerRecordID == myUID {
+                guard let sharedID = wl.sharedWishlistID else { continue }
+
+                // 1. Self-heal owner-role: PATCH membership.role="owner" если она другая.
+                if wl.myRole != "owner" {
+                    do {
+                        try await firestore.updateMembershipRole(
+                            wishlistID: sharedID,
+                            userUID: myUID,
+                            role: "owner"
+                        )
+                        wl.myRole = "owner"
+                        wl.canInvite = true
+                        dsLog.info("v1.1 self-heal: restored owner role for \(sharedID, privacy: .public)")
+                    } catch {
+                        dsLog.warning("v1.1 self-heal: owner role for \(sharedID, privacy: .public) failed: \(error.localizedDescription, privacy: .public)")
+                        allOK = false
+                    }
+                }
+
+                // 2. Backfill ownerName в encrypted payload.
+                if let myName = auth.userName, !myName.isEmpty, myName != "Пользователь",
+                   let key = KeychainService.load(for: wl.id.uuidString) {
+                    do {
+                        try await firestore.updateSharedWishlist(
+                            wishlistID: sharedID,
+                            name: wl.name,
+                            emoji: wl.coverEmoji,
+                            coverImageData: wl.coverImageData,
+                            gradientHue: wl.gradientHue,
+                            ownerName: myName,
+                            key: key
+                        )
+                    } catch {
+                        dsLog.warning("v1.1 backfill: ownerName for shared \(sharedID, privacy: .public) failed: \(error.localizedDescription, privacy: .public)")
+                        allOK = false
+                    }
+                }
+            }
+            try? modelContext.save()
+        }
+
         if allOK {
-            UserDefaults.standard.set(true, forKey: key)
+            UserDefaults.standard.set(true, forKey: backfillKey)
+            UserDefaults.standard.set(true, forKey: ownerHealKey)
             dsLog.info("v1.1 backfill: completed and marked done")
         } else {
             dsLog.info("v1.1 backfill: partial — will retry on next start")
