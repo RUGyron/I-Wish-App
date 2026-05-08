@@ -20,6 +20,11 @@ struct ParticipantsView: View {
     @State private var memberToKick: (userUID: String, name: String)?
     /// userUID участника, чья панель прав сейчас раскрыта (только один за раз).
     @State private var expandedMemberUID: String?
+    /// Optimistic UI: локальные значения picker'ов поверх server-state (пока запрос летит).
+    /// При успехе — server догонит, optimistic value совпадёт с member.role.
+    /// При ошибке — toast + revert через сброс ключа в этом dict.
+    @State private var optimisticRoles: [String: String] = [:]
+    @State private var optimisticCanInvite: [String: Bool] = [:]
 
     private var isCurrentUserOwner: Bool { ownerUID == services.auth.uid }
 
@@ -175,15 +180,10 @@ struct ParticipantsView: View {
                 Spacer()
 
                 if canEdit {
-                    if pendingMutationUID == member.userUID {
-                        ProgressView()
-                            .controlSize(.small)
-                    } else {
-                        Image(systemName: "chevron.right")
-                            .font(.subheadline.weight(.semibold))
-                            .foregroundStyle(.secondary)
-                            .rotationEffect(.degrees(isExpanded ? 90 : 0))
-                    }
+                    Image(systemName: "chevron.right")
+                        .font(.subheadline.weight(.semibold))
+                        .foregroundStyle(.secondary)
+                        .rotationEffect(.degrees(isExpanded ? 90 : 0))
                 }
             }
             .frame(height: 44)
@@ -193,13 +193,16 @@ struct ParticipantsView: View {
                 expandedMemberUID = isExpanded ? nil : member.userUID
             }
 
-            if isExpanded && canEdit {
+            // Блок controls всегда в дереве — SwiftUI плавно анимирует свойства,
+            // а не появление/исчезновение. opacity 0.0001 (не строго 0) чтобы SwiftUI
+            // не оптимизировал view как отсутствующий.
+            if canEdit {
                 memberControls(member: member)
-                    .padding(.top, 8)
-                    .transition(.asymmetric(
-                        insertion: .opacity.animation(.easeInOut(duration: 0.25).delay(0.05)),
-                        removal: .opacity.animation(.easeInOut(duration: 0.15))
-                    ))
+                    .padding(.top, isExpanded ? 8 : 0)
+                    .frame(height: isExpanded ? nil : 0, alignment: .top)
+                    .opacity(isExpanded ? 1 : 0.0001)
+                    .clipped()
+                    .allowsHitTesting(isExpanded)
             }
         }
         .animation(.easeInOut(duration: 0.25), value: isExpanded)
@@ -216,45 +219,71 @@ struct ParticipantsView: View {
 
     @ViewBuilder
     private func memberControls(member: (userUID: String, role: String, name: String, canInvite: Bool)) -> some View {
-        VStack(alignment: .leading, spacing: 12) {
-            Picker("Роль", selection: Binding(
-                get: { member.role },
-                set: { newRole in
-                    guard newRole != member.role else { return }
-                    performRoleChange(memberUID: member.userUID, newRole: newRole)
-                }
-            )) {
-                Text("Редактор").tag("editor")
-                Text("Зритель").tag("viewer")
-            }
-            .pickerStyle(.segmented)
+        let displayRole = optimisticRoles[member.userUID] ?? member.role
+        let displayCanInvite = optimisticCanInvite[member.userUID] ?? member.canInvite
+        let isLocked = pendingMutationUID == member.userUID
 
-            Toggle(isOn: Binding(
-                get: { member.canInvite },
-                set: { performCanInviteChange(memberUID: member.userUID, canInvite: $0) }
-            )) {
-                Label("Может приглашать", systemImage: "person.badge.plus")
-                    .labelStyle(.titleAndIcon)
-                    .font(.subheadline)
-            }
-            .tint(Color(red: 0.72, green: 0.38, blue: 0.06))
-
-            Button {
-                memberToKick = (userUID: member.userUID, name: member.name)
-            } label: {
-                HStack(spacing: 8) {
-                    Image(systemName: "person.fill.xmark")
-                    Text("Удалить из списка")
+        ZStack {
+            VStack(alignment: .leading, spacing: 18) {
+                Picker("Роль", selection: Binding(
+                    get: { displayRole },
+                    set: { newRole in
+                        guard newRole != displayRole else { return }
+                        // Optimistic UI: моментально показываем новое значение, picker анимация идёт без задержки.
+                        optimisticRoles[member.userUID] = newRole
+                        performRoleChange(memberUID: member.userUID, newRole: newRole)
+                    }
+                )) {
+                    Text("Редактор").tag("editor")
+                    Text("Зритель").tag("viewer")
                 }
-                .font(.subheadline.weight(.medium))
-                .foregroundStyle(.red)
-                .frame(maxWidth: .infinity)
-                .padding(.vertical, 8)
-                .background(.red.opacity(0.1), in: RoundedRectangle(cornerRadius: 8, style: .continuous))
+                .pickerStyle(.segmented)
+
+                Toggle(isOn: Binding(
+                    get: { displayCanInvite },
+                    set: { newValue in
+                        optimisticCanInvite[member.userUID] = newValue
+                        performCanInviteChange(memberUID: member.userUID, canInvite: newValue)
+                    }
+                )) {
+                    Label("Может приглашать", systemImage: "person.badge.plus")
+                        .labelStyle(.titleAndIcon)
+                        .font(.subheadline)
+                }
+                .tint(Color(red: 0.72, green: 0.38, blue: 0.06))
+
+                Button {
+                    memberToKick = (userUID: member.userUID, name: member.name)
+                } label: {
+                    HStack(spacing: 8) {
+                        Image(systemName: "person.fill.xmark")
+                        Text("Удалить из списка")
+                    }
+                    .font(.subheadline.weight(.medium))
+                    .foregroundStyle(.red)
+                    .frame(maxWidth: .infinity)
+                    .padding(.vertical, 10)
+                    .background(.red.opacity(0.1), in: RoundedRectangle(cornerRadius: 8, style: .continuous))
+                }
+                .buttonStyle(.plain)
             }
-            .buttonStyle(.plain)
+            .padding(.bottom, 10)
+
+            // Поверх блока — overlay с ProgressView пока сетевой запрос летит.
+            // Не блокирует анимацию picker'а / toggle'а (она уже произошла оптимистично).
+            if isLocked {
+                Color.black.opacity(0.001) // прозрачный hit-blocker
+                    .contentShape(Rectangle())
+                    .overlay(alignment: .center) {
+                        ProgressView()
+                            .controlSize(.regular)
+                            .padding(10)
+                            .background(.regularMaterial, in: Circle())
+                    }
+                    .transition(.opacity)
+            }
         }
-        .padding(.bottom, 8)
+        .animation(.easeInOut(duration: 0.15), value: isLocked)
     }
 
     // MARK: - Polling
@@ -322,8 +351,8 @@ struct ParticipantsView: View {
 
     private func performRoleChange(memberUID: String, newRole: String) {
         guard let sharedID = wishlist.sharedWishlistID else { return }
-        // Если пытаются поставить ту же роль что уже есть — silent no-op, не дёргаем сеть.
         if let current = members.first(where: { $0.userUID == memberUID }), current.role == newRole {
+            optimisticRoles.removeValue(forKey: memberUID)
             return
         }
         pendingMutationUID = memberUID
@@ -335,9 +364,12 @@ struct ParticipantsView: View {
                     newRole: newRole
                 )
                 await fetchMembers()
+                optimisticRoles.removeValue(forKey: memberUID)
                 let label = newRole == "editor" ? "редактором" : "зрителем"
                 toast.success("Участник теперь \(label)")
             } catch {
+                // Revert: optimistic value сброс → picker анимированно вернётся в server-state.
+                optimisticRoles.removeValue(forKey: memberUID)
                 toast.error(error.localizedDescription)
             }
             pendingMutationUID = nil
@@ -355,8 +387,10 @@ struct ParticipantsView: View {
                     canInvite: canInvite
                 )
                 await fetchMembers()
+                optimisticCanInvite.removeValue(forKey: memberUID)
                 toast.success(canInvite ? "Может приглашать других" : "Не может приглашать других")
             } catch {
+                optimisticCanInvite.removeValue(forKey: memberUID)
                 toast.error(error.localizedDescription)
             }
             pendingMutationUID = nil
