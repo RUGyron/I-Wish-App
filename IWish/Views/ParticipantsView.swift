@@ -164,14 +164,12 @@ struct ParticipantsView: View {
                     .background(.green.opacity(0.15))
                     .clipShape(Circle())
 
-                VStack(alignment: .leading, spacing: 2) {
-                    HStack(spacing: 4) {
-                        Text(member.name)
-                            .font(.body.weight(.medium))
-                        Text(roleBadge(for: member.role))
-                            .font(.caption)
-                            .foregroundStyle(.secondary)
-                    }
+                HStack(spacing: 4) {
+                    Text(member.name)
+                        .font(.body.weight(.medium))
+                    Text(roleBadge(for: member.role))
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
                 }
 
                 Spacer()
@@ -181,30 +179,30 @@ struct ParticipantsView: View {
                         ProgressView()
                             .controlSize(.small)
                     } else {
-                        Image(systemName: "chevron.down")
+                        Image(systemName: "chevron.right")
                             .font(.subheadline.weight(.semibold))
-                            .foregroundStyle(.tint)
-                            .rotationEffect(.degrees(isExpanded ? 180 : 0))
-                            .animation(.easeInOut(duration: 0.2), value: isExpanded)
-                            .padding(.trailing, 4)
+                            .foregroundStyle(.secondary)
+                            .rotationEffect(.degrees(isExpanded ? 90 : 0))
                     }
                 }
             }
+            .frame(height: 44)
             .contentShape(Rectangle())
             .onTapGesture {
                 guard canEdit, pendingMutationUID == nil else { return }
-                withAnimation(.easeInOut(duration: 0.25)) {
-                    expandedMemberUID = isExpanded ? nil : member.userUID
-                }
+                expandedMemberUID = isExpanded ? nil : member.userUID
             }
 
             if isExpanded && canEdit {
                 memberControls(member: member)
-                    .padding(.top, 14)
-                    .transition(.opacity.combined(with: .move(edge: .top)))
+                    .padding(.top, 8)
+                    .transition(.asymmetric(
+                        insertion: .opacity.animation(.easeInOut(duration: 0.25).delay(0.05)),
+                        removal: .opacity.animation(.easeInOut(duration: 0.15))
+                    ))
             }
         }
-        .padding(.vertical, 4)
+        .animation(.easeInOut(duration: 0.25), value: isExpanded)
         .swipeActions(edge: .trailing, allowsFullSwipe: false) {
             if canEdit && pendingMutationUID != member.userUID {
                 Button(role: .destructive) {
@@ -218,53 +216,45 @@ struct ParticipantsView: View {
 
     @ViewBuilder
     private func memberControls(member: (userUID: String, role: String, name: String, canInvite: Bool)) -> some View {
-        VStack(alignment: .leading, spacing: 14) {
-            // Роль — segmented picker с эмодзи + label.
-            VStack(alignment: .leading, spacing: 6) {
-                Text("Роль")
-                    .font(.caption.weight(.semibold))
-                    .foregroundStyle(.secondary)
-                Picker("Роль", selection: Binding(
-                    get: { member.role },
-                    set: { newRole in
-                        guard newRole != member.role else { return }
-                        performRoleChange(memberUID: member.userUID, newRole: newRole)
-                    }
-                )) {
-                    Text("✏️ Редактор").tag("editor")
-                    Text("👁️ Зритель").tag("viewer")
+        VStack(alignment: .leading, spacing: 12) {
+            Picker("Роль", selection: Binding(
+                get: { member.role },
+                set: { newRole in
+                    guard newRole != member.role else { return }
+                    performRoleChange(memberUID: member.userUID, newRole: newRole)
                 }
-                .pickerStyle(.segmented)
+            )) {
+                Text("Редактор").tag("editor")
+                Text("Зритель").tag("viewer")
             }
+            .pickerStyle(.segmented)
 
-            // canInvite — toggle.
             Toggle(isOn: Binding(
                 get: { member.canInvite },
                 set: { performCanInviteChange(memberUID: member.userUID, canInvite: $0) }
             )) {
-                VStack(alignment: .leading, spacing: 2) {
-                    Label("Может приглашать", systemImage: "person.badge.plus")
-                        .font(.subheadline.weight(.medium))
-                    Text("Участник сможет шерить этот список другим (не выше своей роли)")
-                        .font(.caption2)
-                        .foregroundStyle(.secondary)
-                }
+                Label("Может приглашать", systemImage: "person.badge.plus")
+                    .labelStyle(.titleAndIcon)
+                    .font(.subheadline)
             }
             .tint(Color(red: 0.72, green: 0.38, blue: 0.06))
 
-            // Кик — destructive button с подтверждением.
-            Button(role: .destructive) {
+            Button {
                 memberToKick = (userUID: member.userUID, name: member.name)
             } label: {
-                Label("Удалить из списка", systemImage: "person.fill.xmark")
-                    .frame(maxWidth: .infinity)
+                HStack(spacing: 8) {
+                    Image(systemName: "person.fill.xmark")
+                    Text("Удалить из списка")
+                }
+                .font(.subheadline.weight(.medium))
+                .foregroundStyle(.red)
+                .frame(maxWidth: .infinity)
+                .padding(.vertical, 8)
+                .background(.red.opacity(0.1), in: RoundedRectangle(cornerRadius: 8, style: .continuous))
             }
-            .buttonStyle(.bordered)
-            .controlSize(.regular)
-            .tint(.red)
+            .buttonStyle(.plain)
         }
-        .padding(14)
-        .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
+        .padding(.bottom, 8)
     }
 
     // MARK: - Polling
