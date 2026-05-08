@@ -18,6 +18,8 @@ struct ParticipantsView: View {
     @State private var pendingMutationUID: String?
     /// Confirmation dialog: какого юзера собираемся кикнуть.
     @State private var memberToKick: (userUID: String, name: String)?
+    /// userUID участника, чья панель прав сейчас раскрыта (только один за раз).
+    @State private var expandedMemberUID: String?
 
     private var isCurrentUserOwner: Bool { ownerUID == services.auth.uid }
 
@@ -150,89 +152,61 @@ struct ParticipantsView: View {
 
     @ViewBuilder
     private func memberRow(member: (userUID: String, role: String, name: String, canInvite: Bool)) -> some View {
-        HStack(spacing: 12) {
-            Image(systemName: "person.fill.checkmark")
-                .font(.title3)
-                .foregroundStyle(.green)
-                .frame(width: 36, height: 36)
-                .background(.green.opacity(0.15))
-                .clipShape(Circle())
+        let isExpanded = expandedMemberUID == member.userUID
+        let canEdit = isCurrentUserOwner && member.userUID != services.auth.uid
 
-            VStack(alignment: .leading, spacing: 2) {
-                HStack(spacing: 4) {
-                    Text(member.name)
-                        .font(.body.weight(.medium))
-                    Text(roleBadge(for: member.role))
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
+        VStack(alignment: .leading, spacing: 0) {
+            HStack(spacing: 12) {
+                Image(systemName: "person.fill.checkmark")
+                    .font(.title3)
+                    .foregroundStyle(.green)
+                    .frame(width: 36, height: 36)
+                    .background(.green.opacity(0.15))
+                    .clipShape(Circle())
+
+                VStack(alignment: .leading, spacing: 2) {
+                    HStack(spacing: 4) {
+                        Text(member.name)
+                            .font(.body.weight(.medium))
+                        Text(roleBadge(for: member.role))
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                    }
+                }
+
+                Spacer()
+
+                if canEdit {
+                    if pendingMutationUID == member.userUID {
+                        ProgressView()
+                            .controlSize(.small)
+                    } else {
+                        Image(systemName: "chevron.down")
+                            .font(.subheadline.weight(.semibold))
+                            .foregroundStyle(.tint)
+                            .rotationEffect(.degrees(isExpanded ? 180 : 0))
+                            .animation(.easeInOut(duration: 0.2), value: isExpanded)
+                            .padding(.trailing, 4)
+                    }
+                }
+            }
+            .contentShape(Rectangle())
+            .onTapGesture {
+                guard canEdit, pendingMutationUID == nil else { return }
+                withAnimation(.easeInOut(duration: 0.25)) {
+                    expandedMemberUID = isExpanded ? nil : member.userUID
                 }
             }
 
-            Spacer()
-
-            // Owner-only controls для каждого не-owner и не-self.
-            if isCurrentUserOwner && member.userUID != services.auth.uid {
-                if pendingMutationUID == member.userUID {
-                    ProgressView()
-                        .controlSize(.small)
-                } else {
-                    Menu {
-                        // Role switcher: эмодзи/иконка всегда видны, checkmark отдельно у выбранной.
-                        Section("Роль") {
-                            Button {
-                                performRoleChange(memberUID: member.userUID, newRole: "editor")
-                            } label: {
-                                if member.role == "editor" {
-                                    Label("Редактор ✓", systemImage: "pencil")
-                                } else {
-                                    Label("Редактор", systemImage: "pencil")
-                                }
-                            }
-                            Button {
-                                performRoleChange(memberUID: member.userUID, newRole: "viewer")
-                            } label: {
-                                if member.role == "viewer" {
-                                    Label("Зритель ✓", systemImage: "eye")
-                                } else {
-                                    Label("Зритель", systemImage: "eye")
-                                }
-                            }
-                        }
-
-                        // canInvite toggle
-                        Section("Приглашения") {
-                            Button {
-                                performCanInviteChange(memberUID: member.userUID, canInvite: !member.canInvite)
-                            } label: {
-                                if member.canInvite {
-                                    Label("Может приглашать ✓", systemImage: "person.badge.plus")
-                                } else {
-                                    Label("Может приглашать", systemImage: "person.badge.plus")
-                                }
-                            }
-                        }
-
-                        // Kick action
-                        Section {
-                            Button(role: .destructive) {
-                                memberToKick = (userUID: member.userUID, name: member.name)
-                            } label: {
-                                Label("Удалить из списка", systemImage: "person.fill.xmark")
-                            }
-                        }
-                    } label: {
-                        Image(systemName: "ellipsis.circle.fill")
-                            .font(.title3)
-                            .foregroundStyle(.tint)
-                    }
-                    .menuStyle(.borderlessButton)
-                }
+            if isExpanded && canEdit {
+                memberControls(member: member)
+                    .padding(.top, 14)
+                    .transition(.opacity.combined(with: .move(edge: .top)))
             }
         }
         .padding(.vertical, 4)
-        // Swipe-action как альтернатива menu — типичный iOS pattern.
         .swipeActions(edge: .trailing, allowsFullSwipe: false) {
-            if isCurrentUserOwner && member.userUID != services.auth.uid && pendingMutationUID != member.userUID {
+            if canEdit && pendingMutationUID != member.userUID {
                 Button(role: .destructive) {
                     memberToKick = (userUID: member.userUID, name: member.name)
                 } label: {
@@ -240,6 +214,57 @@ struct ParticipantsView: View {
                 }
             }
         }
+    }
+
+    @ViewBuilder
+    private func memberControls(member: (userUID: String, role: String, name: String, canInvite: Bool)) -> some View {
+        VStack(alignment: .leading, spacing: 14) {
+            // Роль — segmented picker с эмодзи + label.
+            VStack(alignment: .leading, spacing: 6) {
+                Text("Роль")
+                    .font(.caption.weight(.semibold))
+                    .foregroundStyle(.secondary)
+                Picker("Роль", selection: Binding(
+                    get: { member.role },
+                    set: { newRole in
+                        guard newRole != member.role else { return }
+                        performRoleChange(memberUID: member.userUID, newRole: newRole)
+                    }
+                )) {
+                    Text("✏️ Редактор").tag("editor")
+                    Text("👁️ Зритель").tag("viewer")
+                }
+                .pickerStyle(.segmented)
+            }
+
+            // canInvite — toggle.
+            Toggle(isOn: Binding(
+                get: { member.canInvite },
+                set: { performCanInviteChange(memberUID: member.userUID, canInvite: $0) }
+            )) {
+                VStack(alignment: .leading, spacing: 2) {
+                    Label("Может приглашать", systemImage: "person.badge.plus")
+                        .font(.subheadline.weight(.medium))
+                    Text("Участник сможет шерить этот список другим (не выше своей роли)")
+                        .font(.caption2)
+                        .foregroundStyle(.secondary)
+                }
+            }
+            .tint(Color(red: 0.72, green: 0.38, blue: 0.06))
+
+            // Кик — destructive button с подтверждением.
+            Button(role: .destructive) {
+                memberToKick = (userUID: member.userUID, name: member.name)
+            } label: {
+                Label("Удалить из списка", systemImage: "person.fill.xmark")
+                    .frame(maxWidth: .infinity)
+            }
+            .buttonStyle(.bordered)
+            .controlSize(.regular)
+            .tint(.red)
+        }
+        .padding(14)
+        .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
     }
 
     // MARK: - Polling
