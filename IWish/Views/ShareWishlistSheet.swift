@@ -202,17 +202,51 @@ struct ShareWishlistSheet: View {
 
     // MARK: - Pickers
 
+    /// Permission inheritance: можно приглашать только с правами не выше своих.
+    /// Owner и editor — могут пригласить editor или viewer. Viewer — только viewer.
+    /// Концепция "пригласить как owner" не существует (owner единственный, ставится при создании share).
+    private var availableRoles: [ShareRole] {
+        let myRole = wishlist.myRole ?? "owner"  // personal wishlists owned
+        if myRole == "viewer" {
+            return [.viewer]
+        }
+        return ShareRole.allCases  // owner или editor — могут любую (.editor или .viewer)
+    }
+
     private var rolePicker: some View {
         VStack(alignment: .leading, spacing: 6) {
-            Text("Роль")
-                .font(.subheadline)
-                .foregroundStyle(.secondary)
-            Picker("Роль", selection: $selectedRole) {
-                ForEach(ShareRole.allCases) { role in
-                    Text(role.label).tag(role)
+            HStack {
+                Text("Роль")
+                    .font(.subheadline)
+                    .foregroundStyle(.secondary)
+                Spacer()
+                if availableRoles.count == 1, let only = availableRoles.first {
+                    Text(only == .viewer ? "(вы зритель → можно приглашать только зрителями)" : "")
+                        .font(.caption2)
+                        .foregroundStyle(.tertiary)
                 }
             }
-            .pickerStyle(.segmented)
+
+            if availableRoles.count > 1 {
+                Picker("Роль", selection: $selectedRole) {
+                    ForEach(availableRoles) { role in
+                        Text(role.label).tag(role)
+                    }
+                }
+                .pickerStyle(.segmented)
+            } else if let only = availableRoles.first {
+                Text(only.label)
+                    .font(.subheadline.weight(.medium))
+                    .frame(maxWidth: .infinity, alignment: .center)
+                    .padding(.vertical, 8)
+                    .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 8))
+            }
+        }
+        .onAppear {
+            // Если default из Settings выше дозволенной — clamp.
+            if !availableRoles.contains(selectedRole), let firstAllowed = availableRoles.first {
+                selectedRole = firstAllowed
+            }
         }
     }
 

@@ -1,44 +1,72 @@
 import SwiftUI
 
 enum DefaultCoverGenerator {
-    /// 24 палитры из 3 цветов. Разнообразные, контрастные, подобраны вручную.
+    /// 50 палитр из 3 цветов. Разнообразные, контрастные.
+    /// Hand-crafted для красоты + богатого визуального опыта.
     static let palettes: [[Color]] = [
-        // Cool
+        // Cool — 8
         [.blue, .indigo, .purple],
         [.cyan, .blue, .indigo],
         [.mint, .teal, .cyan],
         [.teal, .blue, .purple],
         [Color(red: 0.2, green: 0.4, blue: 0.8), Color(red: 0.4, green: 0.2, blue: 0.9), Color(red: 0.6, green: 0.3, blue: 1.0)],
         [Color(red: 0.0, green: 0.6, blue: 0.7), Color(red: 0.1, green: 0.4, blue: 0.8), Color(red: 0.3, green: 0.2, blue: 0.7)],
+        [Color(red: 0.1, green: 0.5, blue: 0.9), Color(red: 0.3, green: 0.7, blue: 0.95), Color(red: 0.5, green: 0.85, blue: 1.0)],
+        [Color(red: 0.25, green: 0.3, blue: 0.7), Color(red: 0.4, green: 0.5, blue: 0.85), Color(red: 0.6, green: 0.7, blue: 0.95)],
 
-        // Warm
+        // Warm — 8
         [.orange, .pink, .red],
         [.yellow, .orange, .red],
         [.pink, .red, .purple],
         [Color(red: 1.0, green: 0.6, blue: 0.2), Color(red: 1.0, green: 0.3, blue: 0.3), Color(red: 0.8, green: 0.2, blue: 0.5)],
         [Color(red: 0.9, green: 0.7, blue: 0.1), Color(red: 1.0, green: 0.5, blue: 0.0), Color(red: 0.9, green: 0.3, blue: 0.1)],
         [Color(red: 0.95, green: 0.4, blue: 0.5), Color(red: 0.85, green: 0.2, blue: 0.6), Color(red: 0.7, green: 0.15, blue: 0.7)],
+        [Color(red: 1.0, green: 0.75, blue: 0.4), Color(red: 0.95, green: 0.55, blue: 0.3), Color(red: 0.85, green: 0.35, blue: 0.4)],
+        [Color(red: 0.95, green: 0.6, blue: 0.4), Color(red: 0.85, green: 0.4, blue: 0.45), Color(red: 0.7, green: 0.25, blue: 0.55)],
 
-        // Earth & Nature
+        // Earth & Nature — 8
         [.green, .mint, .teal],
         [Color(red: 0.2, green: 0.7, blue: 0.3), Color(red: 0.1, green: 0.5, blue: 0.5), Color(red: 0.0, green: 0.4, blue: 0.6)],
         [Color(red: 0.6, green: 0.8, blue: 0.2), Color(red: 0.3, green: 0.7, blue: 0.4), Color(red: 0.1, green: 0.6, blue: 0.6)],
         [Color(red: 0.5, green: 0.35, blue: 0.2), Color(red: 0.7, green: 0.45, blue: 0.2), Color(red: 0.85, green: 0.6, blue: 0.3)],
+        [Color(red: 0.4, green: 0.55, blue: 0.25), Color(red: 0.6, green: 0.7, blue: 0.35), Color(red: 0.8, green: 0.85, blue: 0.5)],
+        [Color(red: 0.35, green: 0.5, blue: 0.4), Color(red: 0.55, green: 0.65, blue: 0.5), Color(red: 0.75, green: 0.8, blue: 0.6)],
+        [Color(red: 0.65, green: 0.45, blue: 0.3), Color(red: 0.5, green: 0.55, blue: 0.35), Color(red: 0.35, green: 0.6, blue: 0.45)],
+        [Color(red: 0.2, green: 0.55, blue: 0.45), Color(red: 0.35, green: 0.7, blue: 0.55), Color(red: 0.55, green: 0.85, blue: 0.65)],
 
-        // Pastel
+        // Pastel — 7
         [Color(red: 0.7, green: 0.85, blue: 1.0), Color(red: 0.85, green: 0.7, blue: 1.0), Color(red: 1.0, green: 0.75, blue: 0.85)],
         [Color(red: 1.0, green: 0.85, blue: 0.7), Color(red: 1.0, green: 0.7, blue: 0.75), Color(red: 0.9, green: 0.7, blue: 0.9)],
         [Color(red: 0.7, green: 1.0, blue: 0.85), Color(red: 0.7, green: 0.9, blue: 1.0), Color(red: 0.8, green: 0.75, blue: 1.0)],
+        [Color(red: 0.95, green: 0.85, blue: 0.95), Color(red: 0.9, green: 0.8, blue: 0.95), Color(red: 0.85, green: 0.9, blue: 1.0)],
+        [Color(red: 1.0, green: 0.95, blue: 0.85), Color(red: 0.95, green: 0.9, blue: 0.8), Color(red: 0.85, green: 0.95, blue: 0.9)],
+        [Color(red: 0.85, green: 0.95, blue: 0.85), Color(red: 0.95, green: 0.9, blue: 0.7), Color(red: 1.0, green: 0.8, blue: 0.7)],
+        [Color(red: 0.9, green: 0.75, blue: 0.95), Color(red: 0.7, green: 0.85, blue: 0.95), Color(red: 0.65, green: 0.95, blue: 0.85)],
 
-        // Vivid
+        // Vivid — 8
         [.indigo, .purple, .pink],
         [Color(red: 1.0, green: 0.0, blue: 0.5), Color(red: 0.8, green: 0.0, blue: 1.0), Color(red: 0.4, green: 0.0, blue: 1.0)],
         [Color(red: 0.0, green: 0.8, blue: 1.0), Color(red: 0.0, green: 1.0, blue: 0.6), Color(red: 0.4, green: 1.0, blue: 0.2)],
+        [Color(red: 1.0, green: 0.85, blue: 0.0), Color(red: 1.0, green: 0.4, blue: 0.0), Color(red: 0.9, green: 0.0, blue: 0.5)],
+        [Color(red: 0.0, green: 0.7, blue: 0.95), Color(red: 0.5, green: 0.0, blue: 0.95), Color(red: 0.95, green: 0.0, blue: 0.6)],
+        [Color(red: 0.95, green: 0.95, blue: 0.05), Color(red: 0.4, green: 0.95, blue: 0.5), Color(red: 0.0, green: 0.6, blue: 0.95)],
+        [Color(red: 1.0, green: 0.3, blue: 0.05), Color(red: 0.95, green: 0.05, blue: 0.45), Color(red: 0.65, green: 0.0, blue: 0.85)],
+        [Color(red: 0.0, green: 0.95, blue: 0.85), Color(red: 0.5, green: 0.05, blue: 0.95), Color(red: 0.95, green: 0.0, blue: 0.85)],
 
-        // Dark & Moody
+        // Dark & Moody — 6
         [Color(red: 0.15, green: 0.1, blue: 0.3), Color(red: 0.3, green: 0.1, blue: 0.4), Color(red: 0.5, green: 0.15, blue: 0.5)],
         [Color(red: 0.1, green: 0.2, blue: 0.3), Color(red: 0.15, green: 0.3, blue: 0.4), Color(red: 0.2, green: 0.4, blue: 0.5)],
         [Color(red: 0.3, green: 0.1, blue: 0.1), Color(red: 0.5, green: 0.15, blue: 0.1), Color(red: 0.7, green: 0.25, blue: 0.15)],
+        [Color(red: 0.2, green: 0.15, blue: 0.4), Color(red: 0.4, green: 0.2, blue: 0.5), Color(red: 0.6, green: 0.3, blue: 0.6)],
+        [Color(red: 0.05, green: 0.3, blue: 0.35), Color(red: 0.1, green: 0.4, blue: 0.45), Color(red: 0.2, green: 0.5, blue: 0.55)],
+        [Color(red: 0.25, green: 0.05, blue: 0.25), Color(red: 0.4, green: 0.1, blue: 0.4), Color(red: 0.55, green: 0.2, blue: 0.55)],
+
+        // Sunset / Beach — 5
+        [Color(red: 1.0, green: 0.6, blue: 0.4), Color(red: 0.95, green: 0.4, blue: 0.5), Color(red: 0.7, green: 0.3, blue: 0.7)],
+        [Color(red: 1.0, green: 0.85, blue: 0.6), Color(red: 0.95, green: 0.6, blue: 0.5), Color(red: 0.85, green: 0.4, blue: 0.6)],
+        [Color(red: 0.95, green: 0.7, blue: 0.5), Color(red: 0.65, green: 0.5, blue: 0.7), Color(red: 0.4, green: 0.4, blue: 0.85)],
+        [Color(red: 1.0, green: 0.7, blue: 0.65), Color(red: 0.85, green: 0.55, blue: 0.7), Color(red: 0.7, green: 0.4, blue: 0.85)],
+        [Color(red: 0.55, green: 0.85, blue: 0.95), Color(red: 0.95, green: 0.85, blue: 0.55), Color(red: 0.95, green: 0.5, blue: 0.55)],
     ]
 
     static var paletteCount: Int { palettes.count }
