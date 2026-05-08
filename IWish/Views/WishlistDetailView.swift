@@ -666,11 +666,8 @@ struct WishlistDetailView: View {
         .contentShape(Rectangle())
         .onTapGesture { detailItem = item }
         .listRowInsets(EdgeInsets())
-        .listRowBackground(
-            RoundedRectangle(cornerRadius: 8, style: .continuous)
-                .fill(Color(.secondarySystemGroupedBackground))
-        )
-        .listRowSeparator(.hidden)
+        .listRowBackground(Color(.secondarySystemGroupedBackground))
+        .alignmentGuide(.listRowSeparatorLeading) { _ in 78 }
     }
 
     private func hasBottomMeta(_ item: Item) -> Bool {

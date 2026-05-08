@@ -126,30 +126,17 @@ final class DataService {
 
     // MARK: - One-shot Migration
 
-    /// Однократный wipe локального стора + Keychain после перехода на E2E-шифрование.
-    /// Старые незашифрованные данные в Firestore будут стёрты сервером, а локальные wishlists
-    /// без ключей в Keychain не смогут синхронизироваться, поэтому логика — снести всё локально
-    /// при первом запуске новой версии и подтянуть только то, что есть в новом формате.
+    /// v1.0 миграция на E2E-схему завершена для всех существующих юзеров (v1.0 уже в App Store).
+    /// В v1.1 этот метод — no-op: KeychainService.deleteAll() стирал ключи через iCloud Keychain
+    /// синхронно на всех устройствах юзера, что приводило к потере доступа к зашифрованным
+    /// wishlists в Firestore при reinstall app. Поскольку UserDefaults стирается при удалении
+    /// app, флаг сбрасывался → wipe повторно стирал Keychain.
+    /// Метод оставлен для обратной совместимости callsite в RootView; ничего не делает.
     func wipeLocalIfNeeded() {
-        let migrationKey = "iwish_encrypted_v1_migration_done"
-        let defaults = UserDefaults.standard
-        guard !defaults.bool(forKey: migrationKey) else { return }
-
-        dsLog.info("wipeLocalIfNeeded: performing one-time wipe for E2E migration")
-
-        if let allWishlists = try? modelContext.fetch(FetchDescriptor<Wishlist>()) {
-            for wl in allWishlists { modelContext.delete(wl) }
-        }
-        if let allItems = try? modelContext.fetch(FetchDescriptor<Item>()) {
-            for item in allItems { modelContext.delete(item) }
-        }
-        try? modelContext.save()
-
-        // Также почистим Keychain — там могли остаться тестовые ключи от предыдущих сборок.
-        KeychainService.deleteAll()
-
-        defaults.set(true, forKey: migrationKey)
-        dsLog.info("wipeLocalIfNeeded: done")
+        let v11Key = "iwish_v11_wipe_skip_done"
+        guard !UserDefaults.standard.bool(forKey: v11Key) else { return }
+        UserDefaults.standard.set(true, forKey: v11Key)
+        dsLog.info("wipeLocalIfNeeded: skipped — v1.1 keeps Keychain intact")
     }
 
     private var uid: String {
@@ -1317,6 +1304,32 @@ final class DataService {
             } catch {
                 dsLog.warning("v1.1 backfill: fetchMyMemberships failed: \(error.localizedDescription, privacy: .public)")
                 allOK = false
+            }
+        }
+
+        // Backfill ownerName в shared wishlist'ах где я owner — старые версии шифровали
+        // в payload буквальное "Пользователь" если не было реального имени.
+        if let myUID = auth.uid, let myName = auth.userName, !myName.isEmpty, myName != "Пользователь" {
+            let allWishlists = (try? modelContext.fetch(FetchDescriptor<Wishlist>())) ?? []
+            for wl in allWishlists where wl.isShared && wl.ownerRecordID == myUID {
+                guard let sharedID = wl.sharedWishlistID,
+                      let key = KeychainService.load(for: wl.id.uuidString) else {
+                    continue
+                }
+                do {
+                    try await firestore.updateSharedWishlist(
+                        wishlistID: sharedID,
+                        name: wl.name,
+                        emoji: wl.coverEmoji,
+                        coverImageData: wl.coverImageData,
+                        gradientHue: wl.gradientHue,
+                        ownerName: myName,
+                        key: key
+                    )
+                } catch {
+                    dsLog.warning("v1.1 backfill: ownerName for shared \(sharedID, privacy: .public) failed: \(error.localizedDescription, privacy: .public)")
+                    allOK = false
+                }
             }
         }
 

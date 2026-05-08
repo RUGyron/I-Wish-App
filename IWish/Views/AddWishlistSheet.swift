@@ -37,6 +37,13 @@ struct AddWishlistSheet: View {
                     }
                 }
             }
+            .background(
+                Color.clear
+                    .contentShape(Rectangle())
+                    .onTapGesture {
+                        UIApplication.shared.sendAction(#selector(UIResponder.resignFirstResponder), to: nil, from: nil, for: nil)
+                    }
+            )
             .warmBackground()
             .navigationTitle("Новый список")
             .fontDesign(.rounded)

@@ -56,6 +56,13 @@ struct AddItemSheet: View {
                 descriptionSection
                 probationSection
             }
+            .background(
+                Color.clear
+                    .contentShape(Rectangle())
+                    .onTapGesture {
+                        UIApplication.shared.sendAction(#selector(UIResponder.resignFirstResponder), to: nil, from: nil, for: nil)
+                    }
+            )
             .warmBackground()
             .navigationTitle("Новое желание")
             .fontDesign(.rounded)

@@ -9,64 +9,86 @@ struct NameRecoveryView: View {
     @State private var isSigningOut = false
 
     var body: some View {
-        VStack(spacing: 24) {
-            Image(systemName: "person.crop.circle.badge.exclamationmark")
-                .font(.system(size: 64))
-                .foregroundStyle(.tint)
+        ScrollView {
+            VStack(spacing: 24) {
+                Image(systemName: "person.crop.circle.badge.exclamationmark")
+                    .font(.system(size: 64))
+                    .foregroundStyle(.tint)
+                    .padding(.top, 40)
 
-            VStack(spacing: 12) {
-                Text("Не удалось получить ваше имя")
-                    .font(.title2.weight(.semibold))
-                    .multilineTextAlignment(.center)
+                VStack(spacing: 12) {
+                    Text("Не удалось получить ваше имя")
+                        .font(.title2.weight(.semibold))
+                        .multilineTextAlignment(.center)
 
-                Text("Apple Sign In не передал имя при входе. Это происходит при повторной авторизации — Apple отдаёт имя только при первом входе.")
-                    .font(.subheadline)
-                    .foregroundStyle(.secondary)
-                    .multilineTextAlignment(.center)
-
-                Text("Чтобы починить:\n1. Откройте Настройки → Apple ID → Вход с Apple\n2. Найдите I Wish и нажмите «Прекратить использовать»\n3. Вернитесь сюда и войдите заново")
-                    .font(.subheadline)
-                    .foregroundStyle(.secondary)
-                    .multilineTextAlignment(.leading)
-                    .padding(.top, 8)
-            }
-            .padding(.horizontal, 24)
-
-            VStack(spacing: 12) {
-                Button {
-                    if let url = URL(string: "App-Prefs:APPLE_ACCOUNT") {
-                        UIApplication.shared.open(url)
-                    }
-                } label: {
-                    Label("Открыть настройки Apple ID", systemImage: "gearshape")
-                        .frame(maxWidth: .infinity)
+                    Text("Apple Sign In передаёт имя только при первой авторизации. Чтобы получить имя заново — нужно сбросить связь с приложением.")
+                        .font(.subheadline)
+                        .foregroundStyle(.secondary)
+                        .multilineTextAlignment(.center)
                 }
-                .buttonStyle(.borderedProminent)
-                .controlSize(.large)
+                .padding(.horizontal, 24)
 
-                Button {
-                    isSigningOut = true
-                    do {
-                        try services.auth.signOut()
-                    } catch {
-                        toast.error("Не удалось выйти: \(error.localizedDescription)")
-                    }
-                    isSigningOut = false
-                } label: {
-                    Label("Выйти из аккаунта", systemImage: "rectangle.portrait.and.arrow.right")
-                        .frame(maxWidth: .infinity)
+                VStack(alignment: .leading, spacing: 8) {
+                    Text("Что нужно сделать:")
+                        .font(.subheadline.weight(.semibold))
+                    instructionRow(num: "1", text: "Удалите I Wish с устройства (зажмите иконку → «Удалить приложение»)")
+                    instructionRow(num: "2", text: "Откройте «Настройки» → ваше имя сверху → «Вход с Apple»")
+                    instructionRow(num: "3", text: "Найдите I Wish в списке → «Прекратить использовать Apple ID»")
+                    instructionRow(num: "4", text: "Установите I Wish заново из App Store и войдите — Apple снова передаст имя")
                 }
-                .buttonStyle(.bordered)
-                .controlSize(.large)
-                .disabled(isSigningOut)
-            }
-            .padding(.horizontal, 24)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .padding(16)
+                .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 14, style: .continuous))
+                .padding(.horizontal, 20)
 
-            Spacer()
+                VStack(spacing: 12) {
+                    Button {
+                        if let url = URL(string: UIApplication.openSettingsURLString) {
+                            UIApplication.shared.open(url)
+                        }
+                    } label: {
+                        Label("Открыть Настройки", systemImage: "gearshape")
+                            .frame(maxWidth: .infinity)
+                    }
+                    .buttonStyle(.borderedProminent)
+                    .controlSize(.large)
+
+                    Button {
+                        isSigningOut = true
+                        do {
+                            try services.auth.signOut()
+                        } catch {
+                            toast.error("Не удалось выйти: \(error.localizedDescription)")
+                        }
+                        isSigningOut = false
+                    } label: {
+                        Label("Выйти из аккаунта", systemImage: "rectangle.portrait.and.arrow.right")
+                            .frame(maxWidth: .infinity)
+                    }
+                    .buttonStyle(.bordered)
+                    .controlSize(.large)
+                    .disabled(isSigningOut)
+                }
+                .padding(.horizontal, 24)
+                .padding(.bottom, 32)
+            }
         }
-        .padding(.top, 60)
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .background(Theme.background.ignoresSafeArea())
         .applyTheme()
+    }
+
+    @ViewBuilder
+    private func instructionRow(num: String, text: String) -> some View {
+        HStack(alignment: .top, spacing: 10) {
+            Text(num)
+                .font(.subheadline.weight(.bold))
+                .foregroundStyle(.tint)
+                .frame(width: 20, alignment: .leading)
+            Text(text)
+                .font(.subheadline)
+                .foregroundStyle(.primary)
+                .fixedSize(horizontal: false, vertical: true)
+        }
     }
 }
