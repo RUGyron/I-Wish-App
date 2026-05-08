@@ -157,55 +157,29 @@ struct ParticipantsView: View {
 
     @ViewBuilder
     private func memberRow(member: (userUID: String, role: String, name: String, canInvite: Bool)) -> some View {
-        let isExpanded = expandedMemberUID == member.userUID
         let canEdit = isCurrentUserOwner && member.userUID != services.auth.uid
-
-        VStack(alignment: .leading, spacing: 0) {
-            HStack(spacing: 12) {
-                Image(systemName: "person.fill.checkmark")
-                    .font(.title3)
-                    .foregroundStyle(.green)
-                    .frame(width: 36, height: 36)
-                    .background(.green.opacity(0.15))
-                    .clipShape(Circle())
-
-                HStack(spacing: 4) {
-                    Text(member.name)
-                        .font(.body.weight(.medium))
-                    Text(roleBadge(for: member.role))
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                }
-
-                Spacer()
-
-                if canEdit {
-                    Image(systemName: "chevron.right")
-                        .font(.subheadline.weight(.semibold))
-                        .foregroundStyle(.secondary)
-                        .rotationEffect(.degrees(isExpanded ? 90 : 0))
-                }
-            }
-            .frame(height: 44)
-            .contentShape(Rectangle())
-            .onTapGesture {
+        let isExpandedBinding = Binding<Bool>(
+            get: { expandedMemberUID == member.userUID },
+            set: { newValue in
                 guard canEdit, pendingMutationUID == nil else { return }
-                expandedMemberUID = isExpanded ? nil : member.userUID
+                expandedMemberUID = newValue ? member.userUID : nil
             }
+        )
 
-            // Блок controls всегда в дереве — SwiftUI плавно анимирует свойства,
-            // а не появление/исчезновение. opacity 0.0001 (не строго 0) чтобы SwiftUI
-            // не оптимизировал view как отсутствующий.
+        Group {
             if canEdit {
-                memberControls(member: member)
-                    .padding(.top, isExpanded ? 8 : 0)
-                    .frame(height: isExpanded ? nil : 0, alignment: .top)
-                    .opacity(isExpanded ? 1 : 0.0001)
-                    .clipped()
-                    .allowsHitTesting(isExpanded)
+                DisclosureGroup(isExpanded: isExpandedBinding) {
+                    memberControls(member: member)
+                        .padding(.top, 8)
+                } label: {
+                    memberLabel(member: member)
+                }
+                .disclosureGroupStyle(.automatic)
+                .tint(.secondary)
+            } else {
+                memberLabel(member: member)
             }
         }
-        .animation(.easeInOut(duration: 0.25), value: isExpanded)
         .swipeActions(edge: .trailing, allowsFullSwipe: false) {
             if canEdit && pendingMutationUID != member.userUID {
                 Button(role: .destructive) {
@@ -214,6 +188,28 @@ struct ParticipantsView: View {
                     Label("Удалить", systemImage: "person.fill.xmark")
                 }
             }
+        }
+    }
+
+    @ViewBuilder
+    private func memberLabel(member: (userUID: String, role: String, name: String, canInvite: Bool)) -> some View {
+        HStack(spacing: 12) {
+            Image(systemName: "person.fill.checkmark")
+                .font(.title3)
+                .foregroundStyle(.green)
+                .frame(width: 36, height: 36)
+                .background(.green.opacity(0.15))
+                .clipShape(Circle())
+
+            HStack(spacing: 4) {
+                Text(member.name)
+                    .font(.body.weight(.medium))
+                Text(roleBadge(for: member.role))
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
+
+            Spacer()
         }
     }
 
