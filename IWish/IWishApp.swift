@@ -22,6 +22,7 @@ struct IWishApp: App {
         self.container = ModelContainerFactory.makeProductionContainer()
         configureAppearance()
         preheatKeyboard()
+        KeyboardDismissInstaller.installIfNeeded()
     }
 
     private func configureAppearance() {

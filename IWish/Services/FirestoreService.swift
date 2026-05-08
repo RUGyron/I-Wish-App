@@ -865,6 +865,15 @@ final class FirestoreService {
         )
     }
 
+    /// Plaintext-only GET для shared wishlist — возвращает ownerUID без расшифровки payload.
+    /// Используется в self-heal сценариях когда нужен только owner check, не контент.
+    func fetchSharedWishlistOwnerUID(wishlistID: String) async throws -> String? {
+        let doc = try await request("GET", path: "shared_wishlists/\(wishlistID)")
+        guard let fields = doc["fields"] as? [String: Any] else { return nil }
+        let parsed = parseFields(fields)
+        return parsed["ownerUID"] as? String
+    }
+
     // MARK: - Fetch My Shared Wishlists
 
     /// Возвращает все shared-вишлисты, где пользователь является участником.

@@ -1251,7 +1251,8 @@ final class DataService {
     /// Идемпотентно. Маркер UserDefaults; при partial failure повторим в следующем старте.
     func runV11BackfillIfNeeded() async {
         let backfillKey = "iwish_v11_backfill_done"
-        let ownerHealKey = "iwish_v11_owner_heal_done"
+        // v2 ключ — расширили self-heal на wishlists с ownerRecordID == nil (resolve через GET).
+        let ownerHealKey = "iwish_v11_owner_heal_v2_done"
         let backfillDone = UserDefaults.standard.bool(forKey: backfillKey)
         let healDone = UserDefaults.standard.bool(forKey: ownerHealKey)
         guard !backfillDone || !healDone else { return }
@@ -1320,8 +1321,22 @@ final class DataService {
         // что приводило к isEditable=false и блокировке управления своим же списком.
         if let myUID = auth.uid {
             let allWishlists = (try? modelContext.fetch(FetchDescriptor<Wishlist>())) ?? []
-            for wl in allWishlists where wl.isShared && wl.ownerRecordID == myUID {
+            for wl in allWishlists where wl.isShared {
                 guard let sharedID = wl.sharedWishlistID else { continue }
+
+                // Resolve ownerUID: locally если есть, иначе через plaintext GET (без расшифровки).
+                // Старые wishlists могут иметь ownerRecordID=nil если refreshWishlists ещё не выставил.
+                var resolvedOwnerUID = wl.ownerRecordID
+                if resolvedOwnerUID == nil {
+                    do {
+                        if let doc = try? await firestore.fetchSharedWishlistOwnerUID(wishlistID: sharedID) {
+                            resolvedOwnerUID = doc
+                            wl.ownerRecordID = doc
+                        }
+                    }
+                }
+
+                guard resolvedOwnerUID == myUID else { continue }
 
                 // 1. Self-heal owner-role: PATCH membership.role="owner" если она другая.
                 if wl.myRole != "owner" {
