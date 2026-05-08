@@ -46,7 +46,7 @@ final class FirestoreService {
         let gradientSeed: Int
         let gradientHue: Double?
         let isArchived: Bool
-        let members: [(userUID: String, role: String, userName: String?)]
+        let members: [(userUID: String, role: String, userName: String?, canInvite: Bool)]
         let items: [SharedItemInfo]
     }
 
@@ -838,7 +838,7 @@ final class FirestoreService {
 
         // 4. Query memberships where wishlistID == wishlistID (plaintext metadata)
         let membersResults = try await runQuery(collectionId: "memberships", field: "wishlistID", op: "EQUAL", value: wishlistID)
-        let members: [(userUID: String, role: String, userName: String?)] = membersResults.compactMap { entry in
+        let members: [(userUID: String, role: String, userName: String?, canInvite: Bool)] = membersResults.compactMap { entry in
             guard let doc = entry["document"] as? [String: Any],
                   let f = doc["fields"] as? [String: Any] else { return nil }
             let d = parseFields(f)
@@ -846,7 +846,8 @@ final class FirestoreService {
             return (
                 userUID: d["userUID"] as? String ?? "",
                 role: d["role"] as? String ?? "viewer",
-                userName: (userNameRaw?.isEmpty == false) ? userNameRaw : nil
+                userName: (userNameRaw?.isEmpty == false) ? userNameRaw : nil,
+                canInvite: d["canInvite"] as? Bool ?? false
             )
         }
 
@@ -926,6 +927,17 @@ final class FirestoreService {
         let _ = try await request(
             "PATCH",
             path: "memberships/\(membershipID)?updateMask.fieldPaths=userName",
+            body: ["fields": fields]
+        )
+    }
+
+    /// Обновить флаг canInvite у участника. Permission-check — на стороне DataService.
+    func updateMembershipCanInvite(wishlistID: String, userUID: String, canInvite: Bool) async throws {
+        let membershipID = "\(userUID)_\(wishlistID)"
+        let fields = toFields(["canInvite": canInvite as Any])
+        let _ = try await request(
+            "PATCH",
+            path: "memberships/\(membershipID)?updateMask.fieldPaths=canInvite",
             body: ["fields": fields]
         )
     }

@@ -8,7 +8,7 @@ struct ParticipantsView: View {
     let wishlist: Wishlist
     var onShareRequested: (() -> Void)? = nil
 
-    @State private var members: [(userUID: String, role: String, name: String)] = []
+    @State private var members: [(userUID: String, role: String, name: String, canInvite: Bool)] = []
     @State private var isLoading = true
     @State private var ownerName: String?
     @State private var ownerUID: String?
@@ -149,7 +149,7 @@ struct ParticipantsView: View {
     // MARK: - Member row
 
     @ViewBuilder
-    private func memberRow(member: (userUID: String, role: String, name: String)) -> some View {
+    private func memberRow(member: (userUID: String, role: String, name: String, canInvite: Bool)) -> some View {
         HStack(spacing: 12) {
             Image(systemName: "person.fill.checkmark")
                 .font(.title3)
@@ -177,17 +177,38 @@ struct ParticipantsView: View {
                         .controlSize(.small)
                 } else {
                     Menu {
-                        // Role switcher
+                        // Role switcher: эмодзи/иконка всегда видны, checkmark отдельно у выбранной.
                         Section("Роль") {
                             Button {
                                 performRoleChange(memberUID: member.userUID, newRole: "editor")
                             } label: {
-                                Label("Редактор", systemImage: member.role == "editor" ? "checkmark" : "pencil")
+                                if member.role == "editor" {
+                                    Label("Редактор ✓", systemImage: "pencil")
+                                } else {
+                                    Label("Редактор", systemImage: "pencil")
+                                }
                             }
                             Button {
                                 performRoleChange(memberUID: member.userUID, newRole: "viewer")
                             } label: {
-                                Label("Зритель", systemImage: member.role == "viewer" ? "checkmark" : "eye")
+                                if member.role == "viewer" {
+                                    Label("Зритель ✓", systemImage: "eye")
+                                } else {
+                                    Label("Зритель", systemImage: "eye")
+                                }
+                            }
+                        }
+
+                        // canInvite toggle
+                        Section("Приглашения") {
+                            Button {
+                                performCanInviteChange(memberUID: member.userUID, canInvite: !member.canInvite)
+                            } label: {
+                                if member.canInvite {
+                                    Label("Может приглашать ✓", systemImage: "person.badge.plus")
+                                } else {
+                                    Label("Может приглашать", systemImage: "person.badge.plus")
+                                }
                             }
                         }
 
@@ -200,9 +221,9 @@ struct ParticipantsView: View {
                             }
                         }
                     } label: {
-                        Image(systemName: "ellipsis.circle")
+                        Image(systemName: "ellipsis.circle.fill")
                             .font(.title3)
-                            .foregroundStyle(.secondary)
+                            .foregroundStyle(.tint)
                     }
                     .menuStyle(.borderlessButton)
                 }
@@ -263,7 +284,7 @@ struct ParticipantsView: View {
             // legacy memberships без userName — fallback "Участник".
             let myUID = services.auth.uid
             let myName = services.auth.userName
-            var resolved: [(userUID: String, role: String, name: String)] = []
+            var resolved: [(userUID: String, role: String, name: String, canInvite: Bool)] = []
             for member in nonOwnerMembers {
                 let name: String
                 if member.userUID == myUID, let myName, !myName.isEmpty {
@@ -273,7 +294,7 @@ struct ParticipantsView: View {
                 } else {
                     name = "Участник"
                 }
-                resolved.append((userUID: member.userUID, role: member.role, name: name))
+                resolved.append((userUID: member.userUID, role: member.role, name: name, canInvite: member.canInvite))
             }
             members = resolved
         } catch {
@@ -301,6 +322,25 @@ struct ParticipantsView: View {
                 await fetchMembers()
                 let label = newRole == "editor" ? "редактором" : "зрителем"
                 toast.success("Участник теперь \(label)")
+            } catch {
+                toast.error(error.localizedDescription)
+            }
+            pendingMutationUID = nil
+        }
+    }
+
+    private func performCanInviteChange(memberUID: String, canInvite: Bool) {
+        guard let sharedID = wishlist.sharedWishlistID else { return }
+        pendingMutationUID = memberUID
+        Task {
+            do {
+                try await services.data.changeMemberCanInvite(
+                    wishlistID: sharedID,
+                    memberUID: memberUID,
+                    canInvite: canInvite
+                )
+                await fetchMembers()
+                toast.success(canInvite ? "Может приглашать других" : "Не может приглашать других")
             } catch {
                 toast.error(error.localizedDescription)
             }

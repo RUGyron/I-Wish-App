@@ -1214,6 +1214,49 @@ final class DataService {
         isSyncing = false
     }
 
+    /// Owner меняет флаг canInvite у участника.
+    func changeMemberCanInvite(wishlistID: String, memberUID: String, canInvite: Bool) async throws {
+        let currentUID = try uid
+
+        let descriptor = FetchDescriptor<Wishlist>()
+        let allLocal = (try? modelContext.fetch(descriptor)) ?? []
+        guard let wishlist = allLocal.first(where: { $0.sharedWishlistID == wishlistID }) else {
+            throw FirestoreService.FirestoreError.notFound
+        }
+
+        let isOwner: Bool = {
+            if let owner = wishlist.ownerRecordID { return owner == currentUID }
+            return wishlist.myRole == "owner"
+        }()
+        guard isOwner else {
+            throw FirestoreService.FirestoreError.requestFailed("Только владелец может менять права приглашения")
+        }
+
+        guard memberUID != currentUID else {
+            throw FirestoreService.FirestoreError.requestFailed("Нельзя изменить собственные права")
+        }
+
+        await acquireLock()
+        isSyncing = true
+        syncError = nil
+        defer { releaseLock() }
+
+        do {
+            try await firestore.updateMembershipCanInvite(
+                wishlistID: wishlistID,
+                userUID: memberUID,
+                canInvite: canInvite
+            )
+        } catch {
+            isSyncing = false
+            throw error
+        }
+
+        wishlist.updatedAt = .now
+        try? modelContext.save()
+        isSyncing = false
+    }
+
     /// Owner кикает participant'а. Acquires lock, валидирует owner-а через локальный
     /// `wishlist.ownerRecordID`, удаляет membership document.
     func kickMember(wishlistID: String, memberUID: String) async throws {
