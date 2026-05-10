@@ -160,7 +160,7 @@ final class DataService {
         let memberships = try await firestore.fetchMyMemberships(userUID: currentUID)
         if let membership = memberships.first(where: { $0.wishlistID == wishlistID }) {
             guard membership.role == "editor" || membership.role == "owner" else {
-                throw FirestoreService.FirestoreError.requestFailed("Только редактор может изменять список")
+                throw FirestoreService.FirestoreError.requestFailed(statusCode: 0, body: "Только редактор может изменять список")
             }
         }
         // If no membership found, user is the owner — allow
@@ -178,7 +178,8 @@ final class DataService {
         let activeCount = allLocal.filter { !$0.isArchived }.count
         guard activeCount < InputLimits.maxWishlistsPerUser else {
             throw FirestoreService.FirestoreError.requestFailed(
-                "Достигнут лимит — \(InputLimits.maxWishlistsPerUser) активных списков. Удалите или архивируйте старые."
+                statusCode: 0,
+                body: "Достигнут лимит — \(InputLimits.maxWishlistsPerUser) активных списков. Удалите или архивируйте старые."
             )
         }
 
@@ -251,7 +252,7 @@ final class DataService {
 
         guard let key = KeychainService.load(for: id) else {
             isSyncing = false
-            throw FirestoreService.FirestoreError.requestFailed("Ключ шифрования не найден")
+            throw FirestoreService.FirestoreError.requestFailed(statusCode: 0, body: "Ключ шифрования не найден")
         }
 
         do {
@@ -262,7 +263,7 @@ final class DataService {
                 }()
                 guard isOwner else {
                     isSyncing = false
-                    throw FirestoreService.FirestoreError.requestFailed("Только владелец может изменить название")
+                    throw FirestoreService.FirestoreError.requestFailed(statusCode: 0, body: "Только владелец может изменить название")
                 }
                 try await firestore.updateSharedWishlist(
                     wishlistID: sharedID,
@@ -479,14 +480,15 @@ final class DataService {
         guard activeItemsCount < InputLimits.maxItemsPerWishlist else {
             isSyncing = false
             throw FirestoreService.FirestoreError.requestFailed(
-                "В списке достигнут лимит — \(InputLimits.maxItemsPerWishlist) желаний. Удалите ненужные."
+                statusCode: 0,
+                body: "В списке достигнут лимит — \(InputLimits.maxItemsPerWishlist) желаний. Удалите ненужные."
             )
         }
 
         // Все items в одном wishlist шифруются одним ключом — берём его по wishlistID (parent).
         guard let key = KeychainService.load(for: wishlistID) else {
             isSyncing = false
-            throw FirestoreService.FirestoreError.requestFailed("Ключ шифрования не найден")
+            throw FirestoreService.FirestoreError.requestFailed(statusCode: 0, body: "Ключ шифрования не найден")
         }
 
         do {
@@ -582,7 +584,7 @@ final class DataService {
 
         guard let key = KeychainService.load(for: wishlistID) else {
             isSyncing = false
-            throw FirestoreService.FirestoreError.requestFailed("Ключ шифрования не найден")
+            throw FirestoreService.FirestoreError.requestFailed(statusCode: 0, body: "Ключ шифрования не найден")
         }
 
         // preserve-unknown-keys паттерн в FirestoreService.updateXxxItem делает GET → merge →
@@ -718,7 +720,7 @@ final class DataService {
         // Archive — это update isArchived=true, поэтому шифруем содержимое заново тем же ключом.
         guard let key = KeychainService.load(for: wishlistID) else {
             isSyncing = false
-            throw FirestoreService.FirestoreError.requestFailed("Ключ шифрования не найден")
+            throw FirestoreService.FirestoreError.requestFailed(statusCode: 0, body: "Ключ шифрования не найден")
         }
 
         do {
@@ -1166,7 +1168,7 @@ final class DataService {
 
         // Whitelist допустимых ролей. "owner" сюда не входит.
         guard newRole == "editor" || newRole == "viewer" else {
-            throw FirestoreService.FirestoreError.requestFailed("Недопустимая роль")
+            throw FirestoreService.FirestoreError.requestFailed(statusCode: 0, body: "Недопустимая роль")
         }
 
         // Найти локальный shared wishlist по sharedWishlistID
@@ -1183,12 +1185,12 @@ final class DataService {
             return wishlist.myRole == "owner"
         }()
         guard isOwner else {
-            throw FirestoreService.FirestoreError.requestFailed("Только владелец может изменять роли")
+            throw FirestoreService.FirestoreError.requestFailed(statusCode: 0, body: "Только владелец может изменять роли")
         }
 
         // Запретить менять роль самому себе через этот метод (нет смысла — owner не может стать viewer).
         guard memberUID != currentUID else {
-            throw FirestoreService.FirestoreError.requestFailed("Нельзя изменить собственную роль")
+            throw FirestoreService.FirestoreError.requestFailed(statusCode: 0, body: "Нельзя изменить собственную роль")
         }
 
         await acquireLock()
@@ -1229,11 +1231,11 @@ final class DataService {
             return wishlist.myRole == "owner"
         }()
         guard isOwner else {
-            throw FirestoreService.FirestoreError.requestFailed("Только владелец может менять права приглашения")
+            throw FirestoreService.FirestoreError.requestFailed(statusCode: 0, body: "Только владелец может менять права приглашения")
         }
 
         guard memberUID != currentUID else {
-            throw FirestoreService.FirestoreError.requestFailed("Нельзя изменить собственные права")
+            throw FirestoreService.FirestoreError.requestFailed(statusCode: 0, body: "Нельзя изменить собственные права")
         }
 
         await acquireLock()
@@ -1275,12 +1277,12 @@ final class DataService {
             return wishlist.myRole == "owner"
         }()
         guard isOwner else {
-            throw FirestoreService.FirestoreError.requestFailed("Только владелец может удалять участников")
+            throw FirestoreService.FirestoreError.requestFailed(statusCode: 0, body: "Только владелец может удалять участников")
         }
 
         // Нельзя кикнуть самого owner'а — для удаления списка есть deleteWishlist.
         guard memberUID != currentUID else {
-            throw FirestoreService.FirestoreError.requestFailed("Владелец не может удалить себя — удалите список целиком")
+            throw FirestoreService.FirestoreError.requestFailed(statusCode: 0, body: "Владелец не может удалить себя — удалите список целиком")
         }
 
         await acquireLock()
@@ -1385,22 +1387,41 @@ final class DataService {
             for wl in allWishlists where wl.isShared {
                 guard let sharedID = wl.sharedWishlistID else { continue }
 
-                // Resolve ownerUID: locally если есть, иначе через plaintext GET (без расшифровки).
-                // Старые wishlists могут иметь ownerRecordID=nil если refreshWishlists ещё не выставил.
-                var resolvedOwnerUID = wl.ownerRecordID
-                if resolvedOwnerUID == nil {
-                    do {
-                        if let doc = try? await firestore.fetchSharedWishlistOwnerUID(wishlistID: sharedID) {
-                            resolvedOwnerUID = doc
-                            wl.ownerRecordID = doc
-                        }
+                // SECURITY: всегда верифицируем ownerUID через wire (не доверяем локальному
+                // wl.ownerRecordID — он мог быть отравлен старым owner-flip багом до 2026-05-10).
+                // Если wire-GET не получился — пропускаем self-heal, чтобы случайно никого не
+                // повысить на основе stale данных.
+                var resolvedOwnerUID: String? = nil
+                if let doc = try? await firestore.fetchSharedWishlistOwnerUID(wishlistID: sharedID) {
+                    resolvedOwnerUID = doc
+                    // Заодно лечим locally — кейс где локальное значение отстаёт от Firestore.
+                    if wl.ownerRecordID != doc {
+                        wl.ownerRecordID = doc
                     }
                 }
 
-                guard resolvedOwnerUID == myUID else { continue }
+                guard let resolved = resolvedOwnerUID, resolved == myUID else { continue }
 
                 // 1. Self-heal owner-role: PATCH membership.role="owner" если она другая.
+                //    ДОПОЛНИТЕЛЬНАЯ ЗАЩИТА: перед повышением себя в owner проверяем что
+                //    нет другой active membership с role="owner" для того же wishlist'а.
+                //    Если есть — что-то странное (двойной owner после bug); abort и log.
                 if wl.myRole != "owner" {
+                    // FAIL-CLOSED: если fetchAllMemberships упал — пропускаем self-heal этого wishlist'а
+                    // (не доверяем "пустому" результату, чтобы случайно не повысить себя при двойном owner).
+                    let memberships: [(userUID: String, role: String, canInvite: Bool)]
+                    do {
+                        memberships = try await firestore.fetchAllMemberships(wishlistID: sharedID)
+                    } catch {
+                        dsLog.warning("v1.1 self-heal: SKIP for \(sharedID, privacy: .public) — fetchAllMemberships failed: \(error.localizedDescription, privacy: .public)")
+                        allOK = false
+                        continue
+                    }
+                    let hasOtherOwner = memberships.contains { $0.userUID != myUID && $0.role == "owner" }
+                    guard !hasOtherOwner else {
+                        dsLog.warning("v1.1 self-heal: ABORT for \(sharedID, privacy: .public) — another owner membership exists")
+                        continue
+                    }
                     do {
                         try await firestore.updateMembershipRole(
                             wishlistID: sharedID,

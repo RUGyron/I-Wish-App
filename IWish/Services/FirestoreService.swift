@@ -22,6 +22,11 @@ final class FirestoreService {
     private let projectPath = "projects/rewardpierwebpush/databases/(default)/documents"
     private let baseURL = "https://firestore.googleapis.com/v1/projects/rewardpierwebpush/databases/(default)/documents"
 
+    /// Threshold-based мониторинг сетевой доступности. Подключается AppServices после init.
+    /// Каждый успешный/неудачный request() / requestArray() рапортует outcome.
+    /// nil допустим (unit tests, Preview).
+    weak var networkMonitor: NetworkMonitor?
+
     // MARK: - Types (same as old CloudKitSharingService for compat)
 
     struct ShareLinkInfo {
@@ -74,9 +79,15 @@ final class FirestoreService {
     enum FirestoreError: LocalizedError {
         case notFound
         case notAuthenticated
-        case requestFailed(String)
+        /// HTTP-level fail. `statusCode == 0` означает "non-HTTP error" (URLError / invalid URL и пр.).
+        /// statusCode хранится отдельно от body для надёжной классификации в NetworkMonitor
+        /// (string-парсинг был хрупкий — Google может изменить форматирование).
+        case requestFailed(statusCode: Int, body: String)
         case decryptionFailed
         case rateLimited
+        /// Попытка перезаписать `shared_wishlists/<id>` под другого ownerUID.
+        /// Защищает от owner-flip: non-owner не может сделать createSharedWishlist на чужом sharedID.
+        case ownerMismatch(existingOwnerUID: String, attemptedOwnerUID: String)
 
         var errorDescription: String? {
             switch self {
@@ -84,12 +95,14 @@ final class FirestoreService {
                 return "Документ не найден"
             case .notAuthenticated:
                 return "Необходима авторизация"
-            case .requestFailed(let msg):
-                return "Ошибка запроса: \(msg)"
+            case .requestFailed(_, let body):
+                return "Ошибка запроса: \(body)"
             case .decryptionFailed:
                 return "Не удалось расшифровать данные"
             case .rateLimited:
                 return "Слишком много запросов. Попробуйте через минуту."
+            case .ownerMismatch:
+                return "Только владелец списка может его перепубликовать"
             }
         }
     }
@@ -138,7 +151,7 @@ final class FirestoreService {
         // Trim trailing slash
         if urlString.hasSuffix("/") { urlString = String(urlString.dropLast()) }
         guard let url = URL(string: urlString) else {
-            throw FirestoreError.requestFailed("Invalid URL: \(urlString)")
+            throw FirestoreError.requestFailed(statusCode: 0, body: "Invalid URL: \(urlString)")
         }
         var req = URLRequest(url: url)
         req.httpMethod = method
@@ -148,12 +161,25 @@ final class FirestoreService {
         if let body {
             req.httpBody = try JSONSerialization.data(withJSONObject: body)
         }
-        let (data, response) = try await URLSession.shared.data(for: req)
-        guard let http = response as? HTTPURLResponse, 200..<300 ~= http.statusCode else {
-            let errorText = String(data: data, encoding: .utf8) ?? ""
-            throw FirestoreError.requestFailed(errorText)
+        do {
+            let (data, response) = try await URLSession.shared.data(for: req)
+            guard let http = response as? HTTPURLResponse, 200..<300 ~= http.statusCode else {
+                let errorText = String(data: data, encoding: .utf8) ?? ""
+                let status = (response as? HTTPURLResponse)?.statusCode ?? 0
+                let err = FirestoreError.requestFailed(statusCode: status, body: errorText)
+                await reportOutcome(error: err)
+                throw err
+            }
+            await reportOutcome(error: nil)
+            // Cache lightweight ping path: один успешный GET даёт NetworkMonitor дешёвый health-check.
+            if method == "GET", !path.hasPrefix("http") {
+                await cacheLightPing(path: path)
+            }
+            return (try? JSONSerialization.jsonObject(with: data)) as? [String: Any] ?? [:]
+        } catch {
+            await reportOutcome(error: error)
+            throw error
         }
-        return (try? JSONSerialization.jsonObject(with: data)) as? [String: Any] ?? [:]
     }
 
     /// POST to a URL that returns an array (e.g. runQuery).
@@ -162,7 +188,7 @@ final class FirestoreService {
         let token = try await getAuthToken()
         let urlString = path.hasPrefix("http") ? path : "\(baseURL)/\(path)"
         guard let url = URL(string: urlString) else {
-            throw FirestoreError.requestFailed("Invalid URL: \(urlString)")
+            throw FirestoreError.requestFailed(statusCode: 0, body: "Invalid URL: \(urlString)")
         }
         var req = URLRequest(url: url)
         req.httpMethod = "POST"
@@ -170,12 +196,41 @@ final class FirestoreService {
         req.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
         req.setValue("application/json", forHTTPHeaderField: "Content-Type")
         req.httpBody = try JSONSerialization.data(withJSONObject: body)
-        let (data, response) = try await URLSession.shared.data(for: req)
-        guard let http = response as? HTTPURLResponse, 200..<300 ~= http.statusCode else {
-            let errorText = String(data: data, encoding: .utf8) ?? ""
-            throw FirestoreError.requestFailed(errorText)
+        do {
+            let (data, response) = try await URLSession.shared.data(for: req)
+            guard let http = response as? HTTPURLResponse, 200..<300 ~= http.statusCode else {
+                let errorText = String(data: data, encoding: .utf8) ?? ""
+                let status = (response as? HTTPURLResponse)?.statusCode ?? 0
+                let err = FirestoreError.requestFailed(statusCode: status, body: errorText)
+                await reportOutcome(error: err)
+                throw err
+            }
+            await reportOutcome(error: nil)
+            return (try? JSONSerialization.jsonObject(with: data)) as? [[String: Any]] ?? []
+        } catch {
+            await reportOutcome(error: error)
+            throw error
         }
-        return (try? JSONSerialization.jsonObject(with: data)) as? [[String: Any]] ?? []
+    }
+
+    /// Рапортует outcome последнего HTTP-запроса в NetworkMonitor. nil = success.
+    /// Безопасно вызывать без attached monitor (no-op).
+    private func reportOutcome(error: Error?) async {
+        guard let monitor = networkMonitor else { return }
+        await MainActor.run {
+            if let error {
+                monitor.recordError(error)
+            } else {
+                monitor.recordSuccess()
+            }
+        }
+    }
+
+    private func cacheLightPing(path: String) async {
+        guard let monitor = networkMonitor else { return }
+        await MainActor.run {
+            monitor.cacheLightPingPath(path)
+        }
     }
 
     // MARK: - Field conversion helpers
@@ -525,6 +580,22 @@ final class FirestoreService {
         items: [SharedItemInfo],
         key: SymmetricKey
     ) async throws {
+        // 0. WIRE-LEVEL OWNER GUARD.
+        // PATCH без updateMask делает full REPLACE документа. Если документ уже существует
+        // с другим ownerUID — REPLACE украдёт ownership. Защита от owner-flip bug:
+        // сначала GET, и если existing.ownerUID отличается — отказ.
+        // Идемпотентный re-publish своим же owner'ом — разрешаем (republish wishlist'а на ту же роль).
+        if let existingDoc = try? await request("GET", path: "shared_wishlists/\(wishlistID)"),
+           let fields = existingDoc["fields"] as? [String: Any] {
+            let existing = parseFields(fields)
+            if let existingOwnerUID = existing["ownerUID"] as? String,
+               !existingOwnerUID.isEmpty,
+               existingOwnerUID != ownerUID {
+                logger.error("[Firestore] createSharedWishlist BLOCKED: existing ownerUID=\(existingOwnerUID, privacy: .public) != attempted=\(ownerUID, privacy: .public) for wlid=\(wishlistID, privacy: .public)")
+                throw FirestoreError.ownerMismatch(existingOwnerUID: existingOwnerUID, attemptedOwnerUID: ownerUID)
+            }
+        }
+
         // 1. Write the wishlist document
         let wishlistPayload = EncryptionService.packPayload([
             "name": name,
@@ -866,6 +937,13 @@ final class FirestoreService {
         )
     }
 
+    /// Health-check GET по произвольному пути — используется NetworkMonitor.silentPing.
+    /// Outcome автоматически рапортится через request(). Возвращаемое значение игнорируется.
+    /// Делаем internal (не private) чтобы NetworkMonitor мог его вызвать.
+    func publicLightPing(path: String) async throws {
+        _ = try await request("GET", path: path)
+    }
+
     /// Plaintext-only GET для shared wishlist — возвращает ownerUID без расшифровки payload.
     /// Используется в self-heal сценариях когда нужен только owner check, не контент.
     func fetchSharedWishlistOwnerUID(wishlistID: String) async throws -> String? {
@@ -908,6 +986,35 @@ final class FirestoreService {
 
     func joinWishlist(wishlistID: String, userUID: String, userName: String, role: String, canInvite: Bool = false) async throws {
         let membershipID = "\(userUID)_\(wishlistID)"
+
+        // Idempotent guard: если membership уже существует — не делаем blanket REPLACE.
+        // Защищает от:
+        //   (a) owner-flip: повторный joinWishlist(role="owner") при перепубликации не должен
+        //       сбрасывать joinedAt и REPLACE'ить если запись уже корректна;
+        //   (b) понижения ранга: если existing.role == "owner" и новый role != "owner" —
+        //       никогда не понижаем через этот метод (для понижения есть updateMembershipRole).
+        if let existingDoc = try? await request("GET", path: "memberships/\(membershipID)"),
+           let fields = existingDoc["fields"] as? [String: Any] {
+            let existing = parseFields(fields)
+            let existingRole = existing["role"] as? String ?? "viewer"
+
+            // Если уже owner — не понижаем через joinWishlist. Только updateMembershipRole может.
+            let safeRole = (existingRole == "owner" && role != "owner") ? existingRole : role
+
+            // Только обновляем поля кроме joinedAt (сохраняем историческое время вступления).
+            let updates = toFields([
+                "wishlistID": wishlistID,
+                "userUID": userUID,
+                "userName": userName,
+                "role": safeRole,
+                "canInvite": canInvite as Any
+            ])
+            let mask = "updateMask.fieldPaths=wishlistID&updateMask.fieldPaths=userUID&updateMask.fieldPaths=userName&updateMask.fieldPaths=role&updateMask.fieldPaths=canInvite"
+            let _ = try await request("PATCH", path: "memberships/\(membershipID)?\(mask)", body: ["fields": updates])
+            return
+        }
+
+        // Первый join: полный create с joinedAt.
         let fields = toFields([
             "wishlistID": wishlistID,
             "userUID": userUID,
@@ -940,6 +1047,21 @@ final class FirestoreService {
             path: "memberships/\(membershipID)?updateMask.fieldPaths=canInvite",
             body: ["fields": fields]
         )
+    }
+
+    /// Plaintext-only GET всех memberships для конкретного wishlist'а.
+    /// Используется в self-heal для проверки "не существует ли другого owner'а" перед повышением себя.
+    func fetchAllMemberships(wishlistID: String) async throws -> [(userUID: String, role: String, canInvite: Bool)] {
+        let results = try await runQuery(collectionId: "memberships", field: "wishlistID", op: "EQUAL", value: wishlistID)
+        return results.compactMap { entry in
+            guard let doc = entry["document"] as? [String: Any],
+                  let f = doc["fields"] as? [String: Any] else { return nil }
+            let d = parseFields(f)
+            guard let uid = d["userUID"] as? String else { return nil }
+            let role = d["role"] as? String ?? "viewer"
+            let canInvite = d["canInvite"] as? Bool ?? false
+            return (userUID: uid, role: role, canInvite: canInvite)
+        }
     }
 
     func fetchMyMemberships(userUID: String) async throws -> [(wishlistID: String, role: String, canInvite: Bool)] {
@@ -1003,7 +1125,7 @@ final class FirestoreService {
             doc = try await request("GET", path: "inviteLinks/\(shortID)")
         } catch let error as FirestoreError {
             // NOT_FOUND returns 404 which becomes requestFailed
-            if case .requestFailed(let msg) = error, msg.contains("NOT_FOUND") { return nil }
+            if case .requestFailed(_, let msg) = error, msg.contains("NOT_FOUND") { return nil }
             throw error
         }
         guard let fields = doc["fields"] as? [String: Any] else { return nil }

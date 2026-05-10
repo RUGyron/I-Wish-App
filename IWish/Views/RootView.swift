@@ -44,7 +44,9 @@ struct RootView: View {
         .task {
             await rc.fetch()
         }
-        .toastOverlay()
+        // Banner потери сети + тосты живут в отдельном UIWindow поверх всех sheet'ов.
+        // .toastOverlay() и .overlay(NetworkBanner) НЕ используются — они бы были под sheet'ами.
+        .installOverlayWindow()
     }
 
     @ViewBuilder

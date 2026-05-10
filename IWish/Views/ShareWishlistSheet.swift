@@ -21,6 +21,15 @@ struct ShareWishlistSheet: View {
     @State private var showingExportSheet = false
     @State private var copied = false
 
+    /// Является ли текущий пользователь owner'ом wishlist'а.
+    /// Для personal (не-shared) — true (он его создатель). Для shared — по myRole.
+    /// От этого зависит: показывать кнопку "Отозвать все приглашения", тексты UI,
+    /// доступную верхнюю границу `selectedRole`.
+    private var isCurrentUserOwner: Bool {
+        if !wishlist.isShared { return true }
+        return wishlist.myRole == "owner"
+    }
+
     var body: some View {
         NavigationStack {
             Group {
@@ -205,8 +214,16 @@ struct ShareWishlistSheet: View {
     /// Permission inheritance: можно приглашать только с правами не выше своих.
     /// Owner и editor — могут пригласить editor или viewer. Viewer — только viewer.
     /// Концепция "пригласить как owner" не существует (owner единственный, ставится при создании share).
+    ///
+    /// SECURITY: для shared wishlist с `myRole == nil` (legacy / pending sync state) — дефолт `viewer`
+    /// (least privilege). Если бы дефолт был `owner` — viewer в pending-sync state мог бы пригласить
+    /// editor через invite link, превысив свои реальные права.
     private var availableRoles: [ShareRole] {
-        let myRole = wishlist.myRole ?? "owner"  // personal wishlists owned
+        if !wishlist.isShared {
+            // Personal wishlist — current user является создателем, может приглашать любую роль.
+            return ShareRole.allCases
+        }
+        let myRole = wishlist.myRole ?? "viewer"  // safe default для legacy / pending
         if myRole == "viewer" {
             return [.viewer]
         }
@@ -244,6 +261,13 @@ struct ShareWishlistSheet: View {
         }
         .onAppear {
             // Если default из Settings выше дозволенной — clamp.
+            if !availableRoles.contains(selectedRole), let firstAllowed = availableRoles.first {
+                selectedRole = firstAllowed
+            }
+        }
+        .onChange(of: wishlist.myRole) { _, _ in
+            // myRole может прийти позже через refresh — переоцениваем availableRoles
+            // и clamp'аем selectedRole если он перестал быть допустимым.
             if !availableRoles.contains(selectedRole), let firstAllowed = availableRoles.first {
                 selectedRole = firstAllowed
             }
@@ -359,17 +383,27 @@ struct ShareWishlistSheet: View {
         return lines.joined(separator: "\n")
     }
 
+    @ViewBuilder
     private var revokeButton: some View {
-        Button(role: .destructive) {
-            Task {
-                await shareManager.revokeAll()
-                dismiss()
+        // UI guard: показываем только если local state думает что мы owner. Это первый
+        // (косметический) уровень. Service-level wire-check в `ShareManager.revokeAll` —
+        // последний барьер на случай если local state отравлен.
+        if isCurrentUserOwner {
+            Button(role: .destructive) {
+                Task {
+                    await shareManager.revokeAll(callerUID: services.auth.uid ?? "")
+                    // Закрываем sheet ТОЛЬКО если revoke реально произошёл (нет error).
+                    // Иначе toast через .onChange(of: shareManager.error) покажет причину.
+                    if shareManager.error == nil {
+                        dismiss()
+                    }
+                }
+            } label: {
+                Text("Отозвать все приглашения")
+                    .font(.caption)
             }
-        } label: {
-            Text("Отозвать все приглашения")
-                .font(.caption)
+            .padding(.top, 16)
         }
-        .padding(.top, 16)
     }
 
     // MARK: - QR Generation

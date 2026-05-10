@@ -7,8 +7,15 @@ final class AppServices {
     static let shared = AppServices()
     let auth = AuthService()
     let firestore = FirestoreService()
+    let networkMonitor = NetworkMonitor()
     var data: DataService!
     var accountDeletion: AccountDeletionService!
+
+    init() {
+        // Bi-directional wire: monitor получает outcome через firestore, и сам может пинговать firestore.
+        firestore.networkMonitor = networkMonitor
+        networkMonitor.attach(firestore: firestore)
+    }
 
     func configure(modelContext: ModelContext) {
         data = DataService(firestore: firestore, modelContext: modelContext, auth: auth)

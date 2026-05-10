@@ -1,5 +1,8 @@
 import SwiftUI
 import SwiftData
+import os.log
+
+private let participantsLog = Logger(subsystem: "RUGyron.IWish", category: "ParticipantsView")
 
 struct ParticipantsView: View {
     @Environment(\.dismiss) private var dismiss
@@ -215,7 +218,17 @@ struct ParticipantsView: View {
 
     @ViewBuilder
     private func memberControls(member: (userUID: String, role: String, name: String, canInvite: Bool)) -> some View {
-        let displayRole = optimisticRoles[member.userUID] ?? member.role
+        // CLAMP: если member.role в Firestore содержит unknown значение (напр. "owner" из-за
+        // прошлого owner-flip бага, или forward-compat unknown string) — отображаем least-privilege
+        // "viewer". Иначе Picker не найдёт matching tag → оба chip серые.
+        // Owner может затем тапнуть нужную роль → server PATCH самовосстановит запись.
+        let rawRole = optimisticRoles[member.userUID] ?? member.role
+        // Case-insensitive + trimmed для robustness против forward-compat / typos на сервере.
+        let normalizedRaw = rawRole.trimmingCharacters(in: .whitespaces).lowercased()
+        let displayRole: String = (normalizedRaw == "editor" || normalizedRaw == "viewer") ? normalizedRaw : "viewer"
+        if displayRole != normalizedRaw, !rawRole.isEmpty {
+            let _ = participantsLog.warning("memberControls: clamping unknown role '\(rawRole, privacy: .public)' → 'viewer' for member \(member.userUID, privacy: .public)")
+        }
         let displayCanInvite = optimisticCanInvite[member.userUID] ?? member.canInvite
         let isLocked = pendingMutationUID == member.userUID
 
@@ -351,6 +364,8 @@ struct ParticipantsView: View {
             optimisticRoles.removeValue(forKey: memberUID)
             return
         }
+        // Имя для toast — snapshot ДО запроса, чтобы текст был стабилен даже если member kicked в гонке.
+        let memberName = members.first(where: { $0.userUID == memberUID })?.name ?? "Участник"
         pendingMutationUID = memberUID
         Task {
             do {
@@ -361,8 +376,8 @@ struct ParticipantsView: View {
                 )
                 await fetchMembers()
                 optimisticRoles.removeValue(forKey: memberUID)
-                let label = newRole == "editor" ? "редактором" : "зрителем"
-                toast.success("Участник теперь \(label)")
+                let label = newRole == "editor" ? "редактор" : "зритель"
+                toast.success("\(memberName) теперь \(label)")
             } catch {
                 // Revert: optimistic value сброс → picker анимированно вернётся в server-state.
                 optimisticRoles.removeValue(forKey: memberUID)
@@ -374,6 +389,12 @@ struct ParticipantsView: View {
 
     private func performCanInviteChange(memberUID: String, canInvite: Bool) {
         guard let sharedID = wishlist.sharedWishlistID else { return }
+        // Idempotency guard (как в performRoleChange): rapid double-tap не отправит лишний PATCH.
+        if let current = members.first(where: { $0.userUID == memberUID }), current.canInvite == canInvite {
+            optimisticCanInvite.removeValue(forKey: memberUID)
+            return
+        }
+        let memberName = members.first(where: { $0.userUID == memberUID })?.name ?? "Участник"
         pendingMutationUID = memberUID
         Task {
             do {
@@ -384,7 +405,11 @@ struct ParticipantsView: View {
                 )
                 await fetchMembers()
                 optimisticCanInvite.removeValue(forKey: memberUID)
-                toast.success(canInvite ? "Может приглашать других" : "Не может приглашать других")
+                if canInvite {
+                    toast.success("\(memberName) может приглашать других")
+                } else {
+                    toast.success("\(memberName) больше не может приглашать")
+                }
             } catch {
                 optimisticCanInvite.removeValue(forKey: memberUID)
                 toast.error(error.localizedDescription)

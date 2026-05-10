@@ -104,7 +104,8 @@ final class ToastManager {
 
 // MARK: - Toast View
 
-private struct ToastBanner: View {
+/// Public version — используется и в ToastOverlayModifier, и в OverlayWindow.OverlayRootView.
+struct ToastBannerView: View {
     let toast: Toast
     let onDismiss: () -> Void
 
@@ -153,7 +154,7 @@ struct ToastOverlayModifier: ViewModifier {
             .overlay(alignment: .top) {
                 ZStack(alignment: .top) {
                     if let toast = manager.current {
-                        ToastBanner(toast: toast) {
+                        ToastBannerView(toast: toast) {
                             manager.dismiss()
                         }
                         .transition(.move(edge: .top).combined(with: .opacity))
