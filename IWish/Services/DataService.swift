@@ -438,6 +438,11 @@ final class DataService {
         coverImageData: Data? = nil,
         linkMetadataData: Data? = nil
     ) async throws -> Item {
+        // Сериализуем mutation — без этого rapid double-tap может обойти server-side
+        // лимит (50 items per wishlist), потому что local checks еще не отразили new item.
+        await acquireLock()
+        defer { releaseLock() }
+
         let currentUID = try uid
         // Имя автора фиксируем на момент добавления. bestDisplayName() добирает имя
         // из Keychain → Firebase displayName → email-prefix, чтобы атрибуция работала
@@ -817,16 +822,22 @@ final class DataService {
 
             // 3. Delete local wishlists not in remote (only personal, non-shared)
             let localPersonal = allLocal.filter { !$0.isShared }
+            // Pre-fetch memberships ОДИН раз (раньше дублировался на line 867 → quota waste).
+            let allMemberships = try await firestore.fetchMyMemberships(userUID: currentUID)
+            let memberWishlistIDs = Set(allMemberships.map(\.wishlistID))
+
             for local in localPersonal {
-                if !remoteIDs.contains(local.id.uuidString) {
+                // SAFETY на reinstall: если local wishlist помечен как НЕ имеющий ключа,
+                // и в remote его не видно — НЕ удаляем (вероятно iCloud Keychain ещё не догнал,
+                // remote.fetchPersonalWishlists пропустил его). Иначе юзер увидит пропавшие списки.
+                let hasKey = KeychainService.load(for: local.id.uuidString) != nil
+                let isInMembership = memberWishlistIDs.contains(local.id.uuidString)
+                if !remoteIDs.contains(local.id.uuidString) && (hasKey || isInMembership) {
                     modelContext.delete(local)
                 }
             }
 
             // 4. Add new or update existing
-            // Pre-fetch memberships to detect orphaned personal copies
-            let membershipsForCheck = try await firestore.fetchMyMemberships(userUID: currentUID)
-            let memberWishlistIDs = Set(membershipsForCheck.map(\.wishlistID))
 
             for r in remote {
                 // Skip personal wishlists that are managed as shared (have membership)
@@ -863,8 +874,8 @@ final class DataService {
                 }
             }
 
-            // 5. Also fetch shared wishlists via memberships
-            let memberships = try await firestore.fetchMyMemberships(userUID: currentUID)
+            // 5. Also fetch shared wishlists via memberships (используем pre-fetched выше).
+            let memberships = allMemberships
 
             // Build a set of sharedWishlistIDs already present locally to prevent duplicates
             let allLocalRefreshed = (try? modelContext.fetch(FetchDescriptor<Wishlist>())) ?? []
@@ -1002,7 +1013,7 @@ final class DataService {
             try? modelContext.save()
         } catch {
             syncError = error.localizedDescription
-            print("[DataService] refreshWishlists error: \(error)")
+            dsLog.error("refreshWishlists error: \(error.localizedDescription, privacy: .public)")
         }
 
         isSyncing = false
@@ -1071,7 +1082,7 @@ final class DataService {
                 wishlistDeleted = true
             }
             syncError = error.localizedDescription
-            print("[DataService] refreshItems error: \(error)")
+            dsLog.error("refreshItems error: \(error.localizedDescription, privacy: .public)")
         }
 
         isSyncing = false

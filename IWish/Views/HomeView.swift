@@ -51,8 +51,10 @@ struct HomeView: View {
         switch sizeClass {
         case .compact: count = 2
         case .regular:
-            // iPad portrait — 3 колонки, landscape — 4
-            count = (UIScreen.main.bounds.width > 1000) ? 4 : 3
+            // iPad / iPad Multitasking. UIScreen.main deprecated в iOS 26 и врёт при split-view.
+            // Используем GridItem с adaptive minimum — SwiftUI сам наполнит 3-4 столбца
+            // в зависимости от доступной ширины контейнера.
+            return [GridItem(.adaptive(minimum: 220), spacing: 12)]
         default: count = 2
         }
         return Array(repeating: GridItem(.flexible(), spacing: 12), count: count)
@@ -359,144 +361,8 @@ struct HomeView: View {
         }
     }
 
-    private func wishlistTile(_ wishlist: Wishlist) -> some View {
-        let activeItems = (wishlist.items ?? []).filter { !$0.isArchived }
-        let total = activeItems.compactMap(\.price).reduce(0, +)
-        let memberCount = 0 // Updated by polling if shared
-
-        return ZStack {
-            // Background
-            tileBackground(wishlist)
-
-            // Bottom gradient for text legibility
-            VStack {
-                Spacer()
-                LinearGradient(
-                    colors: [.clear, .black.opacity(0.55)],
-                    startPoint: .top,
-                    endPoint: .bottom
-                )
-                .frame(height: 80)
-            }
-
-            // Top: stats chip left, role badge right
-            VStack {
-                HStack {
-                    // Stats chip (top-left)
-                    HStack(spacing: 0) {
-                        HStack(spacing: 3) {
-                            Image(systemName: "gift")
-                                .font(.system(size: 9))
-                            Text("\(activeItems.count)")
-                                .font(.caption2.weight(.medium))
-                        }
-                        Text(" · ")
-                            .font(.caption2)
-                        HStack(spacing: 3) {
-                            Image(systemName: "person.2")
-                                .font(.system(size: 9))
-                            Text("\(max(wishlist.memberCount, 1))")
-                                .font(.caption2.weight(.medium))
-                        }
-                    }
-                    .foregroundStyle(.white)
-                    .padding(.horizontal, 7)
-                    .padding(.vertical, 4)
-                    .background(.black.opacity(0.35), in: Capsule())
-
-                    Spacer()
-
-                    // Role/status badge (top-right) — always visible
-                    Image(systemName: tileStatusIcon(wishlist))
-                        .font(.system(size: 10, weight: .semibold))
-                        .foregroundStyle(.white)
-                        .padding(6)
-                        .background(.black.opacity(0.35), in: Circle())
-                }
-                Spacer()
-            }
-            .padding(8)
-
-            // Bottom-left: name
-            VStack {
-                Spacer()
-                VStack(alignment: .leading, spacing: 2) {
-                    Text(wishlist.name)
-                        .font(.subheadline.weight(.semibold))
-                        .foregroundStyle(.white)
-                        .lineLimit(2)
-                }
-                .frame(maxWidth: .infinity, alignment: .leading)
-                .padding(10)
-            }
-        }
-        .aspectRatio(1, contentMode: .fit)
-        .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
-        .titaniumBorder(cornerRadius: 16)
-    }
-
-    @ViewBuilder
-    private func tileBackground(_ wishlist: Wishlist) -> some View {
-        if let imageData = wishlist.coverImageData, let uiImage = UIImage(data: imageData) {
-            GeometryReader { geo in
-                Image(uiImage: uiImage)
-                    .resizable()
-                    .scaledToFill()
-                    .frame(width: geo.size.width, height: geo.size.height)
-                    .clipped()
-            }
-        } else {
-            let colors = DefaultCoverGenerator.colors(for: wishlist)
-            GeometryReader { geo in
-                ZStack {
-                    MeshGradient(
-                        width: 3, height: 3,
-                        points: [
-                            .init(0, 0),   .init(0.5, 0),   .init(1, 0),
-                            .init(0, 0.5), .init(0.5, 0.5), .init(1, 0.5),
-                            .init(0, 1),   .init(0.5, 1),   .init(1, 1),
-                        ],
-                        colors: [
-                            colors[0], colors[1], colors[2],
-                            colors[1], colors[2], colors[0],
-                            colors[2], colors[0], colors[1],
-                        ]
-                    )
-                    .frame(width: geo.size.width, height: geo.size.height)
-                    if let emoji = wishlist.coverEmoji {
-                        Text(emoji).font(.system(size: 44))
-                    }
-                }
-            }
-        }
-    }
-
-    /// Status icon: lock if private/no members, role icon if shared
-    private func tileStatusIcon(_ wishlist: Wishlist) -> String {
-        // Locked: personal or shared with no other members
-        if !wishlist.isShared || wishlist.memberCount <= 1 {
-            return "lock.fill"
-        }
-        // Shared with members — show role
-        return roleBadgeIcon(wishlist.myRole ?? "owner")
-    }
-
-    private func roleBadgeIcon(_ role: String) -> String {
-        switch role {
-        case "owner": return "crown.fill"
-        case "editor": return "pencil"
-        case "viewer": return "eye"
-        default: return "person.2.fill"
-        }
-    }
-
-    private func formatPrice(_ price: Double, currency: String) -> String {
-        let formatter = NumberFormatter()
-        formatter.numberStyle = .currency
-        formatter.currencyCode = currency
-        formatter.maximumFractionDigits = 0
-        return formatter.string(from: NSNumber(value: price)) ?? "\(Int(price)) \(currency)"
-    }
+    // wishlistTile/tileBackground/tileStatusIcon/roleBadgeIcon/formatPrice удалены —
+    // были дубликатами WishlistTileView (см. Views/Components/), не использовались.
 
     // MARK: - Polling
 

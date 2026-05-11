@@ -6,15 +6,31 @@ enum ImageCompressor {
     static let fallbackQuality: CGFloat = 0.5
     static let targetMaxBytes: Int = 500_000  // 500 KB
 
+    /// Hard cap — даже после fallback quality 0.5 не пускаем больше этого в Firestore.
+    /// Firestore document limit = 1 MB; encryptedPayload содержит и другие поля.
+    static let hardCapBytes: Int = 900_000
+
     /// Сжимает изображение в JPEG, стремится уложиться в targetMaxBytes.
-    /// Сначала ресайз до maxEdge, потом quality 0.7. Если всё ещё больше — quality 0.5.
+    /// Сначала ресайз до maxEdge, потом quality 0.7 → 0.5 → 0.3.
+    /// Возвращает nil если даже после всех проходов не уложилось в hardCapBytes —
+    /// лучше отказать, чем превысить Firestore limit.
     static func compress(_ image: UIImage) -> Data? {
         let resized = image.resized(maxEdge: maxEdge)
         if let primary = resized.jpegData(compressionQuality: primaryQuality),
            primary.count <= targetMaxBytes {
             return primary
         }
-        return resized.jpegData(compressionQuality: fallbackQuality)
+        if let fallback = resized.jpegData(compressionQuality: fallbackQuality),
+           fallback.count <= hardCapBytes {
+            return fallback
+        }
+        // Last-resort: уменьшаем ещё раз и quality 0.3.
+        let smaller = image.resized(maxEdge: maxEdge / 2)
+        if let last = smaller.jpegData(compressionQuality: 0.3),
+           last.count <= hardCapBytes {
+            return last
+        }
+        return nil
     }
 }
 

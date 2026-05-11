@@ -27,7 +27,9 @@ struct RootView: View {
         .fontDesign(.rounded)
         .environment(\.systemColorScheme, detectedSystemScheme)
         .preferredColorScheme(activeSettings.themeMode.colorScheme)
-        .animation(.easeInOut(duration: 0.8), value: activeSettings.themeMode)
+        // Theme switching — короче анимация (0.8 → 0.3), глобальная на корне приводит
+        // к замедленной анимации любых state-changes которые случаются параллельно.
+        .animation(.easeInOut(duration: 0.3), value: activeSettings.themeMode)
         .onAppear {
             if settingsList.isEmpty {
                 _ = AppSettings.loadOrCreate(in: context)

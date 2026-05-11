@@ -2,6 +2,9 @@ import Foundation
 import FirebaseAuth
 import AuthenticationServices
 import CryptoKit
+import os.log
+
+private let authLog = Logger(subsystem: "RUGyron.IWish", category: "Auth")
 
 @Observable
 @MainActor
@@ -23,7 +26,18 @@ final class AuthService: NSObject {
     private var _isAppleSignedIn: Bool = false
     private var currentNonce: String?
 
-    private static let apiKey = "AIzaSyBifbBfRvO47M7mZnxJ55QZSqeelqPeSMs"
+    /// Firebase Web API key — НЕ secret (REST-key, не service-account), но единственный
+    /// источник правды — `GoogleService-Info.plist`. Раньше дублировался hardcoded.
+    private static let apiKey: String = {
+        guard let path = Bundle.main.path(forResource: "GoogleService-Info", ofType: "plist"),
+              let dict = NSDictionary(contentsOfFile: path),
+              let key = dict["API_KEY"] as? String, !key.isEmpty else {
+            // Это не должно случиться в production (plist обязателен для FirebaseApp.configure).
+            // Fallback на пустую строку даст 401 от Identity Toolkit — поведение очевидно для дебага.
+            return ""
+        }
+        return key
+    }()
 
     override init() {
         super.init()
@@ -50,14 +64,14 @@ final class AuthService: NSObject {
 
         if let user = Auth.auth().currentUser, !user.isAnonymous {
             _uid = user.uid
-            print("[Auth] Found Keychain session: \(user.uid)")
+            authLog.info("Found Keychain session: \(user.uid, privacy: .private)")
             Task {
                 await verifyAndRestore(uid: user.uid)
                 isLoading = false
             }
         } else {
             isLoading = false
-            print("[Auth] No session, will show Sign in with Apple")
+            authLog.info("No session, will show Sign in with Apple")
         }
     }
 
@@ -80,18 +94,18 @@ final class AuthService: NSObject {
         if userName == nil, let dn = Auth.auth().currentUser?.displayName, !dn.isEmpty {
             userName = dn
             KeychainService.saveUserName(dn)
-            print("[Auth] Restored name from Firebase displayName: \(dn)")
+            authLog.info("Restored name from Firebase displayName: \(dn, privacy: .private)")
         }
 
         // v1.1: имя — обязательное условие. Если не получили — gate на re-auth.
         if userName == nil || userName == "Пользователь" {
             requiresNameRecovery = true
-            print("[Auth] No usable name after restore — requiring name recovery")
+            authLog.info("No usable name after restore — requiring name recovery")
         } else {
             requiresNameRecovery = false
         }
 
-        print("[Auth] Restored: \(uid), name: \(userName ?? "nil")")
+        authLog.info("Restored: uid=\(uid, privacy: .private), name=\(self.userName ?? "nil", privacy: .private)")
     }
 
     /// Get a valid ID token (refreshes if needed)
@@ -128,7 +142,7 @@ final class AuthService: NSObject {
             _idToken = idToken
             _refreshToken = newRefresh
         } catch {
-            print("[Auth] Token refresh failed: \(error)")
+            authLog.warning("Token refresh failed: \(error.localizedDescription, privacy: .public)")
         }
     }
 
@@ -172,7 +186,7 @@ final class AuthService: NSObject {
             _uid = authResult.user.uid
             _idToken = try? await authResult.user.getIDToken()
             _isAppleSignedIn = true
-            print("[Auth] Apple sign-in OK, uid: \(_uid ?? "nil")")
+            authLog.info("Apple sign-in OK, uid=\(self._uid ?? "nil", privacy: .private)")
 
             // Extract name — Apple only sends it on FIRST sign-in ever
             var resolvedName: String?
@@ -214,7 +228,7 @@ final class AuthService: NSObject {
                 userName = nil
                 KeychainService.deleteUserName()
                 requiresNameRecovery = true
-                print("[Auth] Sign-in без имени — переход в name recovery flow")
+                authLog.info("Sign-in без имени — переход в name recovery flow")
             }
 
         case .failure(let error):
@@ -266,7 +280,7 @@ final class AuthService: NSObject {
     private func randomNonceString(length: Int = 32) -> String {
         var randomBytes = [UInt8](repeating: 0, count: length)
         _ = SecRandomCopyBytes(kSecRandomDefault, randomBytes.count, &randomBytes)
-        let charset = Array("0123456789ABCDEFGHIJKLMNOPQRSTUVXYZabcdefghijklmnopqrstuvwxyz-._")
+        let charset = Array("0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz-._")
         return String(randomBytes.map { charset[Int($0) % charset.count] })
     }
 

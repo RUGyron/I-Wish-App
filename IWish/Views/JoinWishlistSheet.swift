@@ -205,11 +205,8 @@ struct JoinWishlistSheet: View {
                     return
                 }
 
-                // КРИТИЧНО: сохраняем ключ в Keychain ДО первого membership/fetch.
-                // Без него последующие fetchSharedWishlist (включая background sync) не смогут расшифровать.
-                try KeychainService.save(key: key, for: info.wishlistID)
-
-                // Check if already a member (Firestore is source of truth)
+                // Сначала ВСЕ проверки до сохранения ключа в Keychain — иначе при ранних returns
+                // (already-member, no-name, etc.) в Keychain останется мусорный ключ.
                 let memberships = try await services.firestore.fetchMyMemberships(userUID: uid)
                 if memberships.contains(where: { $0.wishlistID == info.wishlistID }) {
                     showingInvitePreview = false
@@ -218,6 +215,10 @@ struct JoinWishlistSheet: View {
                     dismiss()
                     return
                 }
+
+                // Только теперь — сохраняем ключ и создаём membership.
+                // Ключ нужен ДО fetchSharedWishlist (расшифровка encryptedPayload).
+                try KeychainService.save(key: key, for: info.wishlistID)
 
                 // Join: create membership
                 try await services.firestore.joinWishlist(
@@ -333,8 +334,34 @@ final class QRScannerViewController: UIViewController, AVCaptureMetadataOutputOb
         view.insetsLayoutMarginsFromSafeArea = false
         additionalSafeAreaInsets = .zero
 
+        // Camera permission flow — если юзер отказал, показываем понятный UI
+        // с кнопкой "Открыть Настройки" вместо чёрного экрана.
+        let status = AVCaptureDevice.authorizationStatus(for: .video)
+        switch status {
+        case .authorized:
+            break
+        case .notDetermined:
+            AVCaptureDevice.requestAccess(for: .video) { [weak self] granted in
+                DispatchQueue.main.async {
+                    if granted {
+                        self?.viewDidLoad()  // restart with permission
+                    } else {
+                        self?.showPermissionDeniedOverlay()
+                    }
+                }
+            }
+            return
+        case .denied, .restricted:
+            showPermissionDeniedOverlay()
+            return
+        @unknown default:
+            showPermissionDeniedOverlay()
+            return
+        }
+
         guard let videoCaptureDevice = AVCaptureDevice.default(for: .video),
               let videoInput = try? AVCaptureDeviceInput(device: videoCaptureDevice) else {
+            showPermissionDeniedOverlay()
             return
         }
 
@@ -461,7 +488,8 @@ final class QRScannerViewController: UIViewController, AVCaptureMetadataOutputOb
             let iconName = isTorchOn ? "flashlight.on.fill" : "flashlight.off.fill"
             torchButton?.setImage(UIImage(systemName: iconName), for: .normal)
         } catch {
-            print("Torch error: \(error)")
+            // Torch не критично — пользователь увидит что иконка не сменилась, но scanner работает.
+            // os.log без category т.к. это редкая ветка.
         }
     }
 
@@ -478,5 +506,65 @@ final class QRScannerViewController: UIViewController, AVCaptureMetadataOutputOb
             AudioServicesPlaySystemSound(SystemSoundID(kSystemSoundID_Vibrate))
             self.onCodeScanned?(stringValue)
         }
+    }
+
+    /// Показать overlay "Доступ к камере отключён" с кнопками "Настройки" / "Закрыть".
+    private func showPermissionDeniedOverlay() {
+        let container = UIView(frame: view.bounds)
+        container.autoresizingMask = [.flexibleWidth, .flexibleHeight]
+        container.backgroundColor = .black
+
+        let stack = UIStackView()
+        stack.axis = .vertical
+        stack.alignment = .center
+        stack.spacing = 16
+        stack.translatesAutoresizingMaskIntoConstraints = false
+
+        let icon = UIImageView(image: UIImage(systemName: "camera.fill"))
+        icon.tintColor = .white
+        icon.contentMode = .scaleAspectFit
+        icon.translatesAutoresizingMaskIntoConstraints = false
+        icon.heightAnchor.constraint(equalToConstant: 56).isActive = true
+
+        let title = UILabel()
+        title.text = "Нет доступа к камере"
+        title.textColor = .white
+        title.font = .systemFont(ofSize: 20, weight: .semibold)
+        title.textAlignment = .center
+
+        let desc = UILabel()
+        desc.text = "Чтобы отсканировать QR-код, разрешите приложению доступ к камере в Настройках."
+        desc.textColor = .lightGray
+        desc.font = .systemFont(ofSize: 15)
+        desc.numberOfLines = 0
+        desc.textAlignment = .center
+
+        let settingsBtn = UIButton(type: .system)
+        var settingsConfig = UIButton.Configuration.borderedProminent()
+        settingsConfig.title = "Открыть Настройки"
+        settingsConfig.cornerStyle = .large
+        settingsBtn.configuration = settingsConfig
+        settingsBtn.addAction(UIAction { [weak self] _ in
+            guard let url = URL(string: UIApplication.openSettingsURLString) else { return }
+            UIApplication.shared.open(url)
+            self?.onCancel?()
+        }, for: .touchUpInside)
+
+        let cancelBtn = UIButton(type: .system)
+        cancelBtn.setTitle("Закрыть", for: .normal)
+        cancelBtn.setTitleColor(.lightGray, for: .normal)
+        cancelBtn.titleLabel?.font = .systemFont(ofSize: 16, weight: .medium)
+        cancelBtn.addAction(UIAction { [weak self] _ in
+            self?.onCancel?()
+        }, for: .touchUpInside)
+
+        [icon, title, desc, settingsBtn, cancelBtn].forEach(stack.addArrangedSubview)
+        container.addSubview(stack)
+        NSLayoutConstraint.activate([
+            stack.centerYAnchor.constraint(equalTo: container.centerYAnchor),
+            stack.leadingAnchor.constraint(equalTo: container.leadingAnchor, constant: 32),
+            stack.trailingAnchor.constraint(equalTo: container.trailingAnchor, constant: -32),
+        ])
+        view.addSubview(container)
     }
 }

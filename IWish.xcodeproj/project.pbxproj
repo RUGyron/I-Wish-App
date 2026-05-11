@@ -362,12 +362,13 @@
 				CODE_SIGN_ENTITLEMENTS = IWish/IWish.entitlements;
 				CODE_SIGN_IDENTITY = "Apple Development";
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 23;
+				CURRENT_PROJECT_VERSION = 24;
 				DEVELOPMENT_TEAM = N8VX7T6P4D;
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = IWish/Info.plist;
 				INFOPLIST_KEY_NSCameraUsageDescription = "Чтобы сфотографировать обложку для желания";
+				INFOPLIST_KEY_CFBundleDisplayName = "I Wish";
 				INFOPLIST_KEY_NSPhotoLibraryUsageDescription = "Чтобы выбрать фото для обложки желания";
 				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
 				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
@@ -401,12 +402,13 @@
 				CODE_SIGN_ENTITLEMENTS = IWish/IWish.entitlements;
 				CODE_SIGN_IDENTITY = "Apple Development";
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 23;
+				CURRENT_PROJECT_VERSION = 24;
 				DEVELOPMENT_TEAM = N8VX7T6P4D;
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = IWish/Info.plist;
 				INFOPLIST_KEY_NSCameraUsageDescription = "Чтобы сфотографировать обложку для желания";
+				INFOPLIST_KEY_CFBundleDisplayName = "I Wish";
 				INFOPLIST_KEY_NSPhotoLibraryUsageDescription = "Чтобы выбрать фото для обложки желания";
 				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
 				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
@@ -437,7 +439,7 @@
 			buildSettings = {
 				BUNDLE_LOADER = "$(TEST_HOST)";
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 23;
+				CURRENT_PROJECT_VERSION = 24;
 				DEVELOPMENT_TEAM = N8VX7T6P4D;
 				GENERATE_INFOPLIST_FILE = YES;
 				MARKETING_VERSION = 1.1.1;
@@ -458,7 +460,7 @@
 			buildSettings = {
 				BUNDLE_LOADER = "$(TEST_HOST)";
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 23;
+				CURRENT_PROJECT_VERSION = 24;
 				DEVELOPMENT_TEAM = N8VX7T6P4D;
 				GENERATE_INFOPLIST_FILE = YES;
 				MARKETING_VERSION = 1.1.1;

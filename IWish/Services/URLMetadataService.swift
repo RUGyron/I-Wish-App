@@ -29,6 +29,11 @@ struct URLMetadataService {
 
     // MARK: - Private
 
+    /// Hard cap на размер HTML — защита от memory-attack (адверсарный сайт может
+    /// слать гигабайты в HTTP body). Метаданных нет нужды искать в больше чем 2МБ:
+    /// og:title/og:image обычно в первых 200КБ <head>.
+    private static let maxHTMLBytes = 2 * 1024 * 1024
+
     private static func fetchHTML(from url: URL) async -> String? {
         var request = URLRequest(url: url, timeoutInterval: 12)
         request.setValue(
@@ -44,8 +49,11 @@ struct URLMetadataService {
         guard let (data, _) = try? await URLSession.shared.data(for: request) else {
             return nil
         }
-        return String(data: data, encoding: .utf8)
-            ?? String(data: data, encoding: .windowsCP1251)
+        // Truncate если ответ слишком большой — парсить хвост не нужно.
+        let bounded = data.count > maxHTMLBytes ? data.prefix(maxHTMLBytes) : data
+        let boundedData = Data(bounded)
+        return String(data: boundedData, encoding: .utf8)
+            ?? String(data: boundedData, encoding: .windowsCP1251)
     }
 
     /// Extracts content= from <meta property="X" content="Y"> or <meta content="Y" property="X">

@@ -390,8 +390,18 @@ struct WishlistDetailView: View {
         .environment(\.editMode, $editMode)
         .contentMargins(.bottom, 80)
         .warmBackground()
-        .animation(.easeInOut, value: activeItems.map(\.id))
+        // Hash count + last id вместо map(\.id) — без array allocation на каждый render.
+        // На 100+ items это ощутимо при scroll/edit.
+        .animation(.easeInOut, value: activeItemsAnimationHash)
         .animation(.easeInOut(duration: 0.25), value: collapsedTiersRaw)
+    }
+
+    /// Дешёвый хэш для anim trigger без массива: count + последний id.
+    /// Уловит insert/delete/reorder где порядок последнего элемента меняется.
+    private var activeItemsAnimationHash: Int {
+        let count = activeItems.count
+        let lastID = activeItems.last?.id.uuidString.hashValue ?? 0
+        return count &* 31 &+ lastID
     }
 
     // Хедер — часть списка, но визуально читается как продолжение навбара:
