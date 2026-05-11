@@ -1,52 +1,56 @@
 import SwiftUI
 
-/// Top-banner поверх всего интерфейса когда сеть нестабильна.
+/// Лаконичный banner потери сети + блокирующий overlay поверх всего UI.
 ///
-/// Показывается только когда `NetworkMonitor.isBlocked == true` — после N подряд
-/// network-failures (threshold). Не блокирует чтение/scroll, только сигнализирует.
-/// При восстановлении (M подряд successes) banner плавно исчезает.
+/// Дизайн (после правок Влада 2026-05-11):
+/// - Стиль как у тостов: `ultraThinMaterial`, rounded card, нейтральный цвет, без агрессивного red.
+/// - Правильное размещение: НЕ в safe area, с padding от top.
+/// - Блокирует UI: полупрозрачный backdrop consume'ит touches пока сеть нестабильна.
+///   Юзер видит свои локальные данные подсвеченным, но не может тапать — это однозначный
+///   сигнал "сейчас ничего сделать нельзя, ждём сеть".
+///
+/// Полностью прозрачен пока `monitor.isBlocked == false`.
 struct NetworkBanner: View {
     let monitor: NetworkMonitor
 
     var body: some View {
         if monitor.isBlocked {
-            HStack(spacing: 10) {
-                Image(systemName: "wifi.exclamationmark")
-                    .font(.body.weight(.semibold))
-                Text("Нет соединения")
-                    .font(.subheadline.weight(.semibold))
-                Spacer()
-                ProgressView()
-                    .controlSize(.small)
-                    .tint(.white)
-            }
-            .foregroundStyle(.white)
-            .padding(.horizontal, 16)
-            .padding(.vertical, 10)
-            .frame(maxWidth: .infinity)
-            .background(.red.opacity(0.92), in: RoundedRectangle(cornerRadius: 0))
-            .transition(.move(edge: .top).combined(with: .opacity))
-            .accessibilityElement(children: .combine)
-            .accessibilityLabel("Нет соединения. Идёт попытка восстановления.")
-        }
-    }
-}
+            ZStack(alignment: .top) {
+                // Backdrop — мягкий, но consume'ит touches (UI залочен).
+                Color.black.opacity(0.18)
+                    .ignoresSafeArea()
+                    .transition(.opacity)
+                    .contentShape(Rectangle()) // hit-test всю площадь — блокировка тапов
 
-#Preview {
-    @Previewable @State var monitor = NetworkMonitor()
-    return VStack {
-        NetworkBanner(monitor: monitor)
-        Button("Toggle blocked") {
-            // Test only — real logic is via recordError/recordSuccess
-            if monitor.isBlocked {
-                monitor.recordSuccess()
-                monitor.recordSuccess()
-            } else {
-                monitor.recordError(URLError(.notConnectedToInternet))
-                monitor.recordError(URLError(.notConnectedToInternet))
-                monitor.recordError(URLError(.notConnectedToInternet))
+                // Карточка banner — лаконичная, в стиле тостов.
+                HStack(spacing: 10) {
+                    Image(systemName: "wifi.exclamationmark")
+                        .font(.body.weight(.semibold))
+                        .foregroundStyle(.secondary)
+
+                    Text("Нет соединения")
+                        .font(.subheadline.weight(.medium))
+                        .foregroundStyle(.primary)
+
+                    Spacer(minLength: 8)
+
+                    ProgressView()
+                        .controlSize(.small)
+                }
+                .padding(.horizontal, 16)
+                .padding(.vertical, 12)
+                .background {
+                    RoundedRectangle(cornerRadius: 14, style: .continuous)
+                        .fill(.ultraThinMaterial)
+                        .shadow(color: .black.opacity(0.08), radius: 8, y: 4)
+                }
+                .padding(.horizontal, 16)
+                .padding(.top, 8) // отступ от safe-area top — RootView передаёт ниже status bar
+                .transition(.move(edge: .top).combined(with: .opacity))
+                .accessibilityElement(children: .combine)
+                .accessibilityLabel("Нет соединения. Идёт попытка восстановления.")
             }
+            .animation(.spring(duration: 0.3, bounce: 0.15), value: monitor.isBlocked)
         }
-        Spacer()
     }
 }

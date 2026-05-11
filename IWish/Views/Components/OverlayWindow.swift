@@ -48,31 +48,34 @@ final class OverlayWindowController {
 /// При отсутствии активного banner/toast — полностью прозрачен и пропускает touches.
 ///
 /// **⚠ НЕ ДОБАВЛЯТЬ:** `.background(...)`, `.contentShape(Rectangle())`, `.frame(...)` с
-/// solid color на корневой VStack — это создаст hit-testable backing view, и passthrough
+/// solid color на корневой ZStack — это создаст hit-testable backing view, и passthrough
 /// в PassthroughWindow перестанет работать. Юзер не сможет тапать UI под overlay'ем.
-/// Banner и toast уже имеют собственный `.background()` — там hit-testing OK.
+/// Banner / backdrop / toast уже имеют собственный `.background()` или `.contentShape()` —
+/// там hit-testing работает осмысленно.
 struct OverlayRootView: View {
     private let monitor = AppServices.shared.networkMonitor
     private let toastManager = ToastManager.shared
 
     var body: some View {
-        VStack(spacing: 0) {
+        ZStack(alignment: .top) {
+            // 1. NetworkBanner: при isBlocked показывает backdrop (на весь экран, lock UI)
+            //    + карточку banner. Backdrop поглощает touches — UI залочен.
             NetworkBanner(monitor: monitor)
-            // Toast встаёт под banner (если banner показан) или сверху если banner скрыт.
-            ZStack(alignment: .top) {
-                if let toast = toastManager.current {
-                    ToastBannerView(toast: toast) {
-                        toastManager.dismiss()
-                    }
-                    .transition(.move(edge: .top).combined(with: .opacity))
-                    .padding(.top, 8)
+
+            // 2. Toast: всегда поверх banner (выше z-index), уважает safe area сверху.
+            //    При активном banner тост встаёт ниже карточки banner за счёт extra-padding.
+            if let toast = toastManager.current {
+                ToastBannerView(toast: toast) {
+                    toastManager.dismiss()
                 }
+                .transition(.move(edge: .top).combined(with: .opacity))
+                // padding.top: 8 (от safe area) + extra 64 если banner показан, чтобы не накладывались
+                .padding(.top, monitor.isBlocked ? 72 : 8)
+                .zIndex(2)
             }
-            .animation(.spring(duration: 0.35, bounce: 0.2), value: toastManager.current?.id)
-            Spacer(minLength: 0)
         }
-        .frame(maxWidth: .infinity, maxHeight: .infinity)
-        .ignoresSafeArea(.container, edges: .top)
+        .animation(.spring(duration: 0.3, bounce: 0.15), value: toastManager.current?.id)
+        .animation(.spring(duration: 0.3, bounce: 0.15), value: monitor.isBlocked)
     }
 }
 
