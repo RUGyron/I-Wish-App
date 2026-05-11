@@ -20,6 +20,8 @@ struct EditItemSheet: View {
     @State private var priceMode: PriceModeUI = .exact
     @State private var currency: String = "RUB"
     @State private var urlString: String = ""
+    @State private var fetchedTitle: String?
+    @State private var isFetchingMetadata = false
     @State private var probationEnabled: Bool = false
     @State private var probationDays: Int = 30
     @State private var isSaving = false
@@ -33,11 +35,12 @@ struct EditItemSheet: View {
     var body: some View {
         NavigationStack {
             Form {
-                Section("Ссылка") {
-                    TextField("URL", text: $urlString)
-                        .textInputAutocapitalization(.never)
-                        .autocorrectionDisabled()
-                }
+                URLPasteSection(
+                    urlString: $urlString,
+                    fetchedTitle: $fetchedTitle,
+                    onPasted: { url in fetchMetadata(for: url) },
+                    isFetching: isFetchingMetadata
+                )
 
                 Section("Название") {
                     TextField("Чего хочется?", text: $name)
@@ -157,6 +160,18 @@ struct EditItemSheet: View {
         if let end = item.probationEndAt {
             let days = Calendar.current.dateComponents([.day], from: .now, to: end).day ?? 30
             probationDays = max(1, days)
+        }
+    }
+
+    private func fetchMetadata(for url: URL) {
+        isFetchingMetadata = true
+        Task {
+            let meta = await URLMetadataService.fetch(from: url)
+            await MainActor.run {
+                isFetchingMetadata = false
+                fetchedTitle = meta.title
+                // В EditItemSheet НЕ перезатираем существующее имя/обложку — юзер уже выбрал.
+            }
         }
     }
 

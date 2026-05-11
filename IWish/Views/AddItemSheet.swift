@@ -31,6 +31,7 @@ struct AddItemSheet: View {
     }
 
     @State private var urlStatus: URLPasteStatus = .idle
+    @State private var fetchedTitle: String?
     @State private var isFetchingMetadata = false
     @State private var errorMessage: String?
     @State private var isSaving = false
@@ -100,47 +101,12 @@ struct AddItemSheet: View {
     // MARK: - Sections
 
     private var urlSection: some View {
-        Section("Ссылка") {
-            if urlString.isEmpty {
-                Button {
-                    pasteURL()
-                } label: {
-                    Label("Вставить ссылку", systemImage: "doc.on.clipboard")
-                        .frame(maxWidth: .infinity, alignment: .leading)
-                }
-                .contentShape(Rectangle())
-
-                if case .noURL = urlStatus {
-                    Text("Нет ссылки в буфере")
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                }
-            } else {
-                HStack {
-                    Text(urlString)
-                        .font(.subheadline)
-                        .foregroundStyle(.secondary)
-                        .lineLimit(1)
-                        .truncationMode(.middle)
-
-                    Spacer()
-
-                    if isFetchingMetadata {
-                        ProgressView()
-                            .controlSize(.small)
-                    }
-
-                    Button {
-                        urlString = ""
-                        urlStatus = .idle
-                    } label: {
-                        Image(systemName: "xmark.circle.fill")
-                            .foregroundStyle(.secondary)
-                    }
-                    .buttonStyle(.plain)
-                }
-            }
-        }
+        URLPasteSection(
+            urlString: $urlString,
+            fetchedTitle: $fetchedTitle,
+            onPasted: { url in fetchMetadata(for: url) },
+            isFetching: isFetchingMetadata
+        )
     }
 
     private var nameSection: some View {
@@ -245,20 +211,7 @@ struct AddItemSheet: View {
         }
     }
 
-    // MARK: - URL Paste + Metadata
-
-    private func pasteURL() {
-        guard let clipboard = UIPasteboard.general.string,
-              let url = URL(string: clipboard),
-              url.scheme != nil else {
-            urlStatus = .noURL
-            return
-        }
-
-        urlString = clipboard
-        urlStatus = .pasted
-        fetchMetadata(for: url)
-    }
+    // MARK: - URL Metadata
 
     private func fetchMetadata(for url: URL) {
         isFetchingMetadata = true
@@ -266,6 +219,7 @@ struct AddItemSheet: View {
             let meta = await URLMetadataService.fetch(from: url)
             await MainActor.run {
                 isFetchingMetadata = false
+                fetchedTitle = meta.title
                 if name.trimmingCharacters(in: .whitespaces).isEmpty, let title = meta.title {
                     name = title
                 }

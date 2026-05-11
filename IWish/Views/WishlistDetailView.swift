@@ -370,6 +370,9 @@ struct WishlistDetailView: View {
                 flatSorted
             }
         }
+        // .plain убирает огромный inset+большой автоскруги insetGrouped.
+        // Каждый item-row получает собственный compact card через listRowBackground.
+        .listStyle(.plain)
         .environment(\.editMode, $editMode)
         .contentMargins(.bottom, 80)
         .warmBackground()
@@ -665,8 +668,16 @@ struct WishlistDetailView: View {
         .padding(.horizontal, 12)
         .contentShape(Rectangle())
         .onTapGesture { detailItem = item }
-        .listRowInsets(EdgeInsets())
-        .listRowBackground(Color(.secondarySystemGroupedBackground))
+        // Compact card: малый cornerRadius (6pt) вместо большого default insetGrouped (~10pt).
+        // Горизонтальный padding имитирует inset; вертикальный — gap между rows.
+        .listRowInsets(EdgeInsets(top: 2, leading: 16, bottom: 2, trailing: 16))
+        .listRowBackground(
+            RoundedRectangle(cornerRadius: 6, style: .continuous)
+                .fill(Color(.secondarySystemGroupedBackground))
+                .padding(.horizontal, 16)
+                .padding(.vertical, 2)
+        )
+        .listRowSeparator(.hidden)
         .alignmentGuide(.listRowSeparatorLeading) { _ in 78 }
     }
 
