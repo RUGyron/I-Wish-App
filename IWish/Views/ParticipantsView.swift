@@ -325,9 +325,19 @@ struct ParticipantsView: View {
                 key: key
             )
 
-            // Set owner info: ownerName приходит расшифрованным из payload SharedWishlistInfo.
+            // Set owner info.
+            // SOURCE-OF-TRUTH для ownerName: сначала plaintext memberships.userName
+            // (надёжнее — не может быть отравлен старым owner-flip багом, который
+            // перезаписывал encryptedPayload.ownerName именем "флипера"). Если
+            // membership с role="owner" у owner UID отсутствует — fallback на
+            // encryptedPayload.ownerName, затем на дефолт.
             ownerUID = info.ownerUID
-            ownerName = info.ownerName ?? "Владелец"
+            let ownerMembership = info.members.first { $0.userUID == info.ownerUID && $0.role == "owner" }
+            if let mname = ownerMembership?.userName, !mname.isEmpty {
+                ownerName = mname
+            } else {
+                ownerName = info.ownerName ?? "Владелец"
+            }
 
             // Filter out the owner — they're shown in the owner section
             let nonOwnerMembers = info.members.filter { $0.userUID != info.ownerUID }
