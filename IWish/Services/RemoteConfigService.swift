@@ -59,14 +59,23 @@ final class RemoteConfigService {
         }
     }
 
-    /// Polling каждые 15 секунд — позволяет динамически блокировать/разблокировать без рестарта app.
-    /// Если разработчик выкатил kill-switch (`min_supported_build = current+1`) — юзеры увидят блок
-    /// в течение 15 секунд. Если откат — в течение 15 секунд снова получат доступ.
+    /// Adaptive polling:
+    /// - Когда force-update **требуется** (UI заблокирован) — раз в 15с, чтобы быстро отпустить
+    ///   после публикации новой версии или отката kill-switch.
+    /// - Когда **не требуется** (нормальная работа) — раз в 120с, чтобы не жечь батарею
+    ///   и не спамить Firebase. 2 минуты задержки на kill-switch acceptable.
+    /// Перепланирует таймер при каждом fetch (см. `performFetch` ниже).
     private func startPolling() {
-        guard pollTimer == nil else { return }
-        let timer = Timer.scheduledTimer(withTimeInterval: 15.0, repeats: true) { [weak self] _ in
+        scheduleNextPoll()
+    }
+
+    private func scheduleNextPoll() {
+        pollTimer?.invalidate()
+        let interval: TimeInterval = requiresForceUpdate ? 15.0 : 120.0
+        let timer = Timer.scheduledTimer(withTimeInterval: interval, repeats: false) { [weak self] _ in
             Task { @MainActor in
                 await self?.performFetch()
+                self?.scheduleNextPoll()
             }
         }
         pollTimer = timer

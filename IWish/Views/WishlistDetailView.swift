@@ -37,6 +37,7 @@ struct WishlistDetailView: View {
     @Environment(\.dismiss) private var dismiss
     @Environment(\.appServices) private var services
     @Environment(\.toast) private var toast
+    @Environment(\.scenePhase) private var scenePhase
     let wishlist: Wishlist
     @State private var showingAddItem = false
     @State private var selectedSort: SortOption = .importance
@@ -312,6 +313,19 @@ struct WishlistDetailView: View {
             stopPolling()
             if editMode.isEditing {
                 cancelReorder()
+            }
+        }
+        .onChange(of: scenePhase) { _, newPhase in
+            // Pause polling в background чтобы не жечь quota и батарею.
+            switch newPhase {
+            case .background, .inactive:
+                stopPolling()
+            case .active:
+                if pollTimer == nil && !wishlist.isDeleted {
+                    startPolling()
+                }
+            @unknown default:
+                break
             }
         }
         .overlay(alignment: .bottom) {

@@ -76,6 +76,13 @@ final class NetworkMonitor {
     /// Записать ошибку. Если это network-flavored (URLError, 5xx) — increment fail counter.
     /// Не-сетевые ошибки (4xx, decryption, rate-limit) ИГНОРИРУЮТСЯ — они не indicator потери сети.
     func recordError(_ error: Error) {
+        // 404 на cached lightPingPath означает что документ удалён — invalidate cache,
+        // чтобы следующий silentPing fall back на fetchMyMemberships.
+        if let fs = error as? FirestoreService.FirestoreError,
+           case .requestFailed(let status, _) = fs, status == 404 {
+            lightPingPath = nil
+        }
+
         guard Self.isNetworkError(error) else {
             // Не сетевая ошибка — никак не влияет на network state.
             // Но НЕ сбрасываем consecutiveSuccesses — она не получила подтверждения сети.

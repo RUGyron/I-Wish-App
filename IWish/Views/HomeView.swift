@@ -6,6 +6,7 @@ struct HomeView: View {
     @Environment(\.appServices) private var services
     @Environment(\.toast) private var toast
     @Environment(\.horizontalSizeClass) private var sizeClass
+    @Environment(\.scenePhase) private var scenePhase
     @Query(sort: \Wishlist.createdAt, order: .reverse) private var wishlists: [Wishlist]
     @State private var showingAddSheet = false
     @State private var showingSettings = false
@@ -124,6 +125,26 @@ struct HomeView: View {
                 // First appear — refresh + start polling
                 Task { await services.data?.refreshWishlists() }
                 startPolling()
+            }
+        }
+        .onDisappear {
+            // Не выгружаемся пока view навигационно в стеке (NavigationLink → детальный
+            // экран не вызывает onDisappear на HomeView), но при reset стека / переключении
+            // вкладок остановим polling чтобы не жрать quota / батарею в фоне.
+            stopPolling()
+        }
+        .onChange(of: scenePhase) { _, newPhase in
+            // Pause polling когда app в background. Resume на foreground.
+            switch newPhase {
+            case .background, .inactive:
+                stopPolling()
+            case .active:
+                if pollTimer == nil {
+                    Task { await services.data?.refreshWishlists() }
+                    startPolling()
+                }
+            @unknown default:
+                break
             }
         }
         .onReceive(NotificationCenter.default.publisher(for: .didReceiveShareLink)) { _ in

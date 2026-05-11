@@ -1,6 +1,9 @@
 import SwiftUI
 import SwiftData
 import CryptoKit
+import os.log
+
+private let shareLog = Logger(subsystem: "RUGyron.IWish", category: "ShareManager")
 
 // MARK: - Share Role
 
@@ -57,7 +60,7 @@ final class ShareManager {
             //    Не-owner participant получает ключ при join через invite link → он у него в Keychain.
             //    Owner получает ключ при createWishlist.
             guard let key = KeychainService.load(for: wishlist.id.uuidString) else {
-                print("[Share] FAILED: no key in Keychain for wishlist \(wishlist.id.uuidString)")
+                shareLog.error("FAILED: no key in Keychain for wishlist \(wishlist.id.uuidString, privacy: .public)")
                 self.error = "Не найден ключ шифрования списка. Попробуйте создать список заново."
                 isLoading = false
                 return
@@ -89,7 +92,7 @@ final class ShareManager {
                 }
             }
 
-            print("[Share] generateShare: wlid=\(wishlist.id.uuidString) isFirstPublish=\(isFirstPublish) isOwner=\(isOwner) myRole=\(wishlist.myRole ?? "nil") ownerRecordID=\(wishlist.ownerRecordID ?? "nil") callerUID=\(ownerUID)")
+            shareLog.info("generateShare: wlid=\(wishlist.id.uuidString, privacy: .public) isFirstPublish=\(isFirstPublish, privacy: .public) isOwner=\(isOwner, privacy: .public) myRole=\(wishlist.myRole ?? "nil", privacy: .public) callerUID=\(ownerUID, privacy: .private)")
 
             // 2. Только при first-time публикации owner'ом пишем shared_wishlists + items + owner membership.
             //    Повторные открытия sheet'а у owner'а не пере-записывают wishlist DOC.
@@ -195,12 +198,14 @@ final class ShareManager {
                 wishlist.updatedAt = .now
             }
 
-            print("[Share] SUCCESS — shareURL: \(userURL)")
+            // SECURITY: НЕ логируем shareURL — он содержит fragment с AES-ключом (#k=).
+            // Только confirmation что share создан + plaintext shortID для debug.
+            shareLog.info("share generated: shortID=\(newShortID, privacy: .public)")
         } catch let firestoreError as FirestoreService.FirestoreError {
-            print("[Share] FAILED: \(firestoreError)")
+            shareLog.error("FAILED: \(firestoreError.localizedDescription, privacy: .public)")
             self.error = firestoreError.errorDescription ?? "Ошибка"
         } catch {
-            print("[Share] FAILED: \(error)")
+            shareLog.error("FAILED: \(error.localizedDescription, privacy: .public)")
             self.error = error.localizedDescription
         }
 

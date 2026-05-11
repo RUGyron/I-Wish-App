@@ -189,7 +189,7 @@ struct EditItemSheet: View {
                 let priceMin = parsePrice(priceMinString)
                 let priceMax: Double? = priceMode == .range ? parsePrice(priceMaxString) : nil
 
-                try await services.data.updateItem(
+                try await services.data?.updateItem(
                     id: item.id.uuidString,
                     wishlistID: wishlistID,
                     name: name.trimmingCharacters(in: .whitespaces),

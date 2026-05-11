@@ -265,7 +265,7 @@ struct AddItemSheet: View {
                 let priceMin = parsePrice(priceMinString)
                 let priceMax: Double? = priceMode == .range ? parsePrice(priceMaxString) : nil
 
-                _ = try await services.data.addItem(
+                _ = try await services.data?.addItem(
                     to: wishlist.id.uuidString,
                     name: trimmedName,
                     tier: tier,
