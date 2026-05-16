@@ -1,0 +1,568 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<title>IWish — приватные списки желаний для iPhone</title>
+<meta name="description" content="IWish — списки желаний с шифрованием на устройстве. Бесплатно, без рекламы, open source. Только для iPhone.">
+<meta name="theme-color" content="#1C1610">
+
+<!-- Open Graph -->
+<meta property="og:type" content="website">
+<meta property="og:url" content="https://rugyron.github.io/I-Wish-App/promo">
+<meta property="og:title" content="IWish — приватные списки желаний">
+<meta property="og:description" content="Списки желаний, которые видишь только ты и те, кому ты разрешила. Бесплатно навсегда, без рекламы, open source.">
+<meta property="og:image" content="https://rugyron.github.io/I-Wish-App/assets/og-image.png">
+<meta property="og:locale" content="ru_RU">
+
+<!-- Twitter -->
+<meta name="twitter:card" content="summary_large_image">
+<meta name="twitter:title" content="IWish — приватные списки желаний">
+<meta name="twitter:description" content="Списки желаний с шифрованием на устройстве. Бесплатно, без рекламы, open source.">
+<meta name="twitter:image" content="https://rugyron.github.io/I-Wish-App/assets/og-image.png">
+
+<link rel="icon" type="image/png" href="./assets/favicon.png">
+<link rel="apple-touch-icon" href="./assets/apple-touch-icon.png">
+
+<!-- GoatCounter analytics -->
+<script data-goatcounter="https://iwish.goatcounter.com/count" async src="//gc.zgo.at/count.js"></script>
+
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; -webkit-tap-highlight-color: transparent; }
+
+  :root {
+    --bg: #1C1610;
+    --bg-alt: #241B14;
+    --bg-card: rgba(255, 240, 220, 0.04);
+    --text: #F5E6D0;
+    --text-dim: #A08060;
+    --accent: #C2710C;
+    --accent-light: #E0944A;
+    --accent-glow: rgba(194, 113, 12, 0.35);
+    --border: rgba(245, 230, 208, 0.08);
+  }
+
+  html { scroll-behavior: smooth; }
+
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, "SF Pro Display", "SF Pro Text", "Helvetica Neue", sans-serif;
+    background: var(--bg);
+    color: var(--text);
+    line-height: 1.55;
+    -webkit-font-smoothing: antialiased;
+    overflow-x: hidden;
+  }
+
+  /* Decorative gradient blobs */
+  body::before {
+    content: "";
+    position: fixed;
+    inset: 0;
+    background:
+      radial-gradient(ellipse 70% 50% at 80% 10%, rgba(194, 113, 12, 0.18), transparent 60%),
+      radial-gradient(ellipse 60% 40% at 10% 90%, rgba(224, 148, 74, 0.10), transparent 60%);
+    pointer-events: none;
+    z-index: 0;
+  }
+
+  main, header, footer { position: relative; z-index: 1; }
+
+  /* ---------- HEADER NAV ---------- */
+  .nav {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 20px 24px;
+    max-width: 1100px;
+    margin: 0 auto;
+  }
+  .nav-logo {
+    font-size: 18px;
+    font-weight: 700;
+    letter-spacing: -0.2px;
+  }
+  .nav-logo .sparkle { color: var(--accent); }
+  .nav-links {
+    display: flex;
+    gap: 20px;
+    font-size: 14px;
+  }
+  .nav-links a {
+    color: var(--text-dim);
+    text-decoration: none;
+    transition: color 0.2s;
+  }
+  .nav-links a:hover { color: var(--text); }
+
+  /* ---------- HERO ---------- */
+  .hero {
+    text-align: center;
+    padding: 60px 24px 80px;
+    max-width: 760px;
+    margin: 0 auto;
+  }
+  .hero-badge {
+    display: inline-block;
+    padding: 6px 14px;
+    background: var(--bg-card);
+    border: 1px solid var(--border);
+    border-radius: 100px;
+    font-size: 13px;
+    color: var(--text-dim);
+    margin-bottom: 24px;
+    backdrop-filter: blur(20px);
+    -webkit-backdrop-filter: blur(20px);
+  }
+  .hero h1 {
+    font-size: clamp(36px, 7vw, 56px);
+    font-weight: 800;
+    letter-spacing: -1px;
+    line-height: 1.1;
+    margin-bottom: 20px;
+    background: linear-gradient(180deg, #F5E6D0 0%, #C2710C 130%);
+    -webkit-background-clip: text;
+    background-clip: text;
+    -webkit-text-fill-color: transparent;
+  }
+  .hero p.lead {
+    font-size: clamp(16px, 4vw, 19px);
+    color: var(--text-dim);
+    margin-bottom: 36px;
+    max-width: 540px;
+    margin-left: auto;
+    margin-right: auto;
+  }
+
+  /* ---------- BUTTONS ---------- */
+  .btn-primary {
+    display: inline-flex;
+    align-items: center;
+    gap: 10px;
+    background: var(--accent);
+    color: #fff;
+    text-decoration: none;
+    padding: 16px 28px;
+    border-radius: 16px;
+    font-size: 17px;
+    font-weight: 600;
+    box-shadow: 0 8px 32px var(--accent-glow);
+    transition: transform 0.15s, box-shadow 0.2s;
+  }
+  .btn-primary:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 12px 40px var(--accent-glow);
+  }
+  .btn-primary:active { transform: translateY(0); }
+  .btn-secondary {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    color: var(--text);
+    text-decoration: none;
+    padding: 14px 22px;
+    border-radius: 14px;
+    border: 1px solid var(--border);
+    background: var(--bg-card);
+    backdrop-filter: blur(20px);
+    -webkit-backdrop-filter: blur(20px);
+    font-size: 15px;
+    margin-left: 8px;
+    transition: background 0.2s, border-color 0.2s;
+  }
+  .btn-secondary:hover {
+    background: rgba(255, 240, 220, 0.07);
+    border-color: rgba(245, 230, 208, 0.18);
+  }
+
+  .hero-cta-row {
+    display: inline-flex;
+    flex-wrap: wrap;
+    gap: 12px;
+    justify-content: center;
+    align-items: center;
+  }
+
+  /* ---------- SECTIONS ---------- */
+  section {
+    padding: 80px 24px;
+    max-width: 1100px;
+    margin: 0 auto;
+  }
+  section.tight { padding: 60px 24px; }
+
+  h2 {
+    font-size: clamp(28px, 5vw, 38px);
+    font-weight: 800;
+    letter-spacing: -0.5px;
+    margin-bottom: 16px;
+    text-align: center;
+  }
+  h2 + p.section-lead {
+    text-align: center;
+    color: var(--text-dim);
+    font-size: 17px;
+    max-width: 560px;
+    margin: 0 auto 48px;
+  }
+
+  /* ---------- USP GRID ---------- */
+  .usp-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+    gap: 16px;
+  }
+  .usp-card {
+    padding: 28px;
+    background: var(--bg-card);
+    border: 1px solid var(--border);
+    border-radius: 24px;
+    backdrop-filter: blur(20px);
+    -webkit-backdrop-filter: blur(20px);
+    transition: transform 0.2s, border-color 0.2s;
+  }
+  .usp-card:hover {
+    transform: translateY(-3px);
+    border-color: rgba(245, 230, 208, 0.16);
+  }
+  .usp-icon {
+    font-size: 32px;
+    margin-bottom: 14px;
+    display: block;
+  }
+  .usp-card h3 {
+    font-size: 18px;
+    margin-bottom: 8px;
+    letter-spacing: -0.2px;
+  }
+  .usp-card p {
+    font-size: 15px;
+    color: var(--text-dim);
+    line-height: 1.55;
+  }
+
+  /* ---------- SCREENSHOTS ---------- */
+  .screens-row {
+    display: flex;
+    gap: 16px;
+    overflow-x: auto;
+    padding: 8px 0 24px;
+    scroll-snap-type: x mandatory;
+    -webkit-overflow-scrolling: touch;
+    scrollbar-width: none;
+  }
+  .screens-row::-webkit-scrollbar { display: none; }
+  .screen {
+    flex: 0 0 auto;
+    width: clamp(180px, 50vw, 240px);
+    aspect-ratio: 9 / 19.5;
+    background: var(--bg-alt);
+    border: 1px solid var(--border);
+    border-radius: 32px;
+    overflow: hidden;
+    scroll-snap-align: center;
+    box-shadow: 0 20px 60px rgba(0,0,0,0.4);
+  }
+  .screen img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    display: block;
+  }
+  .screen-placeholder {
+    width: 100%;
+    height: 100%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: var(--text-dim);
+    font-size: 13px;
+    padding: 16px;
+    text-align: center;
+  }
+
+  /* ---------- HOW IT WORKS ---------- */
+  .steps {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+    gap: 24px;
+  }
+  .step {
+    text-align: center;
+    padding: 24px;
+  }
+  .step-num {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 48px;
+    height: 48px;
+    border-radius: 50%;
+    background: var(--accent);
+    color: #fff;
+    font-weight: 700;
+    font-size: 20px;
+    margin-bottom: 16px;
+    box-shadow: 0 6px 20px var(--accent-glow);
+  }
+  .step h3 {
+    font-size: 18px;
+    margin-bottom: 8px;
+  }
+  .step p {
+    color: var(--text-dim);
+    font-size: 15px;
+  }
+
+  /* ---------- SECURITY ---------- */
+  .security-block {
+    background: var(--bg-card);
+    border: 1px solid var(--border);
+    border-radius: 28px;
+    padding: 40px;
+    backdrop-filter: blur(20px);
+    -webkit-backdrop-filter: blur(20px);
+  }
+  .security-block h2 { text-align: left; }
+  .security-block p { color: var(--text-dim); font-size: 16px; margin-bottom: 14px; }
+  .security-block p strong { color: var(--text); }
+  .security-block ul { color: var(--text-dim); padding-left: 22px; margin: 12px 0 18px; }
+  .security-block ul li { margin-bottom: 6px; }
+
+  /* ---------- OPEN SOURCE ---------- */
+  .opensource {
+    text-align: center;
+    background: linear-gradient(135deg, rgba(194,113,12,0.10), rgba(224,148,74,0.04));
+    border: 1px solid var(--border);
+    border-radius: 28px;
+    padding: 56px 32px;
+  }
+  .opensource h2 { margin-bottom: 12px; }
+  .opensource p { color: var(--text-dim); font-size: 17px; margin-bottom: 28px; max-width: 520px; margin-left: auto; margin-right: auto; }
+
+  /* ---------- FINAL CTA ---------- */
+  .final-cta {
+    text-align: center;
+    padding: 80px 24px;
+  }
+  .final-cta h2 {
+    margin-bottom: 16px;
+  }
+  .final-cta p {
+    color: var(--text-dim);
+    font-size: 17px;
+    margin-bottom: 32px;
+  }
+
+  /* ---------- FOOTER ---------- */
+  footer {
+    border-top: 1px solid var(--border);
+    padding: 40px 24px;
+    text-align: center;
+    color: var(--text-dim);
+    font-size: 14px;
+  }
+  footer p { margin-bottom: 12px; }
+  footer a {
+    color: var(--text-dim);
+    text-decoration: none;
+    margin: 0 10px;
+    transition: color 0.2s;
+  }
+  footer a:hover { color: var(--text); }
+  footer .signature {
+    margin-top: 20px;
+    font-size: 13px;
+    color: var(--text-dim);
+    opacity: 0.7;
+  }
+
+  @media (max-width: 600px) {
+    section { padding: 60px 20px; }
+    .nav { padding: 16px 20px; }
+    .nav-links { gap: 14px; font-size: 13px; }
+    .security-block { padding: 28px 22px; }
+    .btn-secondary { margin-left: 0; margin-top: 8px; }
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    *, *::before, *::after {
+      transition: none !important;
+      animation: none !important;
+      scroll-behavior: auto !important;
+    }
+  }
+</style>
+</head>
+<body>
+
+<header>
+  <nav class="nav">
+    <div class="nav-logo">IWish<span class="sparkle"> ✨</span></div>
+    <div class="nav-links">
+      <a href="#features">Фичи</a>
+      <a href="#security">Безопасность</a>
+      <a href="https://github.com/RUGyron/I-Wish-App" target="_blank" rel="noopener">GitHub</a>
+    </div>
+  </nav>
+</header>
+
+<main>
+
+  <!-- HERO -->
+  <section class="hero">
+    <span class="hero-badge">🪶 Бесплатно навсегда · Open source</span>
+    <h1>Списки желаний только для своих</h1>
+    <p class="lead">
+      Веди вишлисты на iPhone и делись ими с близкими. Содержимое шифруется на устройстве — никто кроме тебя и приглашённых не увидит, что ты загадала.
+    </p>
+    <div class="hero-cta-row">
+      <a class="btn-primary app-store-link" href="#">
+         Скачать в App Store
+      </a>
+      <a class="btn-secondary" href="https://github.com/RUGyron/I-Wish-App" target="_blank" rel="noopener">
+        ⭐ GitHub
+      </a>
+    </div>
+  </section>
+
+  <!-- USP -->
+  <section id="features">
+    <h2>Почему IWish</h2>
+    <p class="section-lead">Сделано как pet-проект одним человеком, для себя и близких. Без бизнес-плана, без подписок, без рекламы.</p>
+    <div class="usp-grid">
+      <div class="usp-card">
+        <span class="usp-icon">🔒</span>
+        <h3>Приватно по умолчанию</h3>
+        <p>Содержимое шифруется на твоём iPhone до того, как уйдёт на сервер. Ни разработчик, ни Firebase, ни хакер с доступом к базе не увидят твои желания.</p>
+      </div>
+      <div class="usp-card">
+        <span class="usp-icon">🎁</span>
+        <h3>Бесплатно навсегда</h3>
+        <p>Никаких подписок, никакой рекламы, никаких «Pro»-уровней. Если что-то изменится — обещаю в первом же changelog'е.</p>
+      </div>
+      <div class="usp-card">
+        <span class="usp-icon">🤝</span>
+        <h3>Совместное редактирование</h3>
+        <p>Покажи близкому QR или кинь ссылку в iMessage. Он откроет твой вишлист в приложении и сможет добавлять туда свои варианты.</p>
+      </div>
+      <div class="usp-card">
+        <span class="usp-icon">🍎</span>
+        <h3>Нативный iOS 26</h3>
+        <p>Сделано в новом дизайне Liquid Glass. Работает быстро, выглядит как часть системы, а не как очередное web-приложение.</p>
+      </div>
+      <div class="usp-card">
+        <span class="usp-icon">🪶</span>
+        <h3>Вход через Apple</h3>
+        <p>Один тап для входа. Никаких email-рассылок, никаких паролей. Можно использовать приватный Apple Relay-email.</p>
+      </div>
+      <div class="usp-card">
+        <span class="usp-icon">🌍</span>
+        <h3>Open Source</h3>
+        <p>Код открыт под MIT-лицензией. Можешь сам убедиться, что приложение делает то, что обещает. Или форкнуть и собрать свою версию.</p>
+      </div>
+    </div>
+  </section>
+
+  <!-- SCREENSHOTS -->
+  <section class="tight">
+    <h2>Как это выглядит</h2>
+    <p class="section-lead">Свайпай вбок чтобы посмотреть все экраны</p>
+    <div class="screens-row">
+      <div class="screen"><div class="screen-placeholder">Главный<br>экран</div></div>
+      <div class="screen"><div class="screen-placeholder">Wishlist</div></div>
+      <div class="screen"><div class="screen-placeholder">Добавление<br>желания</div></div>
+      <div class="screen"><div class="screen-placeholder">Шаринг<br>через QR</div></div>
+      <div class="screen"><div class="screen-placeholder">Тёмная<br>тема</div></div>
+      <div class="screen"><div class="screen-placeholder">Настройки</div></div>
+    </div>
+  </section>
+
+  <!-- HOW IT WORKS -->
+  <section>
+    <h2>Как это работает</h2>
+    <p class="section-lead">От скачивания до первого вишлиста — минута</p>
+    <div class="steps">
+      <div class="step">
+        <div class="step-num">1</div>
+        <h3>Скачай и войди</h3>
+        <p>App Store → один тап Sign in with Apple. Никаких форм регистрации.</p>
+      </div>
+      <div class="step">
+        <div class="step-num">2</div>
+        <h3>Создай wishlist</h3>
+        <p>Назови список — «ДР 2026», «Подарки маме». Добавляй желания: фото, цена, ссылка, важность.</p>
+      </div>
+      <div class="step">
+        <div class="step-num">3</div>
+        <h3>Поделись</h3>
+        <p>Покажи QR близкому или кинь ссылку в мессенджер. Он откроет и сможет добавить свои предложения.</p>
+      </div>
+    </div>
+  </section>
+
+  <!-- SECURITY -->
+  <section id="security">
+    <div class="security-block">
+      <h2>Безопасность — на человеческом</h2>
+      <p>Когда ты добавляешь желание в IWish, оно <strong>шифруется прямо на твоём iPhone</strong> — внутри Apple-чипа, через библиотеку CryptoKit, прежде чем хоть один байт уйдёт на сервер.</p>
+      <p>На сервере хранится только <strong>зашифрованный блоб</strong>. Расшифровать его можно только ключом, который лежит у тебя в iCloud Keychain — там же, где iPhone хранит пароли от Wi-Fi и сайтов.</p>
+      <p>Ключ от вишлиста, которым ты делишься, передаётся <strong>в самой ссылке</strong> (в её последней части после <code>#</code>) — эта часть по правилам интернета не отправляется на сервер вообще. Только устройство получателя её видит.</p>
+      <p><strong>Что это значит на практике:</strong></p>
+      <ul>
+        <li>Если базу IWish взломают — увидят только зашифрованные блобы, прочитать их без ключа невозможно.</li>
+        <li>Я (разработчик) не могу зайти и посмотреть, что у тебя в вишлисте. Технически не могу.</li>
+        <li>Apple не имеет доступа к ключам — iCloud Keychain тоже E2E-шифрованный.</li>
+      </ul>
+      <p><strong>Что важно понимать:</strong> если ты делишься ссылкой на вишлист через мессенджер — её безопасность равна безопасности мессенджера. Не публикуй share-ссылки в открытых местах вроде Twitter или публичных каналов.</p>
+      <p>Хочешь сам убедиться? <a href="https://github.com/RUGyron/I-Wish-App" target="_blank" rel="noopener" style="color: var(--accent-light);">Открыть код на GitHub</a>.</p>
+    </div>
+  </section>
+
+  <!-- OPEN SOURCE -->
+  <section>
+    <div class="opensource">
+      <h2>⭐ Open Source</h2>
+      <p>IWish — это open-source проект под MIT-лицензией. Код можно посмотреть, форкнуть, собрать самостоятельно. Если ты разработчик и хочешь помочь — pull request'ы приветствуются.</p>
+      <a class="btn-secondary" href="https://github.com/RUGyron/I-Wish-App" target="_blank" rel="noopener">
+        Посмотреть на GitHub →
+      </a>
+    </div>
+  </section>
+
+  <!-- FINAL CTA -->
+  <section class="final-cta">
+    <h2>Заведи свой первый вишлист</h2>
+    <p>Бесплатно, навсегда, без рекламы. Только для iPhone на iOS 26+.</p>
+    <a class="btn-primary app-store-link" href="#">
+      Скачать в App Store
+    </a>
+  </section>
+
+</main>
+
+<footer>
+  <p>
+    <a href="https://github.com/RUGyron/I-Wish-App" target="_blank" rel="noopener">GitHub</a> ·
+    <a href="./privacy.md">Privacy</a> ·
+    <a href="./terms.md">Terms</a> ·
+    <a href="mailto:pivosh098@gmail.com">Поддержка</a>
+  </p>
+  <p>© 2026 Vladislav Pivosh · MIT License</p>
+  <p class="signature">Сделано с любовью одним человеком в Москве</p>
+</footer>
+
+<script>
+  // Map UTM params → App Store ct attribution token
+  document.addEventListener('DOMContentLoaded', () => {
+    const params = new URLSearchParams(location.search);
+    const ct = params.get('utm_campaign')
+            || params.get('utm_source')
+            || 'landing-direct';
+    document.querySelectorAll('a.app-store-link').forEach(a => {
+      a.href = `https://apps.apple.com/app/id6762267281?ct=${encodeURIComponent(ct)}&mt=8`;
+    });
+  });
+</script>
+
+</body>
+</html>
