@@ -13,12 +13,14 @@ struct AddWishlistSheet: View {
     @State private var gradientHue: Double = Double.random(in: 0...1)
     @State private var errorMessage: String?
     @State private var isSaving = false
+    @Query private var settingsList: [AppSettings]
+    private var appSettings: AppSettings? { settingsList.first }
 
     var body: some View {
         NavigationStack {
             Form {
-                Section("Название") {
-                    TextField("Например: На день рождения", text: $name)
+                Section("Name") {
+                    TextField("e.g. Birthday", text: $name)
                         .textInputAutocapitalization(.sentences)
                         .onChange(of: name) { _, newValue in
                             name = InputLimits.truncate(newValue, to: InputLimits.wishlistName)
@@ -31,7 +33,7 @@ struct AddWishlistSheet: View {
                 )
 
                 if coverImageData == nil {
-                    Section("Цвет обложки") {
+                    Section("Cover color") {
                         GradientHuePicker(hue: $gradientHue)
                             .padding(.vertical, 8)
                     }
@@ -45,22 +47,22 @@ struct AddWishlistSheet: View {
                     }
             )
             .warmBackground()
-            .navigationTitle("Новый список")
+            .navigationTitle("New list")
             .fontDesign(.rounded)
             .navigationBarTitleDisplayMode(.inline)
             .scrollDismissesKeyboard(.interactively)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
-                    Button("Отмена") { dismiss() }
+                    Button("Cancel") { dismiss() }
                 }
                 ToolbarItem(placement: .confirmationAction) {
-                    Button("Готово") { save() }
+                    Button("Done") { save() }
                         .disabled(isSaving)
                 }
             }
         }
         .loadingOverlay(isSaving)
-        .alert("Не удалось создать", isPresented: .constant(errorMessage != nil)) {
+        .alert("Couldn’t create", isPresented: .constant(errorMessage != nil)) {
             Button("OK", role: .cancel) { errorMessage = nil }
         } message: {
             Text(errorMessage ?? "")
@@ -68,28 +70,12 @@ struct AddWishlistSheet: View {
         .applyTheme()
     }
 
-    private static let autoNames = [
-        "Мечты на завтра",
-        "Список вдохновения",
-        "Хотелки",
-        "Коллекция желаний",
-        "Мои находки",
-        "Список идей",
-        "Избранное",
-        "Заветные мечты",
-        "На заметку",
-        "Просто хочу",
-        "Для души",
-        "Собираю на мечту",
-        "Приглянулось",
-        "Буду копить",
-        "Поймал момент",
-    ]
-
     private func generateName() -> String {
         let used = Set(wishlists.map(\.name))
-        let available = Self.autoNames.filter { !used.contains($0) }
-        return available.randomElement() ?? "Список \(wishlists.count + 1)"
+        // Берём культурно-релевантный набор для текущей локали (см. AutoListNames).
+        let localized = AutoListNames.current()
+        let available = localized.filter { !used.contains($0) }
+        return available.randomElement() ?? String(format: String(localized: "List %lld"), wishlists.count + 1)
     }
 
     private func save() {
@@ -97,7 +83,7 @@ struct AddWishlistSheet: View {
 
         let emptyCount = wishlists.filter { ($0.items ?? []).isEmpty }.count
         guard emptyCount < InputLimits.maxEmptyWishlists else {
-            errorMessage = "У вас слишком много пустых списков. Сначала удалите или заполните их."
+            errorMessage = String(localized: "You have too many empty lists. Delete or fill them first.")
             return
         }
 
@@ -107,6 +93,7 @@ struct AddWishlistSheet: View {
             : trimmed
 
         isSaving = true
+        let pushDefault = appSettings?.newWishlistNotificationsDefault ?? true
         Task {
             do {
                 // gradientHue только если нет фото (фото — главная обложка).
@@ -114,8 +101,10 @@ struct AddWishlistSheet: View {
                 let wishlist = try await services.data.createWishlist(name: finalName, emoji: coverEmoji, gradientHue: hueToSave)
                 if let coverImageData {
                     wishlist.coverImageData = coverImageData
-                    try? context.save()
                 }
+                // Применяем default уведомлений для нового списка из глобальных настроек.
+                wishlist.notificationsEnabled = pushDefault
+                try? context.save()
                 dismiss()
             } catch {
                 errorMessage = error.localizedDescription

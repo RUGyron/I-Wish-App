@@ -26,14 +26,14 @@ struct InvitePreviewSheet: View {
             // Info rows
             VStack(alignment: .leading, spacing: 10) {
                 if let owner = info.ownerName, !owner.isEmpty {
-                    infoRow(icon: "person.fill", text: "\(owner) приглашает")
+                    infoRow(icon: "person.fill", text: String(format: String(localized: "%@ invites you"), owner))
                 }
                 infoRow(
                     icon: info.role == "editor" ? "pencil" : "eye",
-                    text: info.role == "editor" ? "Редактор" : "Только просмотр"
+                    text: info.role == "editor" ? String(localized: "Editor") : String(localized: "View only")
                 )
                 if info.itemCount > 0 {
-                    infoRow(icon: "gift.fill", text: "\(info.itemCount) \(wishWord(info.itemCount))")
+                    infoRow(icon: "gift.fill", text: String(format: NSLocalizedString("%lld желаний", comment: ""), info.itemCount))
                 }
             }
             .frame(maxWidth: .infinity, alignment: .leading)
@@ -49,7 +49,7 @@ struct InvitePreviewSheet: View {
                 isAccepting = true
                 onAccept()
             } label: {
-                Text("Принять приглашение")
+                Text("Accept invitation")
                     .font(.headline)
                     .foregroundStyle(.white)
                     .frame(maxWidth: .infinity, minHeight: 50)
@@ -61,7 +61,7 @@ struct InvitePreviewSheet: View {
 
             // Decline
             Button { dismiss() } label: {
-                Text("Отклонить")
+                Text("Decline")
                     .font(.subheadline)
                     .foregroundStyle(.secondary)
             }
@@ -121,11 +121,5 @@ struct InvitePreviewSheet: View {
         }
     }
 
-    private func wishWord(_ count: Int) -> String {
-        let mod10 = count % 10
-        let mod100 = count % 100
-        if mod10 == 1 && mod100 != 11 { return "желание" }
-        if mod10 >= 2 && mod10 <= 4 && !(mod100 >= 12 && mod100 <= 14) { return "желания" }
-        return "желаний"
-    }
+    // wishWord(_:) удалён — заменён на %lld желаний plural key из .xcstrings.
 }

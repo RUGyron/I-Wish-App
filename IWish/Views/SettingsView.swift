@@ -20,6 +20,8 @@ struct SettingsView: View {
         Form {
             accountSection
             appearanceSection
+            notificationsSection
+            parsingSection
             wishesSection
             invitesSection
             #if DEBUG
@@ -33,9 +35,9 @@ struct SettingsView: View {
                 Task {
                     do {
                         try await services.auth.handleSignInWithApple(result: result)
-                        toast.success("Вы вошли как \(services.auth.userName ?? "пользователь")")
+                        toast.success(String(format: String(localized: "Signed in as %@"), services.auth.userName ?? String(localized: "user")))
                     } catch {
-                        toast.error("Не удалось войти")
+                        toast.error(String(localized: "Couldn’t sign in"))
                     }
                 }
             }
@@ -45,7 +47,7 @@ struct SettingsView: View {
             DeleteAccountSheet { result in
                 switch result {
                 case .success:
-                    toast.success("Аккаунт удалён")
+                    toast.success(String(localized: "Account deleted"))
                     dismiss()
                 case .failure:
                     // Сообщение об ошибке покажет сам sheet — здесь молчим.
@@ -54,20 +56,20 @@ struct SettingsView: View {
             }
             .presentationDetents([.large])
         }
-        .alert("Удалить аккаунт?", isPresented: $showingDeleteConfirm) {
-            Button("Отмена", role: .cancel) {}
-            Button("Удалить", role: .destructive) {
+        .alert("Delete account?", isPresented: $showingDeleteConfirm) {
+            Button("Cancel", role: .cancel) {}
+            Button("Delete", role: .destructive) {
                 showingDeleteSheet = true
             }
         } message: {
-            Text("Все ваши списки, участия и ключи шифрования будут удалены безвозвратно. Действие нельзя отменить.")
+            Text("All your lists, memberships, and encryption keys will be deleted permanently. This action can’t be undone.")
         }
         .warmBackground()
-        .navigationTitle("Настройки")
+        .navigationTitle("Settings")
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {
             ToolbarItem(placement: .confirmationAction) {
-                Button("Готово") { dismiss() }
+                Button("Done") { dismiss() }
             }
         }
     }
@@ -84,7 +86,7 @@ struct SettingsView: View {
                     VStack(alignment: .leading, spacing: 2) {
                         Text(services.auth.userName ?? "Apple ID")
                             .font(.body.weight(.medium))
-                        Text("Вы вошли через Apple")
+                        Text("Signed in with Apple")
                             .font(.caption)
                             .foregroundStyle(.secondary)
                     }
@@ -101,12 +103,12 @@ struct SettingsView: View {
                     try? context.save()
                     try? services.auth.signOut()
                 } label: {
-                    Label("Выйти из аккаунта", systemImage: "rectangle.portrait.and.arrow.right")
+                    Label("Sign out", systemImage: "rectangle.portrait.and.arrow.right")
                 }
                 Button(role: .destructive) {
                     showingDeleteConfirm = true
                 } label: {
-                    Label("Удалить аккаунт", systemImage: "trash")
+                    Label("Delete account", systemImage: "trash")
                         .foregroundStyle(.red)
                 }
             } else {
@@ -118,9 +120,9 @@ struct SettingsView: View {
                             .font(.title2)
                             .foregroundStyle(.tint)
                         VStack(alignment: .leading, spacing: 2) {
-                            Text("Войти через Apple")
+                            Text("Sign in with Apple")
                                 .font(.body.weight(.medium))
-                            Text("Для шеринга списков")
+                            Text("Required to share lists")
                                 .font(.caption)
                                 .foregroundStyle(.secondary)
                         }
@@ -128,22 +130,22 @@ struct SettingsView: View {
                 }
             }
         } header: {
-            Text("Аккаунт")
+            Text("Account")
         }
     }
 
     // MARK: - Sections
 
     private var appearanceSection: some View {
-        Section("Внешний вид") {
-            Picker("Тема", selection: themeBinding) {
+        Section("Appearance") {
+            Picker("Theme", selection: themeBinding) {
                 ForEach(ThemeMode.allCases) { mode in
                     Text(mode.label).tag(mode)
                 }
             }
 
             VStack(alignment: .leading, spacing: 8) {
-                Text("Иконка приложения")
+                Text("App icon")
                     .font(.subheadline)
                     .foregroundStyle(.secondary)
 
@@ -183,17 +185,109 @@ struct SettingsView: View {
         }
     }
 
+    // MARK: - Notifications
+
+    private var notificationsSection: some View {
+        Section("Notifications") {
+            Toggle("Update notifications", isOn: pushEnabledBinding)
+            if settings.pushNotificationsEnabled {
+                Toggle("On by default for new lists", isOn: pushDefaultBinding)
+                if services.push.authorizationStatus == .denied {
+                    Text("System notifications are disabled. Enable them in iOS Settings → I Wish.")
+                        .font(.footnote)
+                        .foregroundStyle(.secondary)
+                }
+                if services.push.authorizationStatus == .notDetermined {
+                    Button {
+                        Task {
+                            _ = await services.push.requestAuthorization()
+                        }
+                    } label: {
+                        Text("Allow notifications")
+                    }
+                }
+            }
+        }
+    }
+
+    private var pushEnabledBinding: Binding<Bool> {
+        Binding(
+            get: { settings.pushNotificationsEnabled },
+            set: { newValue in
+                settings.pushNotificationsEnabled = newValue
+                try? context.save()
+                // Доводим глобальный тоггл до Firestore (users/{uid}.pushEnabled) — CF фильтрует по нему.
+                services.push.syncPushEnabledPreference(newValue)
+                if newValue && services.push.authorizationStatus == .notDetermined {
+                    Task { _ = await services.push.requestAuthorization() }
+                }
+            }
+        )
+    }
+
+    private var pushDefaultBinding: Binding<Bool> {
+        Binding(
+            get: { settings.newWishlistNotificationsDefault },
+            set: { newValue in
+                settings.newWishlistNotificationsDefault = newValue
+                try? context.save()
+            }
+        )
+    }
+
+    // MARK: - Parsing
+
+    private var parsingSection: some View {
+        Section {
+            Picker("Mode", selection: parseFillModeBinding) {
+                ForEach(ParseFillMode.allCases) { mode in
+                    Text(mode.label).tag(mode)
+                }
+            }
+            if settings.parseFillMode != .off {
+                Toggle("Title", isOn: parseBinding(\.parseFillTitle))
+                Toggle("Price", isOn: parseBinding(\.parseFillPrice))
+                Toggle("Cover", isOn: parseBinding(\.parseFillImage))
+                Toggle("Description", isOn: parseBinding(\.parseFillDescription))
+            }
+        } header: {
+            Text("Link parsing")
+        } footer: {
+            Text("“Don’t fill” — leaves everything as is. “Only empty fields” — fills a field only if you haven’t typed anything. “Always overwrite” — replaces with data from the page.")
+        }
+    }
+
+    private var parseFillModeBinding: Binding<ParseFillMode> {
+        Binding(
+            get: { settings.parseFillMode },
+            set: { newValue in
+                settings.parseFillMode = newValue
+                try? context.save()
+            }
+        )
+    }
+
+    private func parseBinding(_ key: ReferenceWritableKeyPath<AppSettings, Bool>) -> Binding<Bool> {
+        Binding(
+            get: { settings[keyPath: key] },
+            set: { newValue in
+                settings[keyPath: key] = newValue
+                try? context.save()
+            }
+        )
+    }
+
     private var wishesSection: some View {
-        Section("Желания") {
-            Picker("Валюта по умолчанию", selection: currencyBinding) {
-                Text("\u{20BD}").tag("RUB")
-                Text("$").tag("USD")
+        Section("Wishes") {
+            Picker("Default currency", selection: currencyBinding) {
+                Text(verbatim: "\u{20BD}").tag("RUB")
+                Text(verbatim: "$").tag("USD")
             }
 
-            Toggle("Испытательный срок по умолчанию", isOn: probationEnabledBinding)
+            Toggle("Probation period by default", isOn: probationEnabledBinding)
 
             if settings.probationEnabledByDefault {
-                Picker("Длительность", selection: probationDaysBinding) {
+                Picker("Duration", selection: probationDaysBinding) {
                     ForEach(1...365, id: \.self) { day in
                         Text(String(format: NSLocalizedString("%lld дней", comment: ""), day)).tag(day)
                     }
@@ -201,19 +295,19 @@ struct SettingsView: View {
                 .pickerStyle(.wheel)
                 .frame(height: 120)
 
-                Toggle("Уведомлять о конце срока", isOn: notifyProbationBinding)
+                Toggle("Notify when period ends", isOn: notifyProbationBinding)
             }
         }
     }
 
     private var invitesSection: some View {
-        Section("Приглашения") {
-            Picker("Роль по умолчанию", selection: shareRoleBinding) {
+        Section("Invitations") {
+            Picker("Default role", selection: shareRoleBinding) {
                 ForEach(ShareRole.allCases) { role in
                     Text(role.label).tag(role)
                 }
             }
-            Picker("Срок действия по умолчанию", selection: inviteTTLBinding) {
+            Picker("Default expiry", selection: inviteTTLBinding) {
                 ForEach(InviteTTL.allCases) { ttl in
                     Text(ttl.label).tag(ttl)
                 }
@@ -230,17 +324,17 @@ struct SettingsView: View {
                 Task {
                     await services.data?.seedMockDataForScreenshots()
                     isSeeding = false
-                    toast.success("Тестовые данные созданы")
+                    toast.success(String(localized: "Test data created"))
                 }
             } label: {
-                Label("Заполнить тестовыми данными", systemImage: "wand.and.stars")
+                Label("Seed test data", systemImage: "wand.and.stars")
             }
             .disabled(isSeeding)
             Button(role: .destructive) {
                 services.data?.wipeAllLocal()
-                toast.success("Локальные данные удалены")
+                toast.success(String(localized: "Local data wiped"))
             } label: {
-                Label("Очистить локально", systemImage: "trash")
+                Label("Wipe local data", systemImage: "trash")
             }
         }
     }
@@ -251,27 +345,33 @@ struct SettingsView: View {
             NavigationLink {
                 PrivacyDisclosureView()
             } label: {
-                Label("Как мы храним данные", systemImage: "lock.shield")
+                Label("How we store your data", systemImage: "lock.shield")
             }
             NavigationLink {
-                MarkdownDocView(title: "Политика конфиденциальности", resourceName: "privacy")
+                MarkdownDocView(title: String(localized: "Privacy Policy"), resourceName: "privacy")
             } label: {
-                Label("Политика конфиденциальности", systemImage: "doc.text")
+                Label("Privacy Policy", systemImage: "doc.text")
             }
             NavigationLink {
-                MarkdownDocView(title: "Пользовательское соглашение", resourceName: "terms")
+                MarkdownDocView(title: String(localized: "Terms of Use"), resourceName: "terms")
             } label: {
-                Label("Пользовательское соглашение", systemImage: "doc.plaintext")
+                Label("Terms of Use", systemImage: "doc.plaintext")
             }
             Button {
                 openFeedbackMail()
             } label: {
-                Label("Обратная связь", systemImage: "envelope")
+                Label("Feedback", systemImage: "envelope")
+            }
+            Button {
+                ReviewService.openAppStoreReview()
+            } label: {
+                Label("Rate the app", systemImage: "star.fill")
+                    .foregroundStyle(.yellow)
             }
         } header: {
-            Text("О приложении")
+            Text("About")
         } footer: {
-            Text("Версия \(appVersion)")
+            Text("Version \(appVersion)")
                 .font(.caption)
                 .foregroundStyle(.tertiary)
                 .frame(maxWidth: .infinity, alignment: .center)
@@ -390,8 +490,8 @@ struct SettingsView: View {
     private func openFeedbackMail() {
         let version = Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "?"
         let build = Bundle.main.infoDictionary?["CFBundleVersion"] as? String ?? "?"
-        let subject = "I Wish — обратная связь"
-        let body = "\n\n\n———\nВерсия: \(version) (\(build))\niOS: \(UIDevice.current.systemVersion)"
+        let subject = String(localized: "I Wish — feedback")
+        let body = String(format: String(localized: "\n\n\n———\nVersion: %@ (%@)\niOS: %@"), version, build, UIDevice.current.systemVersion)
         guard
             let s = subject.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed),
             let b = body.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed),

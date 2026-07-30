@@ -17,11 +17,11 @@ struct NameRecoveryView: View {
                     .padding(.top, 40)
 
                 VStack(spacing: 12) {
-                    Text("Не удалось получить ваше имя")
+                    Text("Couldn’t get your name")
                         .font(.title2.weight(.semibold))
                         .multilineTextAlignment(.center)
 
-                    Text("Apple Sign In передаёт имя только при первой авторизации. Чтобы получить имя заново — нужно сбросить связь с приложением.")
+                    Text("Apple Sign In sends the name only on the first sign-in. To get the name again, you need to reset the link with the app.")
                         .font(.subheadline)
                         .foregroundStyle(.secondary)
                         .multilineTextAlignment(.center)
@@ -29,12 +29,12 @@ struct NameRecoveryView: View {
                 .padding(.horizontal, 24)
 
                 VStack(alignment: .leading, spacing: 8) {
-                    Text("Что нужно сделать:")
+                    Text("What to do:")
                         .font(.subheadline.weight(.semibold))
-                    instructionRow(num: "1", text: "Удалите I Wish с устройства (зажмите иконку → «Удалить приложение»)")
-                    instructionRow(num: "2", text: "Откройте «Настройки» → ваше имя сверху → «Вход с Apple»")
-                    instructionRow(num: "3", text: "Найдите I Wish в списке → «Прекратить использовать Apple ID»")
-                    instructionRow(num: "4", text: "Установите I Wish заново из App Store и войдите — Apple снова передаст имя")
+                    instructionRow(num: "1", text: String(localized: "Delete I Wish from your device (hold the icon → “Remove app”)"))
+                    instructionRow(num: "2", text: String(localized: "Open Settings → your name at the top → “Sign in with Apple”"))
+                    instructionRow(num: "3", text: String(localized: "Find I Wish in the list → “Stop using Apple ID”"))
+                    instructionRow(num: "4", text: String(localized: "Reinstall I Wish from the App Store and sign in — Apple will share the name again"))
                 }
                 .frame(maxWidth: .infinity, alignment: .leading)
                 .padding(16)
@@ -47,7 +47,7 @@ struct NameRecoveryView: View {
                             UIApplication.shared.open(url)
                         }
                     } label: {
-                        Label("Открыть Настройки", systemImage: "gearshape")
+                        Label("Open Settings", systemImage: "gearshape")
                             .frame(maxWidth: .infinity)
                     }
                     .buttonStyle(.borderedProminent)
@@ -58,11 +58,11 @@ struct NameRecoveryView: View {
                         do {
                             try services.auth.signOut()
                         } catch {
-                            toast.error("Не удалось выйти: \(error.localizedDescription)")
+                            toast.error(String(format: String(localized: "Couldn’t sign out: %@"), error.localizedDescription))
                         }
                         isSigningOut = false
                     } label: {
-                        Label("Выйти из аккаунта", systemImage: "rectangle.portrait.and.arrow.right")
+                        Label("Sign out", systemImage: "rectangle.portrait.and.arrow.right")
                             .frame(maxWidth: .infinity)
                     }
                     .buttonStyle(.bordered)

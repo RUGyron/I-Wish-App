@@ -13,10 +13,10 @@ private enum SortOption: String, CaseIterable, Identifiable {
 
     var label: String {
         switch self {
-        case .importance: return "По важности"
-        case .date:       return "По дате"
-        case .price:      return "По цене"
-        case .name:       return "По названию"
+        case .importance: return String(localized: "By importance")
+        case .date:       return String(localized: "By date")
+        case .price:      return String(localized: "By price")
+        case .name:       return String(localized: "By name")
         }
     }
 
@@ -38,7 +38,12 @@ struct WishlistDetailView: View {
     @Environment(\.appServices) private var services
     @Environment(\.toast) private var toast
     @Environment(\.scenePhase) private var scenePhase
+    @Query private var settingsList: [AppSettings]
+    private var activeSettings: AppSettings { settingsList.first ?? AppSettings() }
     let wishlist: Wishlist
+    /// Если задан (deep-link из push по тапу) — открыть карточку этого желания при появлении.
+    var initialItemID: String? = nil
+    @State private var didConsumeDeeplink = false
     @State private var showingAddItem = false
     @State private var selectedSort: SortOption = .importance
     @State private var showingArchive = false
@@ -105,7 +110,7 @@ struct WishlistDetailView: View {
         default: break
         }
         #endif
-        return (wishlist.items ?? []).filter { !$0.isArchived }
+        return (wishlist.items ?? []).filter { !$0.isArchived && !$0.isTombstoned }
     }
 
     var body: some View {
@@ -116,13 +121,13 @@ struct WishlistDetailView: View {
                 itemList
             }
         }
-        .navigationTitle("Желания")
+        .navigationTitle("Wishes")
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {
             ToolbarItem(placement: .principal) {
                 HStack(spacing: 6) {
                     detailSyncSubtitle
-                    Text("Желания").font(.headline)
+                    Text("Wishes").font(.headline)
                 }
             }
 
@@ -169,7 +174,7 @@ struct WishlistDetailView: View {
                             Button {
                                 showingEditWishlist = true
                             } label: {
-                                Label("Изменить список", systemImage: "pencil")
+                                Label("Edit list", systemImage: "pencil")
                             }
 
                             if selectedSort == .importance {
@@ -177,7 +182,7 @@ struct WishlistDetailView: View {
                                     saveSortSnapshot()
                                     withAnimation { editMode = .active }
                                 } label: {
-                                    Label("Переместить", systemImage: "arrow.up.arrow.down")
+                                    Label("Rearrange", systemImage: "arrow.up.arrow.down")
                                 }
                             }
 
@@ -189,7 +194,7 @@ struct WishlistDetailView: View {
                             Button {
                                 showingArchive = true
                             } label: {
-                                Label("Архив (\(archivedCount))", systemImage: "archivebox")
+                                Label("Archive (\(archivedCount))", systemImage: "archivebox")
                             }
                         }
 
@@ -197,7 +202,7 @@ struct WishlistDetailView: View {
                             Button {
                                 showingShare = true
                             } label: {
-                                Label("Поделиться", systemImage: "square.and.arrow.up")
+                                Label("Share", systemImage: "square.and.arrow.up")
                             }
                         }
 
@@ -206,7 +211,7 @@ struct WishlistDetailView: View {
                             Button {
                                 showingParticipants = true
                             } label: {
-                                Label("Участники", systemImage: "person.2")
+                                Label("Participants", systemImage: "person.2")
                             }
                         }
 
@@ -216,13 +221,13 @@ struct WishlistDetailView: View {
                             Button(role: .destructive) {
                                 showingLeaveConfirmation = true
                             } label: {
-                                Label("Покинуть список", systemImage: "rectangle.portrait.and.arrow.right")
+                                Label("Leave list", systemImage: "rectangle.portrait.and.arrow.right")
                             }
                         } else {
                             Button(role: .destructive) {
                                 showingDeleteConfirmation = true
                             } label: {
-                                Label("Удалить список", systemImage: "trash")
+                                Label("Delete list", systemImage: "trash")
                             }
                         }
                     } label: {
@@ -263,8 +268,8 @@ struct WishlistDetailView: View {
                 .applyTheme()
         }
         .loadingOverlay(isPerformingAction)
-        .confirmationDialog("Удалить «\(wishlist.name)»?", isPresented: $showingDeleteConfirmation, titleVisibility: .visible) {
-            Button("Удалить список", role: .destructive) {
+        .confirmationDialog("Delete “\(wishlist.name)”?", isPresented: $showingDeleteConfirmation, titleVisibility: .visible) {
+            Button("Delete list", role: .destructive) {
                 isPerformingAction = true
                 Task {
                     do {
@@ -277,8 +282,8 @@ struct WishlistDetailView: View {
                 }
             }
         }
-        .confirmationDialog("Покинуть «\(wishlist.name)»?", isPresented: $showingLeaveConfirmation, titleVisibility: .visible) {
-            Button("Покинуть список", role: .destructive) {
+        .confirmationDialog("Leave “\(wishlist.name)”?", isPresented: $showingLeaveConfirmation, titleVisibility: .visible) {
+            Button("Leave list", role: .destructive) {
                 isPerformingAction = true
                 Task {
                     do {
@@ -309,6 +314,22 @@ struct WishlistDetailView: View {
                 }
             }
         }
+        .task(id: initialItemID) {
+            // Deep-link из push по тапу: открыть карточку желания, если оно не удалено.
+            guard let iid = initialItemID, !didConsumeDeeplink else { return }
+            didConsumeDeeplink = true
+            func openIfPresent() -> Bool {
+                if let target = (wishlist.items ?? []).first(where: { $0.id.uuidString == iid && !$0.isTombstoned }) {
+                    detailItem = target
+                    return true
+                }
+                return false
+            }
+            if openIfPresent() { return }
+            // Item ещё не подтянулся локально — догружаем (force обходит 15с-throttle) и пробуем снова.
+            await services.data?.refreshItems(for: wishlist.id.uuidString, force: true)
+            _ = openIfPresent()
+        }
         .onDisappear {
             stopPolling()
             if editMode.isEditing {
@@ -321,7 +342,7 @@ struct WishlistDetailView: View {
             case .background, .inactive:
                 stopPolling()
             case .active:
-                if pollTimer == nil && !wishlist.isDeleted {
+                if pollTimer == nil && !wishlist.isTombstoned {
                     startPolling()
                 }
             @unknown default:
@@ -334,7 +355,7 @@ struct WishlistDetailView: View {
                     .padding(.bottom, 24)
             }
         }
-        .onChange(of: wishlist.isDeleted) { _, deleted in
+        .onChange(of: wishlist.isTombstoned) { _, deleted in
             if deleted { dismiss() }
         }
     }
@@ -353,14 +374,14 @@ struct WishlistDetailView: View {
                 Image(systemName: "list.bullet")
                     .font(.system(size: 40))
                     .foregroundStyle(.tint)
-                Text("Список пуст")
+                Text("List is empty")
                     .font(.title3)
                 if wishlist.isEditable {
-                    Text("Добавь первое желание.")
+                    Text("Add your first wish.")
                         .font(.subheadline)
                         .foregroundStyle(.secondary)
                 } else {
-                    Text("В этот список ещё ничего не добавили.")
+                    Text("No wishes have been added to this list yet.")
                         .font(.subheadline)
                         .foregroundStyle(.secondary)
                 }
@@ -392,16 +413,27 @@ struct WishlistDetailView: View {
         .warmBackground()
         // Hash count + last id вместо map(\.id) — без array allocation на каждый render.
         // На 100+ items это ощутимо при scroll/edit.
-        .animation(.easeInOut, value: activeItemsAnimationHash)
+        .animation(.smooth(duration: 0.45), value: activeItemsAnimationHash)
         .animation(.easeInOut(duration: 0.25), value: collapsedTiersRaw)
     }
 
-    /// Дешёвый хэш для anim trigger без массива: count + последний id.
-    /// Уловит insert/delete/reorder где порядок последнего элемента меняется.
+    /// Hash для anim trigger. Ловит insert/delete/reorder + изменения видимых полей
+    /// (name/tier/sortIndex/cover/price). updatedAt НАМЕРЕННО исключён: он дёргался каждым
+    /// polling-тиком (раньше mergeItems писал updatedAt безусловно) → список переанимировался
+    /// под открытым шитом и сбрасывал scroll (баг #2). Реальные изменения ловятся по самим полям.
     private var activeItemsAnimationHash: Int {
-        let count = activeItems.count
-        let lastID = activeItems.last?.id.uuidString.hashValue ?? 0
-        return count &* 31 &+ lastID
+        var hasher = Hasher()
+        for item in activeItems {
+            hasher.combine(item.id)
+            hasher.combine(item.name)
+            hasher.combine(item.tierRaw)
+            hasher.combine(item.sortIndex)
+            hasher.combine(item.coverEmoji)
+            hasher.combine(item.coverImageData?.count)
+            hasher.combine(item.price)
+            hasher.combine(item.priceMax)
+        }
+        return hasher.finalize()
     }
 
     // Хедер — часть списка, но визуально читается как продолжение навбара:
@@ -466,18 +498,25 @@ struct WishlistDetailView: View {
                 Section {
                     if !collapsedTiers.contains(tier.rawValue) {
                         ForEach(tierItems) { item in
-                            if wishlist.isEditable {
-                                itemRow(item)
-                                    .itemContextMenu(item: item, context: context, editingItem: $editingItem, dataService: services.data, wishlistID: wishlist.id.uuidString, toast: toast)
-                                    .itemSwipeActions(item: item, dataService: services.data, wishlistID: wishlist.id.uuidString, toast: toast)
-                            } else {
-                                itemRow(item)
+                            Group {
+                                if wishlist.isEditable {
+                                    itemRow(item)
+                                        .itemContextMenu(item: item, context: context, editingItem: $editingItem, dataService: services.data, wishlistID: wishlist.id.uuidString, toast: toast)
+                                        .itemSwipeActions(item: item, dataService: services.data, wishlistID: wishlist.id.uuidString, toast: toast)
+                                } else {
+                                    itemRow(item)
+                                }
                             }
+                            .transition(.asymmetric(
+                                insertion: .opacity.combined(with: .move(edge: .top)),
+                                removal: .opacity.combined(with: .scale(scale: 0.95, anchor: .top))
+                            ))
                         }
                         .onMove { from, to in
                             guard wishlist.isEditable else { return }
                             reorderItems(in: tier, from: from, to: to)
                         }
+                        .animation(.spring(response: 0.35, dampingFraction: 0.85), value: tierItems.map(\.id))
                     }
                 } header: {
                     Button {
@@ -559,6 +598,8 @@ struct WishlistDetailView: View {
             .filter { $0.tier == tier }
             .sorted { $0.sortIndex < $1.sortIndex }
 
+        // Запомним старые sortIndex чтобы выявить кого реально подвинуло.
+        let oldIndexes = Dictionary(uniqueKeysWithValues: tierItems.map { ($0.id, $0.sortIndex) })
         tierItems.move(fromOffsets: source, toOffset: destination)
 
         for (i, item) in tierItems.enumerated() {
@@ -566,30 +607,20 @@ struct WishlistDetailView: View {
             item.updatedAt = .now
         }
         try? context.save()
-        // Sync reordered items to Firestore
-        for item in tierItems {
-            Task {
-                do {
-                    try await services.data?.updateItem(
-                        id: item.id.uuidString,
-                        wishlistID: wishlist.id.uuidString,
-                        name: item.name,
-                        tier: item.tier,
-                        price: item.priceValue,
-                        priceMax: item.priceMaxValue,
-                        currency: item.currency,
-                        url: item.url,
-                        emoji: item.coverEmoji,
-                        sortIndex: item.sortIndex,
-                        isArchived: item.isArchived,
-                        descriptionText: item.descriptionText,
-                        coverImageData: item.coverImageData,
-                        linkMetadataData: item.linkMetadataData,
-                        probationEndAt: item.probationEndAt
-                    )
-                } catch {
-                    toast.error(error.localizedDescription)
-                }
+
+        // Только items с реально изменившимся sortIndex шлём в Firestore (батч-update).
+        // Раньше слали ВСЕ items в tier — каждый = отдельный isSyncing toggle, sync icon мигал.
+        let changedItems = tierItems.filter { oldIndexes[$0.id] != $0.sortIndex }
+        guard !changedItems.isEmpty else { return }
+
+        Task {
+            do {
+                try await services.data?.reorderItemsBulk(
+                    wishlistID: wishlist.id.uuidString,
+                    items: changedItems
+                )
+            } catch {
+                toast.error(error.localizedDescription)
             }
         }
     }
@@ -598,9 +629,17 @@ struct WishlistDetailView: View {
         Group {
             if let data = services.data {
                 SyncStatusBadge(
-                    isSyncing: data.isSyncing,
-                    syncError: data.syncError,
-                    onTap: { Task { await services.data?.refreshItems(for: wishlist.id.uuidString) } }
+                    isSyncing: services.sync.isSyncing,
+                    syncError: services.sync.lastError,
+                    pendingCount: services.sync.pendingCount,
+                    isOffline: services.networkMonitor.isBlocked,
+                    syncStartedAt: services.sync.syncStartedAt,
+                    onTap: {
+                        Task {
+                            await services.sync.retryAll()
+                            await services.data?.refreshItems(for: wishlist.id.uuidString)
+                        }
+                    }
                 )
             }
         }
@@ -614,14 +653,21 @@ struct WishlistDetailView: View {
 
         Section {
             ForEach(sorted) { item in
-                if wishlist.isEditable {
-                    itemRow(item)
-                        .itemContextMenu(item: item, context: context, editingItem: $editingItem, dataService: services.data, wishlistID: wishlist.id.uuidString, toast: toast)
-                        .itemSwipeActions(item: item, dataService: services.data, wishlistID: wishlist.id.uuidString, toast: toast)
-                } else {
-                    itemRow(item)
+                Group {
+                    if wishlist.isEditable {
+                        itemRow(item)
+                            .itemContextMenu(item: item, context: context, editingItem: $editingItem, dataService: services.data, wishlistID: wishlist.id.uuidString, toast: toast)
+                            .itemSwipeActions(item: item, dataService: services.data, wishlistID: wishlist.id.uuidString, toast: toast)
+                    } else {
+                        itemRow(item)
+                    }
                 }
+                .transition(.asymmetric(
+                    insertion: .opacity.combined(with: .move(edge: .top)),
+                    removal: .opacity.combined(with: .scale(scale: 0.95, anchor: .top))
+                ))
             }
+            .animation(.spring(response: 0.35, dampingFraction: 0.85), value: sorted.map(\.id))
         }
     }
 
@@ -664,22 +710,35 @@ struct WishlistDetailView: View {
         // Title зафиксирован lineLimit(1) → длинный текст не растягивает row.
         // Bottom row показываем только когда есть url / probation, иначе
         // карточка не оставляет пустого места под именем.
-        HStack(alignment: .top, spacing: 0) {
+        let isPending = services.sync.hasPendingSync(entityType: "item", entityID: item.id.uuidString)
+        let style = activeSettings.pendingIndicatorStyle
+        return HStack(alignment: .top, spacing: 0) {
             RoundedRectangle(cornerRadius: 2, style: .continuous)
-                .fill(item.tier.stripeColor)
+                .fill(isPending && style == .stripe ? Color.orange : item.tier.stripeColor)
                 .frame(width: 4)
 
             HStack(alignment: .top, spacing: 12) {
                 DefaultCoverView(
                     id: item.id,
                     imageData: item.coverImageData,
-                    emoji: item.coverEmoji
+                    emoji: item.coverEmoji,
+                    gradientHue: item.gradientHue
                 )
                 .frame(width: 52, height: 52)
+                .overlay(alignment: .topTrailing) {
+                    if isPending && (style == .clock || style == .dot) {
+                        PendingIndicator(style: style, placement: .itemRowCover, isPending: true)
+                            .offset(x: 4, y: -4)
+                    }
+                }
 
                 VStack(alignment: .leading, spacing: 2) {
                     topRow(for: item)
                     titleRow(for: item)
+                    if isPending && style == .pill {
+                        PendingIndicator(style: .pill, placement: .itemRowSubtitle, isPending: true)
+                            .padding(.top, 2)
+                    }
                     if hasBottomMeta(item) {
                         bottomRow(for: item)
                     }
@@ -744,7 +803,7 @@ struct WishlistDetailView: View {
         switch item.priceMode {
         case .none: return nil
         case .exact(let p): return formatPrice(p, currency: item.currency)
-        case .range(_, let max): return "до \(formatPrice(max, currency: item.currency))"
+        case .range(_, let max): return String(format: String(localized: "up to %@"), formatPrice(max, currency: item.currency))
         }
     }
 
@@ -766,7 +825,7 @@ struct WishlistDetailView: View {
                 } label: {
                     HStack(spacing: 3) {
                         Image(systemName: "link")
-                        Text(extractDomain(from: urlString) ?? "ссылка")
+                        Text(extractDomain(from: urlString) ?? String(localized: "link"))
                     }
                     .foregroundStyle(.tint)
                 }
@@ -775,7 +834,7 @@ struct WishlistDetailView: View {
             if let days = probationDaysLeft(item) {
                 HStack(spacing: 3) {
                     Image(systemName: "clock")
-                    Text("\(days) дн.")
+                    Text(String(format: String(localized: "%lld days left"), days))
                 }
                 .foregroundStyle(.secondary)
             }
@@ -790,7 +849,7 @@ struct WishlistDetailView: View {
     /// Если addedByName отсутствует (legacy item, добавленный до внедрения авторства) — возвращаем nil.
     private func authorLabel(for item: Item) -> String? {
         if let myUID = services.auth.uid, item.addedByUID == myUID {
-            return "Вы"
+            return String(localized: "You")
         }
         guard let name = item.addedByName, !name.isEmpty else { return nil }
         return name
@@ -825,11 +884,13 @@ struct WishlistDetailView: View {
         pollTimer = Timer.scheduledTimer(withTimeInterval: 15.0, repeats: true) { _ in
             Task { @MainActor in
                 // Check if wishlist still exists (might be deleted by another device)
-                if wishlist.isDeleted || wishlist.modelContext == nil {
+                if wishlist.isTombstoned || wishlist.modelContext == nil {
                     stopPolling()
                     dismiss()
                     return
                 }
+                // Не плодим запросы пока offline — SyncEngine разбудит при появлении сети.
+                guard services.networkMonitor.isBlocked == false else { return }
                 await services.data?.refreshItems(for: wishlist.id.uuidString)
                 // Check if refreshItems detected remote deletion
                 if services.data?.wishlistDeleted == true {
@@ -853,13 +914,14 @@ struct WishlistDetailView: View {
         Button {
             showingAddItem = true
         } label: {
-            Label("Новое желание", systemImage: "plus")
+            Label("New wish", systemImage: "plus")
                 .font(.headline)
                 .padding(.horizontal, 20)
                 .padding(.vertical, 12)
         }
         .glassEffect(.regular.interactive())
         .clipShape(Capsule())
+        // Offline-mode: add wish работает без сети, op уйдёт в outbox.
     }
 
     // MARK: - Helpers
@@ -913,14 +975,14 @@ private extension View {
             Button {
                 editingItem.wrappedValue = item
             } label: {
-                Label("Изменить", systemImage: "pencil")
+                Label("Edit", systemImage: "pencil")
             }
 
             if let urlString = item.url, let url = URL(string: urlString) {
                 Button {
                     UIApplication.shared.open(url)
                 } label: {
-                    Label("Открыть ссылку", systemImage: "safari")
+                    Label("Open link", systemImage: "safari")
                 }
             }
 
@@ -944,7 +1006,8 @@ private extension View {
                                     descriptionText: item.descriptionText,
                                     coverImageData: item.coverImageData,
                                     linkMetadataData: item.linkMetadataData,
-                                    probationEndAt: item.probationEndAt
+                                    probationEndAt: item.probationEndAt,
+                                    gradientHue: item.gradientHue
                                 )
                             } catch {
                                 toast.error(error.localizedDescription)
@@ -961,7 +1024,7 @@ private extension View {
                     }
                 }
             } label: {
-                Label("Изменить важность", systemImage: "arrow.up.arrow.down")
+                Label("Change importance", systemImage: "arrow.up.arrow.down")
             }
 
             Button {
@@ -973,7 +1036,7 @@ private extension View {
                     }
                 }
             } label: {
-                Label("В архив", systemImage: "archivebox")
+                Label("Archive", systemImage: "archivebox")
             }
 
             Button(role: .destructive) {
@@ -985,7 +1048,7 @@ private extension View {
                     }
                 }
             } label: {
-                Label("Удалить", systemImage: "trash")
+                Label("Delete", systemImage: "trash")
             }
         }
     }
@@ -1001,7 +1064,7 @@ private extension View {
                     }
                 }
             } label: {
-                Label("Удалить", systemImage: "trash")
+                Label("Delete", systemImage: "trash")
             }
             .tint(.red)
 
@@ -1014,7 +1077,7 @@ private extension View {
                     }
                 }
             } label: {
-                Label("В архив", systemImage: "archivebox")
+                Label("Archive", systemImage: "archivebox")
             }
             .tint(.blue)
         }

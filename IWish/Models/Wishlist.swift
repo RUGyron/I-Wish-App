@@ -21,6 +21,18 @@ final class Wishlist {
     var canInvite: Bool = false
     /// Number of participants (synced from Firestore)
     var memberCount: Int = 0
+    /// Хочет ли текущий юзер получать push-уведомления об изменениях в этом вишлисте.
+    /// Дефолт берётся из AppSettings.newWishlistNotificationsDefault при создании.
+    /// Локальный per-device кеш; для SHARED-списков также зеркалится в
+    /// memberships/{uid}_{wid}.notificationsEnabled (EditWishlistSheet) — Cloud Function читает это
+    /// поле и не шлёт пуш юзеру, выключившему уведомления списка.
+    var notificationsEnabled: Bool = true
+    /// Soft-delete tombstone (offline). UI фильтрует, CF чистит через 30 дней.
+    /// Переименовано из `isDeleted` — конфликт с NSManagedObject.isDeleted (см. Item.swift).
+    var isTombstoned: Bool = false
+    var deletedAt: Date?
+    /// JSON dict `{fieldName: Date}` для per-field LWW при offline-sync.
+    var fieldTimestampsJSON: Data?
 
     @Relationship(deleteRule: .cascade, inverse: \Item.wishlist)
     var items: [Item]?

@@ -35,9 +35,9 @@ final class AccountDeletionService {
 
         var errorDescription: String? {
             switch self {
-            case .notAuthenticated: return "Сначала войдите в аккаунт"
-            case .requiresReauth: return "Требуется повторный вход через Apple ID"
-            case .firebaseDeleteFailed(let m): return "Не удалось удалить аккаунт: \(m)"
+            case .notAuthenticated: return String(localized: "Please sign in first")
+            case .requiresReauth: return String(localized: "Re-authentication with Apple ID is required")
+            case .firebaseDeleteFailed(let m): return String(format: String(localized: "Couldn’t delete the account: %@"), m)
             }
         }
     }
@@ -96,6 +96,10 @@ final class AccountDeletionService {
                 try? await firestore.leaveWishlist(wishlistID: m.wishlistID, userUID: uid)
             }
         }
+
+        // Удалить сам users/{uid} document (содержит displayName plaintext).
+        // Subcollections (wishlists, fcmTokens) уже удалены/leave'ed выше.
+        try? await firestore.deleteUserProfileDocument(uid: uid)
 
         KeychainService.deleteAll()
 

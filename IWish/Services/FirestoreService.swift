@@ -74,6 +74,8 @@ final class FirestoreService {
         let addedByUID: String?
         /// displayName юзера на момент добавления. Хранится в зашифрованном payload.
         let addedByName: String?
+        /// Цвет градиента-фона под эмодзи. nil → DefaultCoverView fallback на UUID hash.
+        let gradientHue: Double?
     }
 
     enum FirestoreError: LocalizedError {
@@ -92,17 +94,17 @@ final class FirestoreService {
         var errorDescription: String? {
             switch self {
             case .notFound:
-                return "Документ не найден"
+                return String(localized: "Document not found")
             case .notAuthenticated:
-                return "Необходима авторизация"
+                return String(localized: "Sign-in required")
             case .requestFailed(_, let body):
-                return "Ошибка запроса: \(body)"
+                return String(format: String(localized: "Request error: %@"), body)
             case .decryptionFailed:
-                return "Не удалось расшифровать данные"
+                return String(localized: "Couldn’t decrypt data")
             case .rateLimited:
-                return "Слишком много запросов. Попробуйте через минуту."
+                return String(localized: "Too many requests. Try again in a minute.")
             case .ownerMismatch:
-                return "Только владелец списка может его перепубликовать"
+                return String(localized: "Only the list owner can republish it")
             }
         }
     }
@@ -155,7 +157,7 @@ final class FirestoreService {
         }
         var req = URLRequest(url: url)
         req.httpMethod = method
-        req.timeoutInterval = 10
+        req.timeoutInterval = 6
         req.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
         req.setValue("application/json", forHTTPHeaderField: "Content-Type")
         if let body {
@@ -192,7 +194,7 @@ final class FirestoreService {
         }
         var req = URLRequest(url: url)
         req.httpMethod = "POST"
-        req.timeoutInterval = 10
+        req.timeoutInterval = 6
         req.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
         req.setValue("application/json", forHTTPHeaderField: "Content-Type")
         req.httpBody = try JSONSerialization.data(withJSONObject: body)
@@ -280,6 +282,52 @@ final class FirestoreService {
     /// Build full document name for batch writes.
     private func fullDocName(_ collectionPath: String) -> String {
         "\(projectPath)/\(collectionPath)"
+    }
+
+    // MARK: - User Profile (users/{uid})
+
+    /// Записывает displayName юзера в `users/{uid}` document открытым.
+    /// Используется как серверная истина имени: Apple отдаёт fullName только при первом sign-in,
+    /// поэтому при logout/перелогине fallback chain читает из этого документа.
+    /// Не PII в смысле E2E — имя нужно для атрибуции в shared wishlists и push wording.
+    func setUserDisplayName(uid: String, displayName: String) async throws {
+        let fields = toFields([
+            "displayName": displayName,
+            "displayNameUpdatedAt": Date()
+        ])
+        let _ = try await request(
+            "PATCH",
+            path: "users/\(uid)?updateMask.fieldPaths=displayName&updateMask.fieldPaths=displayNameUpdatedAt",
+            body: ["fields": fields]
+        )
+    }
+
+    /// Записывает текущий язык юзера в `users/{uid}.userLocale`.
+    /// CF использует его чтобы локализовать тексты push-уведомлений на язык получателя.
+    /// Формат: BCP 47 (`ru`, `en`, `es`, `de`, `fr`, `it`, `ja`, `zh-Hans`, `ko`, `pt-BR`).
+    func setUserLocale(uid: String, locale: String) async throws {
+        let fields = toFields([
+            "userLocale": locale,
+            "userLocaleUpdatedAt": Date()
+        ])
+        let _ = try await request(
+            "PATCH",
+            path: "users/\(uid)?updateMask.fieldPaths=userLocale&updateMask.fieldPaths=userLocaleUpdatedAt",
+            body: ["fields": fields]
+        )
+    }
+
+    /// Читает displayName из `users/{uid}` document. nil если документа нет или поля нет.
+    func fetchUserDisplayName(uid: String) async throws -> String? {
+        guard let doc = try? await request("GET", path: "users/\(uid)") else { return nil }
+        guard let fields = doc["fields"] as? [String: Any] else { return nil }
+        guard let dnField = fields["displayName"] as? [String: Any] else { return nil }
+        return dnField["stringValue"] as? String
+    }
+
+    /// Удаляет `users/{uid}` document. Вызывается из AccountDeletionService после очистки subcollections.
+    func deleteUserProfileDocument(uid: String) async throws {
+        let _ = try await request("DELETE", path: "users/\(uid)")
     }
 
     // MARK: - Personal Wishlists (users/{uid}/wishlists)
@@ -452,6 +500,7 @@ final class FirestoreService {
         probationEndAt: Date? = nil,
         addedByUID: String? = nil,
         addedByName: String? = nil,
+        gradientHue: Double? = nil,
         key: SymmetricKey
     ) async throws {
         let payload = EncryptionService.packPayload([
@@ -467,7 +516,8 @@ final class FirestoreService {
             "description": descriptionText,
             "probationEndAt": probationEndAt.map { ISO8601DateFormatter().string(from: $0) },
             "addedByUID": addedByUID,
-            "addedByName": addedByName
+            "addedByName": addedByName,
+            "gradientHue": gradientHue
         ])
         let encrypted = try EncryptionService.encrypt(payload, using: key)
 
@@ -502,6 +552,7 @@ final class FirestoreService {
         probationEndAt: Date? = nil,
         addedByUID: String? = nil,
         addedByName: String? = nil,
+        gradientHue: Double? = nil,
         key: SymmetricKey
     ) async throws {
         var existingPayload: [String: Any] = [:]
@@ -525,7 +576,8 @@ final class FirestoreService {
             "description": descriptionText,
             "probationEndAt": probationEndAt.map { ISO8601DateFormatter().string(from: $0) },
             "addedByUID": addedByUID,
-            "addedByName": addedByName
+            "addedByName": addedByName,
+            "gradientHue": gradientHue
         ]
 
         var merged = existingPayload
@@ -736,6 +788,7 @@ final class FirestoreService {
         probationEndAt: Date? = nil,
         addedByUID: String? = nil,
         addedByName: String? = nil,
+        gradientHue: Double? = nil,
         key: SymmetricKey
     ) async throws {
         let payload = EncryptionService.packPayload([
@@ -751,17 +804,28 @@ final class FirestoreService {
             "description": descriptionText,
             "probationEndAt": probationEndAt.map { ISO8601DateFormatter().string(from: $0) },
             "addedByUID": addedByUID,
-            "addedByName": addedByName
+            "addedByName": addedByName,
+            "gradientHue": gradientHue
         ])
         let encrypted = try EncryptionService.encrypt(payload, using: key)
 
-        let fields = toFields([
+        var data: [String: Any?] = [
             "encryptedPayload": encrypted as Any,
             "sortIndex": sortIndex as Any,
             "isArchived": false as Any,
             "createdAt": Date() as Any,
             "updatedAt": Date() as Any
-        ])
+        ]
+        // Plaintext поле для Cloud Function push trigger (E2E payload скрывает автора).
+        if let addedByUID, !addedByUID.isEmpty {
+            data["lastModifiedByUID"] = addedByUID
+        }
+        // Короткое зашифрованное имя для NSE: CF пробросит его в push.data, NSE расшифрует на
+        // устройстве ключом из shared Keychain и покажет название желания. Сервер расшифровать не может.
+        if let encName = try? EncryptionService.encrypt(["n": name], using: key) {
+            data["encryptedName"] = encName
+        }
+        let fields = toFields(data)
         let _ = try await request("PATCH", path: "shared_wishlists/\(wishlistID)/items/\(itemID)", body: ["fields": fields])
     }
 
@@ -785,6 +849,8 @@ final class FirestoreService {
         probationEndAt: Date? = nil,
         addedByUID: String? = nil,
         addedByName: String? = nil,
+        gradientHue: Double? = nil,
+        lastModifiedByUID: String? = nil,
         key: SymmetricKey
     ) async throws {
         var existingPayload: [String: Any] = [:]
@@ -808,7 +874,8 @@ final class FirestoreService {
             "description": descriptionText,
             "probationEndAt": probationEndAt.map { ISO8601DateFormatter().string(from: $0) },
             "addedByUID": addedByUID,
-            "addedByName": addedByName
+            "addedByName": addedByName,
+            "gradientHue": gradientHue
         ]
 
         var merged = existingPayload
@@ -825,16 +892,81 @@ final class FirestoreService {
         }
 
         let encrypted = try EncryptionService.encrypt(merged, using: key)
-        let fields = toFields([
+        var data: [String: Any?] = [
             "encryptedPayload": encrypted as Any,
             "sortIndex": sortIndex as Any,
             "isArchived": isArchived as Any,
             "updatedAt": Date() as Any
-        ])
+        ]
+        if let lastModifiedByUID, !lastModifiedByUID.isEmpty {
+            data["lastModifiedByUID"] = lastModifiedByUID
+        }
+        // Обновляем зашифрованное имя для NSE (название могло измениться).
+        if let encName = try? EncryptionService.encrypt(["n": name], using: key) {
+            data["encryptedName"] = encName
+        }
+        let fields = toFields(data)
         let _ = try await request("PATCH", path: "shared_wishlists/\(wishlistID)/items/\(itemID)", body: ["fields": fields])
     }
 
-    func deleteSharedItem(wishlistID: String, itemID: String) async throws {
+    /// Delete shared item. Перед DELETE делаем PATCH `lastModifiedByUID=currentUID` чтобы Cloud
+    /// Function push trigger знал автора удаления (E2E payload не даёт это узнать иначе).
+    /// CF skip'ает push на этот intermediate update (encryptedPayload не менялся).
+    /// Bulk reorder: обновляет только `sortIndex` + `updatedAt` через batch commit — один HTTP request.
+    /// encryptedPayload и остальные поля не трогаются (updateMask). Это in 5-10× быстрее чем N
+    /// последовательных GET → decrypt → merge → encrypt → PATCH.
+    func bulkReorderSharedItems(wishlistID: String, items: [(String, Double)], lastModifiedByUID: String) async throws {
+        guard !items.isEmpty else { return }
+        var writes: [[String: Any]] = []
+        for (itemID, sortIndex) in items {
+            // Пишем sortIndex + updatedAt + lastModifiedByUID (актор reorder'а). encryptedPayload
+            // не трогаем → CF push trigger видит неизменный контент и НЕ шлёт пуш (тихий reorder),
+            // но автор последнего изменения становится корректным (а не stale создатель / null).
+            var fieldDict: [String: Any] = ["sortIndex": sortIndex as Any, "updatedAt": Date() as Any]
+            if !lastModifiedByUID.isEmpty { fieldDict["lastModifiedByUID"] = lastModifiedByUID }
+            let fields = toFields(fieldDict)
+            let maskPaths = lastModifiedByUID.isEmpty
+                ? ["sortIndex", "updatedAt"]
+                : ["sortIndex", "updatedAt", "lastModifiedByUID"]
+            writes.append([
+                "update": [
+                    "name": fullDocName("shared_wishlists/\(wishlistID)/items/\(itemID)"),
+                    "fields": fields
+                ],
+                "updateMask": ["fieldPaths": maskPaths]
+            ])
+        }
+        let commitURL = "\(baseURL):commit"
+        let _ = try await request("POST", path: commitURL, body: ["writes": writes])
+    }
+
+    /// Bulk reorder для personal wishlist items.
+    func bulkReorderPersonalItems(uid: String, wishlistID: String, items: [(String, Double)]) async throws {
+        guard !items.isEmpty else { return }
+        var writes: [[String: Any]] = []
+        for (itemID, sortIndex) in items {
+            let fields = toFields(["sortIndex": sortIndex as Any, "updatedAt": Date() as Any])
+            writes.append([
+                "update": [
+                    "name": fullDocName("users/\(uid)/wishlists/\(wishlistID)/items/\(itemID)"),
+                    "fields": fields
+                ],
+                "updateMask": ["fieldPaths": ["sortIndex", "updatedAt"]]
+            ])
+        }
+        let commitURL = "\(baseURL):commit"
+        let _ = try await request("POST", path: commitURL, body: ["writes": writes])
+    }
+
+    func deleteSharedItem(wishlistID: String, itemID: String, currentUID: String? = nil) async throws {
+        if let currentUID, !currentUID.isEmpty {
+            let stamp = toFields(["lastModifiedByUID": currentUID, "updatedAt": Date() as Any])
+            let _ = try? await request(
+                "PATCH",
+                path: "shared_wishlists/\(wishlistID)/items/\(itemID)?updateMask.fieldPaths=lastModifiedByUID&updateMask.fieldPaths=updatedAt",
+                body: ["fields": stamp]
+            )
+        }
         let _ = try await request("DELETE", path: "shared_wishlists/\(wishlistID)/items/\(itemID)")
     }
 
@@ -1048,6 +1180,20 @@ final class FirestoreService {
             body: ["fields": fields]
         )
     }
+
+    /// Per-list тоггл уведомлений текущего юзера. Пишется в его membership-документ (plaintext
+    /// metadata — это его собственная настройка, не контент). Cloud Function читает это поле и
+    /// пропускает получателя если notificationsEnabled == false. updateMask — не трогаем role/canInvite.
+    func updateMembershipNotificationsEnabled(wishlistID: String, userUID: String, enabled: Bool) async throws {
+        let membershipID = "\(userUID)_\(wishlistID)"
+        let fields = toFields(["notificationsEnabled": enabled as Any])
+        let _ = try await request(
+            "PATCH",
+            path: "memberships/\(membershipID)?updateMask.fieldPaths=notificationsEnabled",
+            body: ["fields": fields]
+        )
+    }
+
 
     /// Plaintext-only GET всех memberships для конкретного wishlist'а.
     /// Используется в self-heal для проверки "не существует ли другого owner'а" перед повышением себя.
@@ -1308,6 +1454,7 @@ final class FirestoreService {
         let linkMetadataData = EncryptionService.dataField(content, "linkMeta")
         let probISO = content["probationEndAt"] as? String
         let probationEndAt: Date? = probISO.flatMap { ISO8601DateFormatter().date(from: $0) }
+        let gradientHue = parseDouble(content["gradientHue"])
 
         return SharedItemInfo(
             itemID: docID,
@@ -1325,7 +1472,263 @@ final class FirestoreService {
             sortIndex: parsed["sortIndex"] as? Double ?? 0,
             isArchived: parsed["isArchived"] as? Bool ?? false,
             addedByUID: addedByUID,
-            addedByName: addedByName
+            addedByName: addedByName,
+            gradientHue: gradientHue
         )
+    }
+
+    // MARK: - Offline Sync (LWW per-field merge)
+
+    /// Sync wishlist update от SyncEngine. Делает GET + decrypt + per-field LWW merge + PATCH.
+    /// Encrypted payload содержит embedded `_fieldTimestamps` map: `{name: ISO8601, ...}`.
+    /// Поле с более новым timestamp побеждает.
+    ///
+    /// Plaintext поля (sortIndex, isArchived, gradientHue) передаются в `fields` и записываются
+    /// напрямую через PATCH с updateMask.
+    func syncWishlistUpdate(
+        uid: String,
+        wishlistID: String,
+        fields: [String: Any],
+        fieldTimestamps: [String: Date],
+        sharedWishlistID: String?
+    ) async throws {
+        let isShared = (sharedWishlistID != nil)
+        let path: String
+        let keyID: String  // keychain stores key under wishlistID OR sharedWishlistID
+        if let sid = sharedWishlistID {
+            path = "shared_wishlists/\(sid)"
+            keyID = sid
+        } else {
+            path = "users/\(uid)/wishlists/\(wishlistID)"
+            keyID = wishlistID
+        }
+        guard let key = KeychainService.load(for: keyID) else {
+            throw FirestoreError.notFound  // no key — can't encrypt, skip
+        }
+
+        // Fields разделяем: encrypted (name, coverEmoji, coverImageData) vs plaintext (sortIndex, isArchived, gradientHue).
+        let encryptedFieldNames: Set<String> = ["name", "coverEmoji", "coverImageData"]
+        var encryptedUpdates: [String: Any] = [:]
+        var plaintextUpdates: [String: Any] = [:]
+        for (k, v) in fields {
+            if encryptedFieldNames.contains(k) { encryptedUpdates[k] = v }
+            else { plaintextUpdates[k] = v }
+        }
+
+        try await mergeAndPatch(
+            path: path,
+            key: key,
+            encryptedUpdates: encryptedUpdates,
+            plaintextUpdates: plaintextUpdates,
+            fieldTimestamps: fieldTimestamps
+        )
+
+        // Зеркальный personal cache для shared lists (owner или participant — у каждого свой users/{uid}/wishlists/{wishlistID} запись).
+        if isShared {
+            try? await mergeAndPatch(
+                path: "users/\(uid)/wishlists/\(wishlistID)",
+                key: key,
+                encryptedUpdates: encryptedUpdates,
+                plaintextUpdates: plaintextUpdates,
+                fieldTimestamps: fieldTimestamps
+            )
+        }
+    }
+
+    /// Sync item update — то же что wishlist, но для items.
+    func syncItemUpdate(
+        uid: String,
+        wishlistID: String,
+        itemID: String,
+        fields: [String: Any],
+        fieldTimestamps: [String: Date],
+        sharedWishlistID: String?
+    ) async throws {
+        let path: String
+        let keyID: String
+        if let sid = sharedWishlistID {
+            path = "shared_wishlists/\(sid)/items/\(itemID)"
+            keyID = sid
+        } else {
+            path = "users/\(uid)/wishlists/\(wishlistID)/items/\(itemID)"
+            keyID = wishlistID
+        }
+        guard let key = KeychainService.load(for: keyID) else {
+            throw FirestoreError.notFound
+        }
+
+        // Items: encrypted = name/tier/price/priceMax/currency/url/coverEmoji/coverImageData/linkMeta/description/addedByUID/addedByName
+        // plaintext = sortIndex/isArchived/probationEndAt/gradientHue/lastModifiedByUID
+        let plaintextFieldNames: Set<String> = ["sortIndex", "isArchived", "probationEndAt", "gradientHue", "lastModifiedByUID"]
+        var encryptedUpdates: [String: Any] = [:]
+        var plaintextUpdates: [String: Any] = [:]
+        for (k, v) in fields {
+            if plaintextFieldNames.contains(k) { plaintextUpdates[k] = v }
+            else { encryptedUpdates[k] = v }
+        }
+
+        try await mergeAndPatch(
+            path: path,
+            key: key,
+            encryptedUpdates: encryptedUpdates,
+            plaintextUpdates: plaintextUpdates,
+            fieldTimestamps: fieldTimestamps
+        )
+    }
+
+    /// Soft-delete wishlist (tombstone в encrypted payload + isArchived=true в plaintext).
+    func syncWishlistSoftDelete(
+        uid: String,
+        wishlistID: String,
+        deletedAt: Date,
+        sharedWishlistID: String?
+    ) async throws {
+        // Real delete для owner, leave для participant. Sync-level это просто пометка tombstone.
+        // Используем существующий deletePersonalWishlist + (если shared) deleteSharedWishlistFull / leaveWishlist.
+        if let sid = sharedWishlistID {
+            // Determine ownership: read shared_wishlists/{sid} → check ownerUID.
+            if let doc = try? await request("GET", path: "shared_wishlists/\(sid)"),
+               let f = doc["fields"] as? [String: Any],
+               let ownerUID = parseFields(f)["ownerUID"] as? String {
+                if ownerUID == uid {
+                    try await deleteSharedWishlistFull(wishlistID: sid)
+                    try? await deletePersonalWishlist(uid: uid, wishlistID: wishlistID)
+                } else {
+                    try await leaveWishlist(wishlistID: sid, userUID: uid)
+                }
+            } else {
+                // doc уже нет — просто чистим личный кеш
+                try? await deletePersonalWishlist(uid: uid, wishlistID: wishlistID)
+            }
+        } else {
+            try await deletePersonalWishlist(uid: uid, wishlistID: wishlistID)
+        }
+        _ = deletedAt  // зарезервировано на случай если переходим на soft tombstone
+    }
+
+    /// Soft-delete item (encrypted payload isDeleted=true + deletedAt + plaintext isArchived).
+    func syncItemSoftDelete(
+        uid: String,
+        wishlistID: String,
+        itemID: String,
+        deletedAt: Date,
+        sharedWishlistID: String?
+    ) async throws {
+        // Сейчас hard-delete на сервере (CF cleanup для tombstones — будущая работа).
+        // Для consistency с текущим backend используем существующий delete endpoint.
+        if let sid = sharedWishlistID {
+            // Сообщить CF автора удаления через lastModifiedByUID, потом DELETE.
+            let touchFields = toFields(["lastModifiedByUID": uid, "updatedAt": Date()])
+            _ = try? await request(
+                "PATCH",
+                path: "shared_wishlists/\(sid)/items/\(itemID)?updateMask.fieldPaths=lastModifiedByUID&updateMask.fieldPaths=updatedAt",
+                body: ["fields": touchFields]
+            )
+            _ = try await request("DELETE", path: "shared_wishlists/\(sid)/items/\(itemID)")
+        } else {
+            _ = try await request("DELETE", path: "users/\(uid)/wishlists/\(wishlistID)/items/\(itemID)")
+        }
+        _ = deletedAt
+    }
+
+    /// Archive/unarchive — только plaintext PATCH (без LWW merge encrypted payload).
+    func syncWishlistArchive(uid: String, wishlistID: String, isArchived: Bool, sharedWishlistID: String?) async throws {
+        if let sid = sharedWishlistID {
+            try await archiveSharedWishlist(wishlistID: sid, isArchived: isArchived)
+        }
+        try await archivePersonalWishlist(uid: uid, wishlistID: wishlistID, isArchived: isArchived)
+    }
+
+    func syncItemArchive(uid: String, wishlistID: String, itemID: String, isArchived: Bool, sharedWishlistID: String?) async throws {
+        let path: String
+        if let sid = sharedWishlistID {
+            path = "shared_wishlists/\(sid)/items/\(itemID)"
+        } else {
+            path = "users/\(uid)/wishlists/\(wishlistID)/items/\(itemID)"
+        }
+        let fields = toFields([
+            "isArchived": isArchived,
+            "updatedAt": Date()
+        ])
+        _ = try await request(
+            "PATCH",
+            path: "\(path)?updateMask.fieldPaths=isArchived&updateMask.fieldPaths=updatedAt",
+            body: ["fields": fields]
+        )
+    }
+
+    /// Core LWW merge logic. Reads current encrypted payload, мерджит per-field на основе
+    /// timestamps, encrypt'ит обратно, PATCH'ит.
+    ///
+    /// **Embedded timestamps**: внутри encrypted payload храним key `_fieldTimestamps: [String: String]`
+    /// (ISO8601 strings). При merge сравниваем для каждого поля.
+    /// Если у incoming поля timestamp >= existing → новое значение wins.
+    /// Если у existing нет timestamp (legacy item) → incoming wins (любой client с новым кодом).
+    /// Если у incoming нет timestamp для поля но значение есть → используем `now` как timestamp.
+    private func mergeAndPatch(
+        path: String,
+        key: SymmetricKey,
+        encryptedUpdates: [String: Any],
+        plaintextUpdates: [String: Any],
+        fieldTimestamps: [String: Date]
+    ) async throws {
+        var existingPayload: [String: Any] = [:]
+        if let existingDoc = try? await request("GET", path: path),
+           let docFields = existingDoc["fields"] as? [String: Any],
+           let encryptedData = parseFields(docFields)["encryptedPayload"] as? Data,
+           let decrypted = try? EncryptionService.decrypt(encryptedData, using: key) {
+            existingPayload = decrypted
+        }
+
+        // Достать existing timestamps из payload.
+        let iso = ISO8601DateFormatter()
+        var existingTimestamps: [String: Date] = [:]
+        if let raw = existingPayload["_fieldTimestamps"] as? [String: String] {
+            for (k, v) in raw {
+                if let d = iso.date(from: v) { existingTimestamps[k] = d }
+            }
+        }
+
+        // Per-field LWW merge.
+        var merged = existingPayload
+        var newTimestamps = existingTimestamps
+        let now = Date()
+        for (k, v) in encryptedUpdates {
+            let incomingTS = fieldTimestamps[k] ?? now
+            let existingTS = existingTimestamps[k]
+            if existingTS == nil || incomingTS >= existingTS! {
+                if let data = v as? Data {
+                    merged[k] = data.base64EncodedString()
+                } else if let date = v as? Date {
+                    merged[k] = iso.string(from: date)
+                } else {
+                    // NSNull / "" / Optional.none → удалить поле
+                    if v is NSNull { merged.removeValue(forKey: k) }
+                    else { merged[k] = v }
+                }
+                newTimestamps[k] = incomingTS
+            }
+        }
+
+        // Save timestamps back into payload.
+        var tsStrings: [String: String] = [:]
+        for (k, v) in newTimestamps { tsStrings[k] = iso.string(from: v) }
+        merged["_fieldTimestamps"] = tsStrings
+
+        let encrypted = try EncryptionService.encrypt(merged, using: key)
+
+        // Build PATCH fields: encryptedPayload + plaintext + updatedAt.
+        var data: [String: Any?] = [
+            "encryptedPayload": encrypted as Any,
+            "updatedAt": Date() as Any
+        ]
+        var maskFields = ["encryptedPayload", "updatedAt"]
+        for (k, v) in plaintextUpdates {
+            data[k] = v
+            maskFields.append(k)
+        }
+        let maskPaths = maskFields.map { "updateMask.fieldPaths=\($0)" }.joined(separator: "&")
+        let fields = toFields(data)
+        _ = try await request("PATCH", path: "\(path)?\(maskPaths)", body: ["fields": fields])
     }
 }

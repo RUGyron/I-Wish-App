@@ -8,6 +8,8 @@ final class AppServices {
     let auth = AuthService()
     let firestore = FirestoreService()
     let networkMonitor = NetworkMonitor()
+    let push = PushNotificationService()
+    let sync = SyncEngine()
     var data: DataService!
     var accountDeletion: AccountDeletionService!
 
@@ -15,11 +17,15 @@ final class AppServices {
         // Bi-directional wire: monitor получает outcome через firestore, и сам может пинговать firestore.
         firestore.networkMonitor = networkMonitor
         networkMonitor.attach(firestore: firestore)
+        push.attach(auth: auth)
+        auth.attach(firestore: firestore)
+        networkMonitor.attach(syncEngine: sync)
     }
 
     func configure(modelContext: ModelContext) {
-        data = DataService(firestore: firestore, modelContext: modelContext, auth: auth)
+        data = DataService(firestore: firestore, modelContext: modelContext, auth: auth, sync: sync)
         accountDeletion = AccountDeletionService(auth: auth, firestore: firestore, data: data)
+        sync.configure(firestore: firestore, modelContext: modelContext, networkMonitor: networkMonitor, auth: auth)
     }
 }
 

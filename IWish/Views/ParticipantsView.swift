@@ -46,19 +46,19 @@ struct ParticipantsView: View {
 
                         VStack(alignment: .leading, spacing: 2) {
                             HStack(spacing: 4) {
-                                Text(ownerName ?? "Владелец")
+                                Text(ownerName ?? String(localized: "Owner"))
                                     .font(.body.weight(.medium))
                                 if ownerUID == services.auth.uid {
-                                    Text("(это вы)")
+                                    Text("(you)")
                                         .font(.caption)
                                         .foregroundStyle(.secondary)
                                 } else {
-                                    Text("(владелец)")
+                                    Text("(owner)")
                                         .font(.caption)
                                         .foregroundStyle(.secondary)
                                 }
                             }
-                            Text("Полный доступ")
+                            Text("Full access")
                                 .font(.caption)
                                 .foregroundStyle(.secondary)
                         }
@@ -67,7 +67,7 @@ struct ParticipantsView: View {
                     }
                     .padding(.vertical, 4)
                 } header: {
-                    Text("Владелец")
+                    Text("Owner")
                 }
 
                 // Members
@@ -86,10 +86,10 @@ struct ParticipantsView: View {
                                 .foregroundStyle(.tertiary)
 
                             VStack(spacing: 4) {
-                                Text("Пока никто не приглашён")
+                                Text("Nobody invited yet")
                                     .font(.subheadline)
                                     .foregroundStyle(.secondary)
-                                Text("Поделитесь списком по QR-коду или ссылке")
+                                Text("Share the list via QR code or link")
                                     .font(.caption)
                                     .foregroundStyle(.tertiary)
                             }
@@ -104,7 +104,7 @@ struct ParticipantsView: View {
                     }
                 } header: {
                     HStack {
-                        Text("Участники")
+                        Text("Participants")
                         Spacer()
                         Button {
                             dismiss()
@@ -112,7 +112,7 @@ struct ParticipantsView: View {
                         } label: {
                             HStack(spacing: 3) {
                                 Image(systemName: "plus")
-                                Text("Пригласить")
+                                Text("Invite")
                             }
                             .font(.caption.weight(.semibold))
                         }
@@ -121,12 +121,12 @@ struct ParticipantsView: View {
                 }
             }
             .warmBackground()
-            .navigationTitle("Участники")
+            .navigationTitle("Participants")
             .navigationBarTitleDisplayMode(.inline)
             .fontDesign(.rounded)
             .toolbar {
                 ToolbarItem(placement: .confirmationAction) {
-                    Button("Готово") { dismiss() }
+                    Button("Done") { dismiss() }
                 }
             }
             .task {
@@ -135,7 +135,7 @@ struct ParticipantsView: View {
             .onAppear { startPolling() }
             .onDisappear { stopPolling() }
             .confirmationDialog(
-                "Удалить участника из списка?",
+                "Remove participant from the list?",
                 isPresented: Binding(
                     get: { memberToKick != nil },
                     set: { if !$0 { memberToKick = nil } }
@@ -143,14 +143,14 @@ struct ParticipantsView: View {
                 titleVisibility: .visible,
                 presenting: memberToKick
             ) { target in
-                Button("Удалить", role: .destructive) {
+                Button("Remove", role: .destructive) {
                     performKick(userUID: target.userUID, name: target.name)
                 }
-                Button("Отмена", role: .cancel) {
+                Button("Cancel", role: .cancel) {
                     memberToKick = nil
                 }
             } message: { target in
-                Text("«\(target.name)» потеряет доступ к списку. Чтобы вернуть — потребуется новое приглашение.")
+                Text("“\(target.name)” will lose access to the list. To restore it, a new invitation will be required.")
             }
         }
         .applyTheme()
@@ -188,7 +188,7 @@ struct ParticipantsView: View {
                 Button(role: .destructive) {
                     memberToKick = (userUID: member.userUID, name: member.name)
                 } label: {
-                    Label("Удалить", systemImage: "person.fill.xmark")
+                    Label("Remove", systemImage: "person.fill.xmark")
                 }
             }
         }
@@ -234,7 +234,7 @@ struct ParticipantsView: View {
 
         ZStack {
             VStack(alignment: .leading, spacing: 18) {
-                Picker("Роль", selection: Binding(
+                Picker("Role", selection: Binding(
                     get: { displayRole },
                     set: { newRole in
                         guard newRole != displayRole else { return }
@@ -243,8 +243,8 @@ struct ParticipantsView: View {
                         performRoleChange(memberUID: member.userUID, newRole: newRole)
                     }
                 )) {
-                    Text("Редактор").tag("editor")
-                    Text("Зритель").tag("viewer")
+                    Text("Editor").tag("editor")
+                    Text("Viewer").tag("viewer")
                 }
                 .pickerStyle(.segmented)
 
@@ -255,7 +255,7 @@ struct ParticipantsView: View {
                         performCanInviteChange(memberUID: member.userUID, canInvite: newValue)
                     }
                 )) {
-                    Label("Может приглашать", systemImage: "person.badge.plus")
+                    Label("Can invite", systemImage: "person.badge.plus")
                         .labelStyle(.titleAndIcon)
                         .font(.subheadline)
                 }
@@ -266,7 +266,7 @@ struct ParticipantsView: View {
                 } label: {
                     HStack(spacing: 8) {
                         Image(systemName: "person.fill.xmark")
-                        Text("Удалить из списка")
+                        Text("Remove from list")
                     }
                     .font(.subheadline.weight(.medium))
                     .foregroundStyle(.red)
@@ -336,7 +336,7 @@ struct ParticipantsView: View {
             if let mname = ownerMembership?.userName, !mname.isEmpty {
                 ownerName = mname
             } else {
-                ownerName = info.ownerName ?? "Владелец"
+                ownerName = info.ownerName ?? String(localized: "Owner")
             }
 
             // Filter out the owner — they're shown in the owner section
@@ -355,7 +355,7 @@ struct ParticipantsView: View {
                 } else if let memberName = member.userName, !memberName.isEmpty {
                     name = memberName
                 } else {
-                    name = "Участник"
+                    name = String(localized: "Participant")
                 }
                 resolved.append((userUID: member.userUID, role: member.role, name: name, canInvite: member.canInvite))
             }
@@ -375,7 +375,7 @@ struct ParticipantsView: View {
             return
         }
         // Имя для toast — snapshot ДО запроса, чтобы текст был стабилен даже если member kicked в гонке.
-        let memberName = members.first(where: { $0.userUID == memberUID })?.name ?? "Участник"
+        let memberName = members.first(where: { $0.userUID == memberUID })?.name ?? String(localized: "Participant")
         pendingMutationUID = memberUID
         Task {
             do {
@@ -386,8 +386,8 @@ struct ParticipantsView: View {
                 )
                 await fetchMembers()
                 optimisticRoles.removeValue(forKey: memberUID)
-                let label = newRole == "editor" ? "редактор" : "зритель"
-                toast.success("\(memberName) теперь \(label)")
+                let label = newRole == "editor" ? String(localized: "editor") : String(localized: "viewer")
+                toast.success(String(format: String(localized: "%@ is now %@"), memberName, label))
             } catch {
                 // Revert: optimistic value сброс → picker анимированно вернётся в server-state.
                 optimisticRoles.removeValue(forKey: memberUID)
@@ -404,7 +404,7 @@ struct ParticipantsView: View {
             optimisticCanInvite.removeValue(forKey: memberUID)
             return
         }
-        let memberName = members.first(where: { $0.userUID == memberUID })?.name ?? "Участник"
+        let memberName = members.first(where: { $0.userUID == memberUID })?.name ?? String(localized: "Participant")
         pendingMutationUID = memberUID
         Task {
             do {
@@ -416,9 +416,9 @@ struct ParticipantsView: View {
                 await fetchMembers()
                 optimisticCanInvite.removeValue(forKey: memberUID)
                 if canInvite {
-                    toast.success("\(memberName) может приглашать других")
+                    toast.success(String(format: String(localized: "%@ can now invite others"), memberName))
                 } else {
-                    toast.success("\(memberName) больше не может приглашать")
+                    toast.success(String(format: String(localized: "%@ can no longer invite"), memberName))
                 }
             } catch {
                 optimisticCanInvite.removeValue(forKey: memberUID)
@@ -441,7 +441,7 @@ struct ParticipantsView: View {
                 // Локально убираем сразу — fetchMembers догонит из Firestore через 30s,
                 // но пользователь должен видеть результат немедленно.
                 members.removeAll { $0.userUID == userUID }
-                toast.success("«\(name)» удалён из списка")
+                toast.success(String(format: String(localized: "“%@” removed from the list"), name))
             } catch {
                 toast.error(error.localizedDescription)
             }
@@ -452,7 +452,7 @@ struct ParticipantsView: View {
     // MARK: - Helpers
 
     private func roleBadge(for role: String) -> String {
-        role == "editor" ? "(редактор)" : "(зритель)"
+        role == "editor" ? String(localized: "(editor)") : String(localized: "(viewer)")
     }
 }
 

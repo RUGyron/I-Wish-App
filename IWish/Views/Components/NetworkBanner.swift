@@ -1,56 +1,45 @@
 import SwiftUI
 
-/// Лаконичный banner потери сети + блокирующий overlay поверх всего UI.
+/// Persistent network-status bar. Спокойная тонкая полоска, не тост-формат.
 ///
-/// Дизайн (после правок Влада 2026-05-11):
-/// - Стиль как у тостов: `ultraThinMaterial`, rounded card, нейтральный цвет, без агрессивного red.
-/// - Правильное размещение: НЕ в safe area, с padding от top.
-/// - Блокирует UI: полупрозрачный backdrop consume'ит touches пока сеть нестабильна.
-///   Юзер видит свои локальные данные подсвеченным, но не может тапать — это однозначный
-///   сигнал "сейчас ничего сделать нельзя, ждём сеть".
-///
-/// Полностью прозрачен пока `monitor.isBlocked == false`.
+/// Дизайн (2026-05-18 после фидбека Влада):
+/// - Тосты-формат поверх всего UI неуместен для долгого состояния. Заменён на тонкую
+///   полосу-ленту прямо под navigation bar (как iOS-системный VPN/recording bar).
+/// - Высота ~28pt, background `.thinMaterial`, без shadow и больших rounded углов.
+/// - Pinned внизу status bar / над nav title — приземлённый indicator без отвлечения.
+/// - `allowsHitTesting(false)` — touch проходит насквозь.
 struct NetworkBanner: View {
     let monitor: NetworkMonitor
 
     var body: some View {
         if monitor.isBlocked {
-            ZStack(alignment: .top) {
-                // Backdrop — мягкий, но consume'ит touches (UI залочен).
-                Color.black.opacity(0.18)
-                    .ignoresSafeArea()
-                    .transition(.opacity)
-                    .contentShape(Rectangle()) // hit-test всю площадь — блокировка тапов
+            VStack(spacing: 0) {
+                // Pin под inline navigation bar (44pt + safe area sometimes already accounted).
+                Spacer().frame(height: 44)
 
-                // Карточка banner — лаконичная, в стиле тостов.
-                HStack(spacing: 10) {
+                HStack(spacing: 6) {
                     Image(systemName: "wifi.exclamationmark")
-                        .font(.body.weight(.semibold))
+                        .font(.caption.weight(.medium))
+                        .foregroundStyle(.orange)
+
+                    Text("No connection")
+                        .font(.caption.weight(.regular))
                         .foregroundStyle(.secondary)
-
-                    Text("Нет соединения")
-                        .font(.subheadline.weight(.medium))
-                        .foregroundStyle(.primary)
-
-                    Spacer(minLength: 8)
-
-                    ProgressView()
-                        .controlSize(.small)
                 }
-                .padding(.horizontal, 16)
-                .padding(.vertical, 12)
-                .background {
-                    RoundedRectangle(cornerRadius: 14, style: .continuous)
-                        .fill(.ultraThinMaterial)
-                        .shadow(color: .black.opacity(0.08), radius: 8, y: 4)
+                .frame(maxWidth: .infinity)
+                .padding(.vertical, 6)
+                .background(.thinMaterial)
+                .overlay(alignment: .bottom) {
+                    Divider().opacity(0.5)
                 }
-                .padding(.horizontal, 16)
-                .padding(.top, 8) // отступ от safe-area top — RootView передаёт ниже status bar
                 .transition(.move(edge: .top).combined(with: .opacity))
                 .accessibilityElement(children: .combine)
-                .accessibilityLabel("Нет соединения. Идёт попытка восстановления.")
+                .accessibilityLabel("No connection. Attempting to reconnect.")
+
+                Spacer()
             }
-            .animation(.spring(duration: 0.3, bounce: 0.15), value: monitor.isBlocked)
+            .allowsHitTesting(false)
+            .animation(.spring(duration: 0.3, bounce: 0.0), value: monitor.isBlocked)
         }
     }
 }

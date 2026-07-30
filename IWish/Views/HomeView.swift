@@ -31,15 +31,30 @@ struct HomeView: View {
         #if DEBUG
         if debugListMode == 1 { return [] }
         #endif
-        return wishlists.filter { !($0.isArchived) }
+        return wishlists.filter { !$0.isArchived && !$0.isTombstoned }
+    }
+
+    /// Hash для анимации списка. Ловит insert/delete + изменения name/cover/items.count.
+    /// updatedAt НАМЕРЕННО исключён — он дёргался каждым polling-тиком (refreshWishlists писал
+    /// updatedAt безусловно) и вызывал лишнюю переанимацию грида. Реальные изменения ловятся по полям.
+    private var wishlistsAnimationKey: Int {
+        var hasher = Hasher()
+        for wl in activeWishlists {
+            hasher.combine(wl.id)
+            hasher.combine(wl.name)
+            hasher.combine(wl.coverEmoji)
+            hasher.combine(wl.coverImageData?.count)
+            hasher.combine((wl.items ?? []).filter { !$0.isArchived && !$0.isTombstoned }.count)
+        }
+        return hasher.finalize()
     }
 
     private var totalItems: Int {
-        activeWishlists.reduce(0) { $0 + ($1.items ?? []).filter { !$0.isArchived }.count }
+        activeWishlists.reduce(0) { $0 + ($1.items ?? []).filter { !$0.isArchived && !$0.isTombstoned }.count }
     }
 
     private var archivedCount: Int {
-        wishlists.filter { $0.isArchived }.count
+        wishlists.filter { $0.isArchived && !$0.isTombstoned }.count
     }
 
     private var hasAnyWishlists: Bool {
@@ -71,7 +86,7 @@ struct HomeView: View {
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .warmBackground()
         .ignoresSafeArea(edges: .bottom)
-        .navigationTitle("Вишлисты")
+        .navigationTitle("Wishlists")
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {
             ToolbarItem(placement: .principal) {
@@ -154,11 +169,11 @@ struct HomeView: View {
         }
         .loadingOverlay(isPerformingAction)
         .confirmationDialog(
-            "Удалить «\(wishlistToDelete?.name ?? "")»?",
+            "Delete “\(wishlistToDelete?.name ?? "")”?",
             isPresented: Binding(get: { wishlistToDelete != nil }, set: { if !$0 { wishlistToDelete = nil } }),
             titleVisibility: .visible
         ) {
-            Button("Удалить", role: .destructive) {
+            Button("Delete", role: .destructive) {
                 guard let wl = wishlistToDelete else { return }
                 isPerformingAction = true
                 Task {
@@ -173,11 +188,11 @@ struct HomeView: View {
             }
         }
         .confirmationDialog(
-            "Архивировать «\(wishlistToArchive?.name ?? "")»?",
+            "Archive “\(wishlistToArchive?.name ?? "")”?",
             isPresented: Binding(get: { wishlistToArchive != nil }, set: { if !$0 { wishlistToArchive = nil } }),
             titleVisibility: .visible
         ) {
-            Button("Архивировать", role: .destructive) {
+            Button("Archive", role: .destructive) {
                 guard let wl = wishlistToArchive else { return }
                 isPerformingAction = true
                 Task {
@@ -191,14 +206,14 @@ struct HomeView: View {
                 wishlistToArchive = nil
             }
         } message: {
-            Text("Все участники будут удалены, инвайты отозваны. Список станет приватным.")
+            Text("All participants will be removed, invitations revoked. The list becomes private.")
         }
         .confirmationDialog(
-            "Покинуть «\(wishlistToLeave?.name ?? "")»?",
+            "Leave “\(wishlistToLeave?.name ?? "")”?",
             isPresented: Binding(get: { wishlistToLeave != nil }, set: { if !$0 { wishlistToLeave = nil } }),
             titleVisibility: .visible
         ) {
-            Button("Покинуть список", role: .destructive) {
+            Button("Leave list", role: .destructive) {
                 guard let wl = wishlistToLeave else { return }
                 isPerformingAction = true
                 Task {
@@ -224,12 +239,20 @@ struct HomeView: View {
         HStack(spacing: 6) {
             if let data = services.data {
                 SyncStatusBadge(
-                    isSyncing: data.isSyncing,
-                    syncError: data.syncError,
-                    onTap: { Task { await services.data?.refreshWishlists() } }
+                    isSyncing: services.sync.isSyncing,
+                    syncError: services.sync.lastError,
+                    pendingCount: services.sync.pendingCount,
+                    isOffline: services.networkMonitor.isBlocked,
+                    syncStartedAt: services.sync.syncStartedAt,
+                    onTap: {
+                        Task {
+                            await services.sync.retryAll()
+                            await services.data?.refreshWishlists()
+                        }
+                    }
                 )
             }
-            Text("Вишлисты").font(.headline)
+            Text("Wishlists").font(.headline)
         }
     }
 
@@ -304,9 +327,9 @@ struct HomeView: View {
             Image(systemName: "sparkles")
                 .font(.system(size: 48))
                 .foregroundStyle(.tint)
-            Text("Пока пусто")
+            Text("Nothing here yet")
                 .font(.title3)
-            Text("Начни собирать желания.")
+            Text("Start collecting wishes.")
                 .font(.subheadline)
                 .foregroundStyle(.secondary)
                 .multilineTextAlignment(.center)
@@ -352,10 +375,15 @@ struct HomeView: View {
                             onDelete: { wl in wishlistToDelete = wl },
                             onLeave: { wl in wishlistToLeave = wl }
                         )
+                        .transition(.asymmetric(
+                            insertion: .scale(scale: 0.85).combined(with: .opacity),
+                            removal: .scale(scale: 0.85).combined(with: .opacity)
+                        ))
                     }
 
                 }
                 .padding(.horizontal, 16)
+                .animation(.smooth(duration: 0.45), value: wishlistsAnimationKey)
             }
             .padding(.bottom, 80)
         }
@@ -368,9 +396,11 @@ struct HomeView: View {
 
     private func startPolling() {
         // 30 сек — экономим Firestore quota; throttle в DataService всё равно отсечёт
-        // более частые вызовы.
+        // более частые вызовы. Когда offline — skip polling tick (не плодим зависающие
+        // запросы и спиннер-мигание; NetworkMonitor сам разбудит SyncEngine при появлении сети).
         pollTimer = Timer.scheduledTimer(withTimeInterval: 30.0, repeats: true) { _ in
             Task { @MainActor in
+                guard services.networkMonitor.isBlocked == false else { return }
                 await services.data?.refreshWishlists()
             }
         }
@@ -387,13 +417,14 @@ struct HomeView: View {
         Button {
             showingAddSheet = true
         } label: {
-            Label("Новый список", systemImage: "plus")
+            Label("New list", systemImage: "plus")
                 .font(.headline)
                 .padding(.horizontal, 20)
                 .padding(.vertical, 12)
         }
         .glassEffect(.regular.interactive())
         .clipShape(Capsule())
+        // Offline-mode: создание списка работает без сети — op уйдёт в outbox и push'нется при сети.
     }
 }
 

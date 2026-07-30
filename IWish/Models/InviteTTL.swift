@@ -10,9 +10,9 @@ enum InviteTTL: String, Codable, CaseIterable, Sendable, Identifiable {
 
     var label: String {
         switch self {
-        case .minutes15: return "15 мин"
-        case .hour1:     return "1 час"
-        case .hours24:   return "24 часа"
+        case .minutes15: return String(localized: "15 min")
+        case .hour1:     return String(localized: "1 hour")
+        case .hours24:   return String(localized: "24 hours")
         case .noExpiry:  return "\u{221E}"
         }
     }

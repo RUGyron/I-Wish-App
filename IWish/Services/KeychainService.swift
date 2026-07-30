@@ -10,7 +10,7 @@ enum KeychainError: LocalizedError {
 
     var errorDescription: String? {
         switch self {
-        case .unexpectedStatus(let s): return "Keychain ошибка: \(s)"
+        case .unexpectedStatus(let s): return String(format: String(localized: "Keychain error: %d"), Int(s))
         }
     }
 }
@@ -22,6 +22,11 @@ enum KeychainService {
 
     private static let service = "RUGyron.IWish.WishlistKeys"
     fileprivate static let userProfileService = "RUGyron.IWish.UserProfile"
+
+    /// Shared keychain access group для расшаривания ключей с NotificationServiceExtension
+    /// (NSE расшифровывает имя желания на устройстве). Должен совпадать с entitlement
+    /// `keychain-access-groups` → `$(AppIdentifierPrefix)RUGyron.IWish.shared` (team N8VX7T6P4D).
+    private static let sharedAccessGroup = "N8VX7T6P4D.RUGyron.IWish.shared"
 
     /// Сохранить ключ wishlist в iCloud Keychain.
     static func save(key: SymmetricKey, for wishlistID: String) throws {
@@ -49,6 +54,50 @@ enum KeychainService {
             kcLog.error("Keychain save failed: \(status) for \(wishlistID, privacy: .public)")
             throw KeychainError.unexpectedStatus(status)
         }
+
+        // Дублируем ключ в shared access group, чтобы NSE мог его прочитать. Best-effort:
+        // оригинал в дефолтной группе НЕ трогаем (app читает ключ из любой своей группы), поэтому
+        // даже если копия не запишется (entitlement/provisioning не настроены) — потери ключа нет.
+        copyToSharedGroup(data: data, wishlistID: wishlistID)
+    }
+
+    /// Аддитивно кладёт копию ключа в shared access group. НЕ удаляет оригинал.
+    /// errSecDuplicateItem (уже скопирован) и errSecMissingEntitlement (группа не настроена) — норма.
+    /// Возвращает OSStatus для определения, доступна ли группа (нужно для one-time флага миграции).
+    @discardableResult
+    private static func copyToSharedGroup(data: Data, wishlistID: String) -> OSStatus {
+        let addQuery: [String: Any] = [
+            kSecClass as String: kSecClassGenericPassword,
+            kSecAttrService as String: service,
+            kSecAttrAccount as String: wishlistID,
+            kSecAttrAccessGroup as String: sharedAccessGroup,
+            kSecAttrSynchronizable as String: kCFBooleanTrue!,
+            kSecAttrAccessible as String: kSecAttrAccessibleAfterFirstUnlock,
+            kSecValueData as String: data
+        ]
+        let status = SecItemAdd(addQuery as CFDictionary, nil)
+        if status != errSecSuccess && status != errSecDuplicateItem {
+            kcLog.debug("copyToSharedGroup non-fatal status \(status) for \(wishlistID, privacy: .public)")
+        }
+        return status
+    }
+
+    /// One-time миграция: копирует ключи существующих wishlist'ов в shared access group,
+    /// чтобы NSE показывал имя желания и для списков, созданных до внедрения NSE.
+    /// Безопасно — только аддитивные копии, оригиналы остаются.
+    /// Возвращает false если shared access group ещё не настроена (entitlement отсутствует) —
+    /// тогда миграцию нужно повторить позже (caller не ставит one-time флаг).
+    @discardableResult
+    static func migrateKeysToSharedGroup(wishlistIDs: [String]) -> Bool {
+        var entitlementOK = true
+        for id in wishlistIDs {
+            guard let key = load(for: id) else { continue }
+            let data = key.withUnsafeBytes { Data($0) }
+            if copyToSharedGroup(data: data, wishlistID: id) == errSecMissingEntitlement {
+                entitlementOK = false
+            }
+        }
+        return entitlementOK
     }
 
     /// Загрузить ключ wishlist (если есть на этом девайсе или подтянулся из iCloud).

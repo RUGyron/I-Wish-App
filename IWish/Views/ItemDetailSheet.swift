@@ -29,11 +29,11 @@ struct ItemDetailSheet: View {
                 .padding(.bottom, 32)
             }
             .background(Theme.background.ignoresSafeArea())
-            .navigationTitle("Желание")
+            .navigationTitle("Wish")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
-                    Button("Закрыть") { dismiss() }
+                    Button("Close") { dismiss() }
                 }
                 if wishlist.isEditable {
                     ToolbarItem(placement: .confirmationAction) {
@@ -59,7 +59,8 @@ struct ItemDetailSheet: View {
         DefaultCoverView(
             id: item.id,
             imageData: item.coverImageData,
-            emoji: item.coverEmoji
+            emoji: item.coverEmoji,
+            gradientHue: item.gradientHue
         )
         .frame(maxWidth: .infinity)
         .frame(height: 220)
@@ -111,7 +112,7 @@ struct ItemDetailSheet: View {
 
     private func descriptionBlock(_ text: String) -> some View {
         VStack(alignment: .leading, spacing: 6) {
-            Text("Описание")
+            Text("Description")
                 .font(.caption.weight(.medium))
                 .foregroundStyle(.secondary)
             Text(text)
@@ -151,7 +152,7 @@ struct ItemDetailSheet: View {
                 Divider().padding(.leading, 36)
                 metaRow(
                     icon: "clock",
-                    text: "Испытательный срок: \(days) дн."
+                    text: String(format: String(localized: "Probation period: %lld days"), days)
                 )
             }
         }
@@ -193,9 +194,9 @@ struct ItemDetailSheet: View {
     private func authorLabel() -> String? {
         guard let name = item.addedByName, !name.isEmpty else { return nil }
         if let myUID = services.auth.uid, item.addedByUID == myUID {
-            return "Добавили вы"
+            return String(localized: "Added by you")
         }
-        return "Добавил(а): \(name)"
+        return String(format: String(localized: "Added by: %@"), name)
     }
 
     private func probationDaysLeft() -> Int? {

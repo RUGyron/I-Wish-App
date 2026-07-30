@@ -15,8 +15,8 @@ enum ShareRole: String, CaseIterable, Identifiable {
 
     var label: String {
         switch self {
-        case .editor: return "Редактор"
-        case .viewer: return "Только просмотр"
+        case .editor: return String(localized: "Editor")
+        case .viewer: return String(localized: "View only")
         }
     }
 }
@@ -61,7 +61,7 @@ final class ShareManager {
             //    Owner получает ключ при createWishlist.
             guard let key = KeychainService.load(for: wishlist.id.uuidString) else {
                 shareLog.error("FAILED: no key in Keychain for wishlist \(wishlist.id.uuidString, privacy: .public)")
-                self.error = "Не найден ключ шифрования списка. Попробуйте создать список заново."
+                self.error = String(localized: "Encryption key for the list was not found. Try creating the list again.")
                 isLoading = false
                 return
             }
@@ -116,7 +116,8 @@ final class ShareManager {
                         sortIndex: item.sortIndex,
                         isArchived: item.isArchived,
                         addedByUID: item.addedByUID,
-                        addedByName: item.addedByName
+                        addedByName: item.addedByName,
+                        gradientHue: item.gradientHue
                     )
                 }
                 try await firestore.createSharedWishlist(
@@ -203,7 +204,7 @@ final class ShareManager {
             shareLog.info("share generated: shortID=\(newShortID, privacy: .public)")
         } catch let firestoreError as FirestoreService.FirestoreError {
             shareLog.error("FAILED: \(firestoreError.localizedDescription, privacy: .public)")
-            self.error = firestoreError.errorDescription ?? "Ошибка"
+            self.error = firestoreError.errorDescription ?? String(localized: "Error")
         } catch {
             shareLog.error("FAILED: \(error.localizedDescription, privacy: .public)")
             self.error = error.localizedDescription
@@ -224,18 +225,18 @@ final class ShareManager {
     /// истины. Если GET упал → отказ (fail-closed).
     func revokeAll(callerUID: String) async {
         guard let wl = wishlistRef, let wid = wishlistID else {
-            error = "Списка нет"
+            error = String(localized: "List doesn’t exist")
             return
         }
         if wl.isShared {
             let actualOwnerUID = try? await firestore.fetchSharedWishlistOwnerUID(wishlistID: wid.uuidString)
             guard let actual = actualOwnerUID else {
                 // GET упал — не можем верифицировать; для destructive operation отказываем.
-                error = "Не удалось подтвердить права владельца. Проверьте сеть и попробуйте снова."
+                error = String(localized: "Couldn’t confirm owner rights. Check the network and try again.")
                 return
             }
             guard actual == callerUID else {
-                error = "Только владелец списка может отозвать все приглашения"
+                error = String(localized: "Only the list owner can revoke all invitations")
                 return
             }
         }
@@ -262,6 +263,6 @@ final class ShareManager {
 
     func invitationText(wishlistName: String) -> String {
         guard let url = shareURL else { return "" }
-        return "Присоединяйся к моему списку желаний «\(wishlistName)» в I Wish!\n\n\(url.absoluteString)"
+        return String(format: String(localized: "Join my wishlist “%@” on I Wish!\n\n%@"), wishlistName, url.absoluteString)
     }
 }

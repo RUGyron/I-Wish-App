@@ -1,0 +1,34 @@
+{
+  "sourceLanguage" : "en",
+  "strings" : {
+    "NSCameraUsageDescription" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "To take a photo as a wish cover." } },
+        "ru" : { "stringUnit" : { "state" : "translated", "value" : "Чтобы сфотографировать обложку для желания." } },
+        "es" : { "stringUnit" : { "state" : "translated", "value" : "Para tomar una foto como portada de un deseo." } },
+        "de" : { "stringUnit" : { "state" : "translated", "value" : "Um ein Foto als Wunsch-Cover aufzunehmen." } },
+        "fr" : { "stringUnit" : { "state" : "translated", "value" : "Pour prendre une photo comme couverture d’un vœu." } },
+        "it" : { "stringUnit" : { "state" : "translated", "value" : "Per scattare una foto come copertina del desiderio." } },
+        "ja" : { "stringUnit" : { "state" : "translated", "value" : "希望のカバー写真を撮影するため。" } },
+        "zh-Hans" : { "stringUnit" : { "state" : "translated", "value" : "用于拍摄心愿封面照片。" } },
+        "ko" : { "stringUnit" : { "state" : "translated", "value" : "위시 표지 사진을 촬영하기 위해서입니다." } },
+        "pt-BR" : { "stringUnit" : { "state" : "translated", "value" : "Para tirar uma foto como capa do desejo." } }
+      }
+    },
+    "NSPhotoLibraryUsageDescription" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "To pick a photo as a wish cover." } },
+        "ru" : { "stringUnit" : { "state" : "translated", "value" : "Чтобы выбрать фото для обложки желания." } },
+        "es" : { "stringUnit" : { "state" : "translated", "value" : "Para elegir una foto como portada de un deseo." } },
+        "de" : { "stringUnit" : { "state" : "translated", "value" : "Um ein Foto als Wunsch-Cover auszuwählen." } },
+        "fr" : { "stringUnit" : { "state" : "translated", "value" : "Pour choisir une photo comme couverture d’un vœu." } },
+        "it" : { "stringUnit" : { "state" : "translated", "value" : "Per scegliere una foto come copertina del desiderio." } },
+        "ja" : { "stringUnit" : { "state" : "translated", "value" : "希望のカバー写真を選ぶため。" } },
+        "zh-Hans" : { "stringUnit" : { "state" : "translated", "value" : "用于选择心愿封面照片。" } },
+        "ko" : { "stringUnit" : { "state" : "translated", "value" : "위시 표지 사진을 선택하기 위해서입니다." } },
+        "pt-BR" : { "stringUnit" : { "state" : "translated", "value" : "Para escolher uma foto como capa do desejo." } }
+      }
+    }
+  },
+  "version" : "1.0"
+}

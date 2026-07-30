@@ -38,7 +38,7 @@ struct ShareWishlistSheet: View {
                     VStack(spacing: 16) {
                         ProgressView()
                             .scaleEffect(1.2)
-                        Text("Генерация приглашения...")
+                        Text("Generating invitation…")
                             .font(.subheadline)
                             .foregroundStyle(.secondary)
                     }
@@ -54,7 +54,7 @@ struct ShareWishlistSheet: View {
                                 Text(wishlist.name)
                                     .font(.title3.weight(.semibold))
                                     .multilineTextAlignment(.center)
-                                Text("Приглашение в список")
+                                Text("Invitation to a list")
                                     .font(.caption)
                                     .foregroundStyle(.secondary)
                             }
@@ -70,7 +70,7 @@ struct ShareWishlistSheet: View {
                             VStack(spacing: 16) {
                                 rolePicker
                                 ttlPicker
-                                Toggle("Участники могут приглашать", isOn: $canInvite)
+                                Toggle("Members can invite", isOn: $canInvite)
                                     .tint(Color(red: 0.72, green: 0.38, blue: 0.06))
                             }
                             .padding(.horizontal)
@@ -93,12 +93,12 @@ struct ShareWishlistSheet: View {
                 }
             }
             .background(Theme.background)
-            .navigationTitle("Поделиться")
+            .navigationTitle("Share")
             .navigationBarTitleDisplayMode(.inline)
             .fontDesign(.rounded)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
-                    Button("Закрыть") { dismiss() }
+                    Button("Close") { dismiss() }
                 }
             }
             .onAppear {
@@ -142,10 +142,10 @@ struct ShareWishlistSheet: View {
                             ttl: selectedTTL,
                             canInvite: canInvite,
                             ownerUID: services.auth.uid ?? "",
-                            ownerName: services.auth.userName ?? "Вы"
+                            ownerName: services.auth.userName ?? String(localized: "You")
                         )
                     } catch {
-                        toast.error("Не удалось войти через Apple")
+                        toast.error(String(localized: "Couldn’t sign in with Apple"))
                     }
                 }
             }
@@ -166,7 +166,7 @@ struct ShareWishlistSheet: View {
             ttl: selectedTTL,
             canInvite: canInvite,
             ownerUID: services.auth.uid ?? "",
-            ownerName: services.auth.userName ?? "Вы"
+            ownerName: services.auth.userName ?? String(localized: "You")
         )
     }
 
@@ -198,11 +198,11 @@ struct ShareWishlistSheet: View {
         Group {
             if let expiresAt = shareManager.expiresAt {
                 Label(
-                    "Действует до \(expiresAt.formatted(.dateTime.hour().minute()))",
+                    "Valid until \(expiresAt.formatted(.dateTime.hour().minute()))",
                     systemImage: "clock"
                 )
             } else {
-                Label("Без ограничения по времени", systemImage: "infinity")
+                Label("No time limit", systemImage: "infinity")
             }
         }
         .font(.subheadline)
@@ -233,19 +233,19 @@ struct ShareWishlistSheet: View {
     private var rolePicker: some View {
         VStack(alignment: .leading, spacing: 6) {
             HStack {
-                Text("Роль")
+                Text("Role")
                     .font(.subheadline)
                     .foregroundStyle(.secondary)
                 Spacer()
                 if availableRoles.count == 1, let only = availableRoles.first {
-                    Text(only == .viewer ? "(вы зритель → можно приглашать только зрителями)" : "")
+                    Text(only == .viewer ? String(localized: "(you’re a viewer → can invite viewers only)") : "")
                         .font(.caption2)
                         .foregroundStyle(.tertiary)
                 }
             }
 
             if availableRoles.count > 1 {
-                Picker("Роль", selection: $selectedRole) {
+                Picker("Role", selection: $selectedRole) {
                     ForEach(availableRoles) { role in
                         Text(role.label).tag(role)
                     }
@@ -276,7 +276,7 @@ struct ShareWishlistSheet: View {
 
     private var ttlPicker: some View {
         VStack(alignment: .leading, spacing: 6) {
-            Text("Срок действия")
+            Text("Expiry")
                 .font(.subheadline)
                 .foregroundStyle(.secondary)
             Picker("TTL", selection: $selectedTTL) {
@@ -298,7 +298,7 @@ struct ShareWishlistSheet: View {
                 VStack(spacing: 5) {
                     Image(systemName: "square.and.arrow.up")
                         .font(.title3)
-                    Text("Поделиться")
+                    Text("Share")
                         .font(.caption)
                 }
                 .frame(maxWidth: .infinity)
@@ -319,7 +319,7 @@ struct ShareWishlistSheet: View {
                     Image(systemName: copied ? "checkmark" : "doc.on.doc")
                         .font(.title3)
                         .frame(height: 22)
-                    Text("Скопировать")
+                    Text("Copy")
                         .font(.caption)
                 }
                 .frame(maxWidth: .infinity)
@@ -343,7 +343,7 @@ struct ShareWishlistSheet: View {
             VStack(spacing: 5) {
                 Image(systemName: "doc.text")
                     .font(.title3)
-                Text("Экспорт файлом")
+                Text("Export as file")
                     .font(.caption)
             }
             .frame(maxWidth: .infinity)
@@ -359,7 +359,7 @@ struct ShareWishlistSheet: View {
     }
 
     private func exportText() -> String {
-        let items = (wishlist.items ?? []).filter { !$0.isArchived }
+        let items = (wishlist.items ?? []).filter { !$0.isArchived && !$0.isTombstoned }
         var lines = ["📝 \(wishlist.name)", ""]
         for (i, item) in items.enumerated() {
             var line = "\(i + 1). \(item.tier.emoji) \(item.name)"
@@ -378,7 +378,7 @@ struct ShareWishlistSheet: View {
             lines.append(line)
         }
         if items.isEmpty {
-            lines.append("Список пуст")
+            lines.append(String(localized: "List is empty"))
         }
         return lines.joined(separator: "\n")
     }
@@ -399,7 +399,7 @@ struct ShareWishlistSheet: View {
                     }
                 }
             } label: {
-                Text("Отозвать все приглашения")
+                Text("Revoke all invitations")
                     .font(.caption)
             }
             .padding(.top, 16)

@@ -17,18 +17,18 @@ struct URLPasteSection: View {
     @State private var noURLFlash = false
 
     var body: some View {
-        Section("Ссылка") {
+        Section("Link") {
             if urlString.isEmpty {
                 Button {
                     pasteFromClipboard()
                 } label: {
-                    Label("Вставить ссылку", systemImage: "doc.on.clipboard")
+                    Label("Paste link", systemImage: "doc.on.clipboard")
                         .frame(maxWidth: .infinity, alignment: .leading)
                 }
                 .contentShape(Rectangle())
 
                 if noURLFlash {
-                    Text("Нет ссылки в буфере")
+                    Text("No link in clipboard")
                         .font(.caption)
                         .foregroundStyle(.secondary)
                 }
@@ -55,14 +55,14 @@ struct URLPasteSection: View {
                             Button {
                                 pasteFromClipboard()
                             } label: {
-                                Image(systemName: "arrow.clockwise")
+                                Image(systemName: "doc.on.clipboard.fill")
                                     .font(.body.weight(.medium))
                                     .foregroundStyle(.secondary)
                                     .frame(width: 32, height: 32)
                                     .contentShape(Rectangle())
                             }
                             .buttonStyle(.plain)
-                            .accessibilityLabel("Обновить ссылку")
+                            .accessibilityLabel("Paste new link")
                         }
 
                         Button {
@@ -75,7 +75,7 @@ struct URLPasteSection: View {
                                 .contentShape(Rectangle())
                         }
                         .buttonStyle(.plain)
-                        .accessibilityLabel("Удалить ссылку")
+                        .accessibilityLabel("Remove link")
                     }
                 }
                 .padding(.vertical, 4)
@@ -97,19 +97,42 @@ struct URLPasteSection: View {
     }
 
     private func pasteFromClipboard() {
-        guard let clipboard = UIPasteboard.general.string?.trimmingCharacters(in: .whitespacesAndNewlines),
-              !clipboard.isEmpty,
-              let url = URL(string: clipboard),
-              url.scheme != nil else {
+        let clipboardRaw = UIPasteboard.general.string?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+        guard !clipboardRaw.isEmpty,
+              let url = Self.extractFirstURL(from: clipboardRaw) else {
             noURLFlash = true
             DispatchQueue.main.asyncAfter(deadline: .now() + 2.5) {
                 noURLFlash = false
             }
             return
         }
-        urlString = clipboard
+        urlString = url.absoluteString
         fetchedTitle = nil // сброс — новая метадата подтянется через onPasted
         noURLFlash = false
         onPasted(url)
+    }
+
+    /// Smart URL extraction: ищет первую валидную http(s) ссылку внутри текста.
+    /// WB / Ozon / Я.Маркет "Поделиться" обычно даёт что-то вроде:
+    ///   "🔥 Apple iPhone 16 Pro по супер цене! https://www.wildberries.ru/catalog/260535421/detail.aspx"
+    /// или Telegram-форвард с emoji + ссылка. Чистый URL.parse такое не возьмёт.
+    /// Стратегия:
+    ///   1. NSDataDetector(types: .link) — native iOS детектор URL в произвольном тексте.
+    ///   2. Если в тексте несколько ссылок — берём первую http/https.
+    ///   3. Fallback: если в тексте только URL без префикса — стандартный URL(string:).
+    static func extractFirstURL(from text: String) -> URL? {
+        if let detector = try? NSDataDetector(types: NSTextCheckingResult.CheckingType.link.rawValue) {
+            let range = NSRange(text.startIndex..., in: text)
+            let matches = detector.matches(in: text, range: range)
+            for m in matches {
+                if let url = m.url, let scheme = url.scheme?.lowercased(), scheme == "http" || scheme == "https" {
+                    return url
+                }
+            }
+        }
+        if let url = URL(string: text), let scheme = url.scheme?.lowercased(), scheme == "http" || scheme == "https" {
+            return url
+        }
+        return nil
     }
 }

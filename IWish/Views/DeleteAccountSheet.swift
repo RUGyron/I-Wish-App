@@ -21,23 +21,23 @@ struct DeleteAccountSheet: View {
                 .font(.system(size: 56))
                 .foregroundStyle(.red)
 
-            Text("Удалить аккаунт")
+            Text("Delete account")
                 .font(.title3.weight(.semibold))
 
             VStack(alignment: .leading, spacing: 10) {
-                Text("Будут удалены безвозвратно:")
+                Text("Will be deleted permanently:")
                     .font(.subheadline.weight(.medium))
-                Label("Все ваши списки желаний и пункты", systemImage: "list.bullet")
-                Label("Все совместные списки, которыми вы владеете", systemImage: "person.2")
-                Label("Ваше участие в чужих списках", systemImage: "person.crop.circle.badge.minus")
-                Label("Ключи шифрования из iCloud Keychain", systemImage: "key")
-                Label("Ваш аккаунт у Apple ID для этого приложения", systemImage: "applelogo")
+                Label("All your wishlists and items", systemImage: "list.bullet")
+                Label("All shared lists you own", systemImage: "person.2")
+                Label("Your membership in other people’s lists", systemImage: "person.crop.circle.badge.minus")
+                Label("Encryption keys from iCloud Keychain", systemImage: "key")
+                Label("Your Apple ID account for this app", systemImage: "applelogo")
             }
             .font(.footnote)
             .foregroundStyle(.secondary)
             .padding(.horizontal, 24)
 
-            Text("Действие необратимо. Подтвердите вход через Apple ID, чтобы продолжить.")
+            Text("This action is irreversible. Confirm with Apple ID to continue.")
                 .font(.caption)
                 .foregroundStyle(.secondary)
                 .multilineTextAlignment(.center)
@@ -52,7 +52,7 @@ struct DeleteAccountSheet: View {
             }
 
             if isDeleting {
-                ProgressView("Удаление аккаунта…")
+                ProgressView("Deleting account…")
                     .padding(.vertical, 8)
             } else {
                 SignInWithAppleButton(.continue) { request in
@@ -68,7 +68,7 @@ struct DeleteAccountSheet: View {
                 .padding(.horizontal, 32)
             }
 
-            Button("Отмена") {
+            Button("Cancel") {
                 dismiss()
             }
             .disabled(isDeleting)
@@ -84,7 +84,7 @@ struct DeleteAccountSheet: View {
         switch result {
         case .success(let auth):
             guard let credential = auth.credential as? ASAuthorizationAppleIDCredential else {
-                errorMessage = "Не удалось получить данные Apple ID"
+                errorMessage = String(localized: "Couldn’t get Apple ID data")
                 return
             }
             isDeleting = true

@@ -13,11 +13,11 @@ struct SignInWithAppleSheet: View {
                 .font(.system(size: 56))
                 .foregroundStyle(.tint)
 
-            Text("Войдите через Apple")
+            Text("Sign in with Apple")
                 .font(.title3.weight(.semibold))
                 .multilineTextAlignment(.center)
 
-            Text("Для работы с приложением необходим Apple ID. Ваши данные надёжно защищены.")
+            Text("An Apple ID is required to use the app. Your data is securely protected.")
                 .font(.subheadline)
                 .foregroundStyle(.secondary)
                 .multilineTextAlignment(.center)

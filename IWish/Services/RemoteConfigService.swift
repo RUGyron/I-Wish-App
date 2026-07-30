@@ -43,8 +43,10 @@ final class RemoteConfigService {
 
     private func performFetch() async {
         do {
-            // Timeout 5 секунд — иначе при отсутствии сети юзер залипнет на splash.
-            try await withTimeout(seconds: 5) { [rc] in
+            // Timeout 3 секунды — иначе при отсутствии сети юзер залипнет на splash.
+            // Force-update gate важнее для нормально работающей сети; offline-юзер всё равно
+            // не сможет обновиться, так что задерживать его на splash смысла нет.
+            try await withTimeout(seconds: 3) { [rc] in
                 let _ = try await rc.fetchAndActivate()
             }
 

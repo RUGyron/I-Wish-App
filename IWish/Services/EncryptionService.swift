@@ -8,9 +8,9 @@ enum EncryptionError: LocalizedError {
 
     var errorDescription: String? {
         switch self {
-        case .invalidPayload: return "Некорректные зашифрованные данные"
-        case .decryptionFailed: return "Не удалось расшифровать"
-        case .invalidFragment: return "Некорректный ключ в ссылке"
+        case .invalidPayload: return String(localized: "Invalid encrypted data")
+        case .decryptionFailed: return String(localized: "Couldn’t decrypt")
+        case .invalidFragment: return String(localized: "Invalid key in the link")
         }
     }
 }

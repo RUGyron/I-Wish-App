@@ -1,12 +1,19 @@
 import SwiftUI
+import SwiftData
 
 /// Isolated tile view with confirmationDialog instead of contextMenu
 struct WishlistTileView: View {
+    @Environment(\.appServices) private var services
+    @Query private var settingsList: [AppSettings]
     let wishlist: Wishlist
     let onShare: (Wishlist) -> Void
     let onArchive: (Wishlist) -> Void
     let onDelete: (Wishlist) -> Void
     let onLeave: ((Wishlist) -> Void)?
+
+    private var pendingStyle: PendingIndicatorStyle {
+        settingsList.first?.pendingIndicatorStyle ?? .pill
+    }
 
     init(
         wishlist: Wishlist,
@@ -39,23 +46,23 @@ struct WishlistTileView: View {
         .contextMenu {
             if canShare {
                 Button { cooldown(); onShare(wishlist) } label: {
-                    Label("Поделиться", systemImage: "square.and.arrow.up")
+                    Label("Share", systemImage: "square.and.arrow.up")
                 }
             }
             // Editor/owner — могут архивировать/удалять
             if wishlist.isEditable {
                 Button { cooldown(); onArchive(wishlist) } label: {
-                    Label("В архив", systemImage: "archivebox")
+                    Label("Archive", systemImage: "archivebox")
                 }
                 Divider()
                 Button(role: .destructive) { cooldown(); onDelete(wishlist) } label: {
-                    Label("Удалить", systemImage: "trash")
+                    Label("Delete", systemImage: "trash")
                 }
             } else if let onLeave {
                 // Viewer — может только покинуть shared список
                 Divider()
                 Button(role: .destructive) { cooldown(); onLeave(wishlist) } label: {
-                    Label("Покинуть список", systemImage: "rectangle.portrait.and.arrow.right")
+                    Label("Leave list", systemImage: "rectangle.portrait.and.arrow.right")
                 }
             }
         }
@@ -70,8 +77,10 @@ struct WishlistTileView: View {
     }
 
     private var tileContent: some View {
-        let activeItems = (wishlist.items ?? []).filter { !$0.isArchived }
+        let activeItems = (wishlist.items ?? []).filter { !$0.isArchived && !$0.isTombstoned }
         let total = activeItems.compactMap(\.price).reduce(0, +)
+        let isPending = services.sync.hasPendingSync(entityType: "wishlist", entityID: wishlist.id.uuidString)
+        let style = pendingStyle
 
         return Color.clear
             .aspectRatio(1, contentMode: .fit)
@@ -84,11 +93,16 @@ struct WishlistTileView: View {
             .overlay {
                 topBadges(activeItems: activeItems)
             }
+            .overlay(alignment: .topTrailing) {
+                PendingIndicator(style: style, placement: .tileCorner, isPending: isPending)
+            }
             .overlay {
                 bottomContent(activeItems: activeItems, total: total)
             }
             .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
             .titaniumBorder(cornerRadius: 16)
+            .opacity(PendingIndicator.rowOpacity(style: style, isPending: isPending))
+            .pendingStripe(style: style, isPending: isPending)
     }
 
     @ViewBuilder

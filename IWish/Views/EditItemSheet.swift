@@ -25,11 +25,12 @@ struct EditItemSheet: View {
     @State private var probationEnabled: Bool = false
     @State private var probationDays: Int = 30
     @State private var isSaving = false
+    @State private var gradientHue: Double = 0.5
 
     private enum PriceModeUI: String, CaseIterable, Identifiable {
         case exact, range
         var id: String { rawValue }
-        var label: String { self == .exact ? "Точная" : "Диапазон" }
+        var label: String { self == .exact ? String(localized: "Exact") : String(localized: "Range") }
     }
 
     var body: some View {
@@ -42,16 +43,35 @@ struct EditItemSheet: View {
                     isFetching: isFetchingMetadata
                 )
 
-                Section("Название") {
-                    TextField("Чего хочется?", text: $name)
-                        .textInputAutocapitalization(.sentences)
+                Section("Name") {
+                    HStack {
+                        TextField("What do you wish for?", text: $name)
+                            .textInputAutocapitalization(.sentences)
+                        if !name.isEmpty {
+                            Button {
+                                name = ""
+                            } label: {
+                                Image(systemName: "xmark.circle.fill")
+                                    .foregroundStyle(.secondary)
+                            }
+                            .buttonStyle(.plain)
+                            .accessibilityLabel("Clear name")
+                        }
+                    }
                 }
 
                 CoverPickerSection(imageData: $coverImageData, emoji: $coverEmoji)
 
-                Section("Важность") {
+                if coverImageData == nil {
+                    Section("Background color") {
+                        GradientHuePicker(hue: $gradientHue)
+                            .padding(.vertical, 8)
+                    }
+                }
+
+                Section("Importance") {
                     VStack(spacing: 8) {
-                        Picker("Важность", selection: $tier) {
+                        Picker("Importance", selection: $tier) {
                             ForEach(ItemTier.allCases) { t in
                                 Text(t.emoji).tag(t)
                             }
@@ -66,8 +86,8 @@ struct EditItemSheet: View {
                     }
                 }
 
-                Section("Цена") {
-                    Picker("Тип", selection: $priceMode) {
+                Section("Price") {
+                    Picker("Type", selection: $priceMode) {
                         ForEach(PriceModeUI.allCases) { mode in
                             Text(mode.label).tag(mode)
                         }
@@ -79,24 +99,24 @@ struct EditItemSheet: View {
                         HStack {
                             TextField("0", text: $priceMinString)
                                 .keyboardType(.numberPad)
-                            Picker("Валюта", selection: $currency) {
-                                Text("\u{20BD}").tag("RUB")
-                                Text("$").tag("USD")
+                            Picker("Currency", selection: $currency) {
+                                Text(verbatim: "\u{20BD}").tag("RUB")
+                                Text(verbatim: "$").tag("USD")
                             }
                             .labelsHidden()
                             .pickerStyle(.menu)
                         }
                     } else {
                         HStack(spacing: 8) {
-                            TextField("От", text: $priceMinString)
+                            TextField("From", text: $priceMinString)
                                 .keyboardType(.numberPad)
-                            Text("—")
+                            Text(verbatim: "—")
                                 .foregroundStyle(.secondary)
-                            TextField("До", text: $priceMaxString)
+                            TextField("To", text: $priceMaxString)
                                 .keyboardType(.numberPad)
-                            Picker("Валюта", selection: $currency) {
-                                Text("\u{20BD}").tag("RUB")
-                                Text("$").tag("USD")
+                            Picker("Currency", selection: $currency) {
+                                Text(verbatim: "\u{20BD}").tag("RUB")
+                                Text(verbatim: "$").tag("USD")
                             }
                             .labelsHidden()
                             .pickerStyle(.menu)
@@ -104,9 +124,21 @@ struct EditItemSheet: View {
                     }
                 }
 
-                Section("Описание") {
-                    TextField("Опционально", text: $descriptionText, axis: .vertical)
-                        .lineLimit(2...6)
+                Section("Description") {
+                    ZStack(alignment: .topTrailing) {
+                        TextField("Optional", text: $descriptionText, axis: .vertical)
+                            .lineLimit(2...6)
+                        if !descriptionText.isEmpty {
+                            Button {
+                                descriptionText = ""
+                            } label: {
+                                Image(systemName: "xmark.circle.fill")
+                                    .foregroundStyle(.secondary)
+                            }
+                            .buttonStyle(.plain)
+                            .accessibilityLabel("Clear description")
+                        }
+                    }
                 }
             }
             .background(
@@ -117,16 +149,16 @@ struct EditItemSheet: View {
                     }
             )
             .warmBackground()
-            .navigationTitle("Изменить")
+            .navigationTitle("Edit")
             .navigationBarTitleDisplayMode(.inline)
             .fontDesign(.rounded)
             .scrollDismissesKeyboard(.interactively)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
-                    Button("Отмена") { dismiss() }
+                    Button("Cancel") { dismiss() }
                 }
                 ToolbarItem(placement: .confirmationAction) {
-                    Button("Сохранить") { save() }
+                    Button("Save") { save() }
                         .disabled(name.trimmingCharacters(in: .whitespaces).isEmpty || isSaving)
                 }
             }
@@ -161,6 +193,7 @@ struct EditItemSheet: View {
             let days = Calendar.current.dateComponents([.day], from: .now, to: end).day ?? 30
             probationDays = max(1, days)
         }
+        gradientHue = item.gradientHue ?? Double.random(in: 0...1)
     }
 
     private func fetchMetadata(for url: URL) {
@@ -171,6 +204,7 @@ struct EditItemSheet: View {
                 isFetchingMetadata = false
                 fetchedTitle = meta.title
                 // В EditItemSheet НЕ перезатираем существующее имя/обложку — юзер уже выбрал.
+                // Цену и валюту тоже не трогаем — могут быть выставлены вручную.
             }
         }
     }
@@ -204,7 +238,8 @@ struct EditItemSheet: View {
                     descriptionText: descriptionText.isEmpty ? nil : descriptionText,
                     coverImageData: coverImageData,
                     linkMetadataData: item.linkMetadataData,
-                    probationEndAt: probEnd
+                    probationEndAt: probEnd,
+                    gradientHue: coverImageData == nil ? gradientHue : nil
                 )
                 dismiss()
             } catch {

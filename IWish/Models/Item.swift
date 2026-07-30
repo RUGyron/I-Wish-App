@@ -19,10 +19,26 @@ final class Item {
     var isArchived: Bool = false
     var createdAt: Date = Date()
     var updatedAt: Date = Date()
+    /// Цвет градиента-фона под эмодзи (когда coverImageData == nil).
+    /// nil → DefaultCoverView fallback'нется на stableHash(UUID).
+    var gradientHue: Double?
     /// UID юзера, который добавил item (для проверок). Опционально — у legacy items нет.
     var addedByUID: String?
     /// displayName юзера на момент добавления (для отображения "от <имя>"). Опционально.
     var addedByName: String?
+    /// Soft-delete tombstone. UI фильтрует isTombstoned=true; CF чистит через 30 дней после deletedAt.
+    /// Решает offline conflict "A удалил, B одновременно редактирует": LWW по deletedAt vs fieldTimestamps.
+    ///
+    /// **ВАЖНО**: было `isDeleted` — переименовано в `isTombstoned` так как `isDeleted`
+    /// reserved property в NSManagedObject (CoreData base SwiftData). Конфликт приводил к
+    /// тому что SwiftData рассматривал объект как scheduled-for-deletion и regenerate'ил
+    /// его с default false → UI flip-back после визуального удаления.
+    var isTombstoned: Bool = false
+    var deletedAt: Date?
+    /// JSON dict `{fieldName: Date}` для per-field LWW при offline-sync.
+    /// Каждый локальный edit обновляет timestamp поля; на sync клиент мерджит per-field на
+    /// основе этих timestamps vs server'ных.
+    var fieldTimestampsJSON: Data?
     var wishlist: Wishlist?
 
     var tier: ItemTier {
@@ -67,6 +83,7 @@ final class Item {
         url: String? = nil,
         coverImageData: Data? = nil,
         coverEmoji: String? = nil,
+        gradientHue: Double? = nil,
         addedByUID: String? = nil,
         addedByName: String? = nil
     ) {
@@ -85,6 +102,7 @@ final class Item {
         self.isArchived = false
         self.createdAt = now
         self.updatedAt = now
+        self.gradientHue = gradientHue
         self.addedByUID = addedByUID
         self.addedByName = addedByName
     }

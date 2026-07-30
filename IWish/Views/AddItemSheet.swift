@@ -23,11 +23,12 @@ struct AddItemSheet: View {
     @State private var descriptionText: String = ""
     @State private var probationEnabled: Bool = false
     @State private var probationDays: Int = 30
+    @State private var gradientHue: Double = Double.random(in: 0...1)
 
     private enum PriceModeUI: String, CaseIterable, Identifiable {
         case exact, range
         var id: String { rawValue }
-        var label: String { self == .exact ? "Точная" : "Диапазон" }
+        var label: String { self == .exact ? String(localized: "Exact") : String(localized: "Range") }
     }
 
     @State private var urlStatus: URLPasteStatus = .idle
@@ -52,6 +53,9 @@ struct AddItemSheet: View {
                 urlSection
                 nameSection
                 coverSection
+                if coverImageData == nil {
+                    gradientSection
+                }
                 tierSection
                 priceSection
                 descriptionSection
@@ -65,16 +69,16 @@ struct AddItemSheet: View {
                     }
             )
             .warmBackground()
-            .navigationTitle("Новое желание")
+            .navigationTitle("New wish")
             .fontDesign(.rounded)
             .navigationBarTitleDisplayMode(.inline)
             .scrollDismissesKeyboard(.interactively)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
-                    Button("Отмена") { dismiss() }
+                    Button("Cancel") { dismiss() }
                 }
                 ToolbarItem(placement: .confirmationAction) {
-                    Button("Готово") { save() }
+                    Button("Done") { save() }
                         .disabled(!nameIsValid || isSaving)
                 }
             }
@@ -90,7 +94,7 @@ struct AddItemSheet: View {
             }
         }
         .loadingOverlay(isSaving)
-        .alert("Не удалось добавить", isPresented: .constant(errorMessage != nil)) {
+        .alert("Couldn’t add", isPresented: .constant(errorMessage != nil)) {
             Button("OK", role: .cancel) { errorMessage = nil }
         } message: {
             Text(errorMessage ?? "")
@@ -110,9 +114,21 @@ struct AddItemSheet: View {
     }
 
     private var nameSection: some View {
-        Section("Название") {
-            TextField("Чего хочется?", text: $name)
-                .textInputAutocapitalization(.sentences)
+        Section("Name") {
+            HStack {
+                TextField("What do you wish for?", text: $name)
+                    .textInputAutocapitalization(.sentences)
+                if !name.isEmpty {
+                    Button {
+                        name = ""
+                    } label: {
+                        Image(systemName: "xmark.circle.fill")
+                            .foregroundStyle(.secondary)
+                    }
+                    .buttonStyle(.plain)
+                    .accessibilityLabel("Clear name")
+                }
+            }
         }
     }
 
@@ -123,10 +139,17 @@ struct AddItemSheet: View {
         )
     }
 
+    private var gradientSection: some View {
+        Section("Background color") {
+            GradientHuePicker(hue: $gradientHue)
+                .padding(.vertical, 8)
+        }
+    }
+
     private var tierSection: some View {
-        Section("Важность") {
+        Section("Importance") {
             VStack(spacing: 8) {
-                Picker("Важность", selection: $tier) {
+                Picker("Importance", selection: $tier) {
                     ForEach(ItemTier.allCases) { t in
                         Text(t.emoji).tag(t)
                     }
@@ -143,8 +166,8 @@ struct AddItemSheet: View {
     }
 
     private var priceSection: some View {
-        Section("Цена") {
-            Picker("Тип", selection: $priceMode) {
+        Section("Price") {
+            Picker("Type", selection: $priceMode) {
                 ForEach(PriceModeUI.allCases) { mode in
                     Text(mode.label).tag(mode)
                 }
@@ -157,25 +180,25 @@ struct AddItemSheet: View {
                     TextField("0", text: $priceMinString)
                         .keyboardType(.numberPad)
 
-                    Picker("Валюта", selection: $currency) {
-                        Text("\u{20BD}").tag("RUB")
-                        Text("$").tag("USD")
+                    Picker("Currency", selection: $currency) {
+                        Text(verbatim: "\u{20BD}").tag("RUB")
+                        Text(verbatim: "$").tag("USD")
                     }
                     .labelsHidden()
                     .pickerStyle(.menu)
                 }
             } else {
                 HStack(spacing: 8) {
-                    TextField("От", text: $priceMinString)
+                    TextField("From", text: $priceMinString)
                         .keyboardType(.numberPad)
-                    Text("—")
+                    Text(verbatim: "—")
                         .foregroundStyle(.secondary)
-                    TextField("До", text: $priceMaxString)
+                    TextField("To", text: $priceMaxString)
                         .keyboardType(.numberPad)
 
-                    Picker("Валюта", selection: $currency) {
-                        Text("\u{20BD}").tag("RUB")
-                        Text("$").tag("USD")
+                    Picker("Currency", selection: $currency) {
+                        Text(verbatim: "\u{20BD}").tag("RUB")
+                        Text(verbatim: "$").tag("USD")
                     }
                     .labelsHidden()
                     .pickerStyle(.menu)
@@ -185,18 +208,30 @@ struct AddItemSheet: View {
     }
 
     private var descriptionSection: some View {
-        Section("Описание") {
-            TextField("Опционально", text: $descriptionText, axis: .vertical)
-                .lineLimit(2...6)
+        Section("Description") {
+            ZStack(alignment: .topTrailing) {
+                TextField("Optional", text: $descriptionText, axis: .vertical)
+                    .lineLimit(2...6)
+                if !descriptionText.isEmpty {
+                    Button {
+                        descriptionText = ""
+                    } label: {
+                        Image(systemName: "xmark.circle.fill")
+                            .foregroundStyle(.secondary)
+                    }
+                    .buttonStyle(.plain)
+                    .accessibilityLabel("Clear description")
+                }
+            }
         }
     }
 
     private var probationSection: some View {
         Section {
-            Toggle("Испытательный срок", isOn: $probationEnabled)
+            Toggle("Probation period", isOn: $probationEnabled)
 
             if probationEnabled {
-                Picker("Длительность", selection: $probationDays) {
+                Picker("Duration", selection: $probationDays) {
                     ForEach(1...365, id: \.self) { day in
                         Text(String(format: NSLocalizedString("%lld дней", comment: ""), day)).tag(day)
                     }
@@ -206,7 +241,7 @@ struct AddItemSheet: View {
             }
         } footer: {
             if probationEnabled {
-                Text("Желание скроется до окончания срока — если за это время не передумаешь, оно останется.")
+                Text("The wish stays hidden until the period ends — if you don’t change your mind, it stays.")
             }
         }
     }
@@ -215,16 +250,39 @@ struct AddItemSheet: View {
 
     private func fetchMetadata(for url: URL) {
         isFetchingMetadata = true
+        let s = settings
+        let mode = s?.parseFillMode ?? .empty
+        let fillTitle = s?.parseFillTitle ?? true
+        let fillImage = s?.parseFillImage ?? true
+        let fillPrice = s?.parseFillPrice ?? true
+        let fillDesc = s?.parseFillDescription ?? true
+
         Task {
             let meta = await URLMetadataService.fetch(from: url)
             await MainActor.run {
                 isFetchingMetadata = false
                 fetchedTitle = meta.title
-                if name.trimmingCharacters(in: .whitespaces).isEmpty, let title = meta.title {
+
+                guard mode != .off else { return }
+                let overwrite = (mode == .overwrite)
+
+                let nameEmpty = name.trimmingCharacters(in: .whitespaces).isEmpty
+                if fillTitle, let title = meta.title, (overwrite || nameEmpty) {
                     name = title
                 }
-                if coverImageData == nil, let image = meta.image {
+                if fillImage, let image = meta.image, (overwrite || coverImageData == nil) {
                     coverImageData = ImageCompressor.compress(image)
+                }
+                if fillPrice, let price = meta.price, (overwrite || priceMinString.isEmpty) {
+                    priceMode = .exact
+                    priceMinString = String(Int(price.rounded()))
+                }
+                if fillPrice, let curr = meta.currency, (overwrite || currency.isEmpty) {
+                    currency = curr
+                }
+                let descEmpty = descriptionText.trimmingCharacters(in: .whitespaces).isEmpty
+                if fillDesc, let desc = meta.descriptionText, (overwrite || descEmpty) {
+                    descriptionText = desc
                 }
             }
         }
@@ -247,9 +305,9 @@ struct AddItemSheet: View {
         let trimmedName = name.trimmingCharacters(in: .whitespaces)
         guard !trimmedName.isEmpty else { return }
 
-        let activeCount = (wishlist.items ?? []).filter { !$0.isArchived }.count
+        let activeCount = (wishlist.items ?? []).filter { !$0.isArchived && !$0.isTombstoned }.count
         guard activeCount < InputLimits.maxItemsPerWishlist else {
-            errorMessage = "Достигнут лимит: \(InputLimits.maxItemsPerWishlist) желаний в одном списке."
+            errorMessage = String(format: String(localized: "Limit reached: %lld wishes per list."), InputLimits.maxItemsPerWishlist)
             return
         }
 
@@ -277,7 +335,8 @@ struct AddItemSheet: View {
                     sortIndex: nextSortIndex,
                     descriptionText: descriptionText.isEmpty ? nil : descriptionText,
                     probationEndAt: probEnd,
-                    coverImageData: coverImageData
+                    coverImageData: coverImageData,
+                    gradientHue: coverImageData == nil ? gradientHue : nil
                 )
                 dismiss()
             } catch {

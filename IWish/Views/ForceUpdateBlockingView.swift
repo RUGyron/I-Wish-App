@@ -12,10 +12,10 @@ struct ForceUpdateBlockingView: View {
                 .foregroundStyle(.tint)
 
             VStack(spacing: 12) {
-                Text("Обновите I Wish")
+                Text("Update I Wish")
                     .font(.title2.weight(.semibold))
 
-                Text(message ?? "Установлена устаревшая версия. Обновитесь, чтобы продолжить.")
+                Text(message ?? String(localized: "You have an outdated version. Please update to continue."))
                     .font(.subheadline)
                     .foregroundStyle(.secondary)
                     .multilineTextAlignment(.center)
@@ -29,7 +29,7 @@ struct ForceUpdateBlockingView: View {
                     UIApplication.shared.open(url)
                 }
             } label: {
-                Text("Открыть App Store")
+                Text("Open App Store")
                     .frame(maxWidth: .infinity)
             }
             .buttonStyle(.borderedProminent)

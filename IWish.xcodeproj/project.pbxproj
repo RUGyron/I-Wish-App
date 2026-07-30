@@ -7,13 +7,28 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
+		1FB1AF3424CBBDF9A7845066 /* NotificationServiceExtension.appex in Embed Foundation Extensions */ = {isa = PBXBuildFile; fileRef = 723F1675D870DDE653E69ADE /* NotificationServiceExtension.appex */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
+		744CD339091AF20D4D5D3B65 /* KeychainService.swift in Sources */ = {isa = PBXBuildFile; fileRef = C812F20E7CEF5BE767472D4D /* KeychainService.swift */; };
+		C62893F10DA62182A11943E4 /* Foundation.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 61AAC249AD0DB515F465A632 /* Foundation.framework */; };
 		C90617942F9249AD005AC61C /* QRCode in Frameworks */ = {isa = PBXBuildFile; productRef = AA00CA022FA0000000000002 /* QRCode */; };
+		DBF88237FB4544CCD5076E48 /* EncryptionService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9BDEAB5F779C5E4FAB191FC0 /* EncryptionService.swift */; };
+		EF8728A7D748A79F6B096D04 /* NotificationService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 75E65E8AA6D089BEED1F90C3 /* NotificationService.swift */; };
 		FB00CA012FB0000000000001 /* FirebaseAuth in Frameworks */ = {isa = PBXBuildFile; productRef = FB00CA032FB0000000000001 /* FirebaseAuth */; };
 		FB00CA022FB0000000000001 /* FirebaseFirestore in Frameworks */ = {isa = PBXBuildFile; productRef = FB00CA042FB0000000000001 /* FirebaseFirestore */; };
 		FB00CA062FB0000000000001 /* FirebaseRemoteConfig in Frameworks */ = {isa = PBXBuildFile; productRef = FB00CA052FB0000000000001 /* FirebaseRemoteConfig */; };
+		FB00CA072FB0000000000001 /* FirebaseMessaging in Frameworks */ = {isa = PBXBuildFile; productRef = FB00CA082FB0000000000001 /* FirebaseMessaging */; };
+		FB00CA092FB0000000000001 /* FirebaseAI in Frameworks */ = {isa = PBXBuildFile; productRef = FB00CA0A2FB0000000000001 /* FirebaseAI */; };
+		SE0000000000000000000005 /* ShareExtension.appex in Embed Foundation Extensions */ = {isa = PBXBuildFile; fileRef = SE0000000000000000000002 /* ShareExtension.appex */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
+		9D11388B52CA273484F7AD0B /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = C90615E72F8D5AC1005AC61C /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = A9AA80B14AB45223926676AD;
+			remoteInfo = NotificationServiceExtension;
+		};
 		C90616072F8D817C005AC61C /* PBXContainerItemProxy */ = {
 			isa = PBXContainerItemProxy;
 			containerPortal = C90615E72F8D5AC1005AC61C /* Project object */;
@@ -21,11 +36,41 @@
 			remoteGlobalIDString = C90615EE2F8D5AC1005AC61C;
 			remoteInfo = IWish;
 		};
+		SE0000000000000000000006 /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = C90615E72F8D5AC1005AC61C /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = SE0000000000000000000001;
+			remoteInfo = ShareExtension;
+		};
 /* End PBXContainerItemProxy section */
 
+/* Begin PBXCopyFilesBuildPhase section */
+		SE0000000000000000000004 /* Embed Foundation Extensions */ = {
+			isa = PBXCopyFilesBuildPhase;
+			buildActionMask = 2147483647;
+			dstPath = "";
+			dstSubfolderSpec = 13;
+			files = (
+				SE0000000000000000000005 /* ShareExtension.appex in Embed Foundation Extensions */,
+				1FB1AF3424CBBDF9A7845066 /* NotificationServiceExtension.appex in Embed Foundation Extensions */,
+			);
+			name = "Embed Foundation Extensions";
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXCopyFilesBuildPhase section */
+
 /* Begin PBXFileReference section */
+		1067DD557F6FC29DFC868FE3 /* NotificationServiceExtension.entitlements */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.plist.entitlements; path = NotificationServiceExtension/NotificationServiceExtension.entitlements; sourceTree = SOURCE_ROOT; };
+		61AAC249AD0DB515F465A632 /* Foundation.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = Foundation.framework; path = Platforms/iPhoneOS.platform/Developer/SDKs/iPhoneOS18.0.sdk/System/Library/Frameworks/Foundation.framework; sourceTree = DEVELOPER_DIR; };
+		723F1675D870DDE653E69ADE /* NotificationServiceExtension.appex */ = {isa = PBXFileReference; explicitFileType = "wrapper.app-extension"; includeInIndex = 0; path = NotificationServiceExtension.appex; sourceTree = BUILT_PRODUCTS_DIR; };
+		72B858948B1B8E5B64E7338E /* Info.plist */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.plist.xml; path = NotificationServiceExtension/Info.plist; sourceTree = SOURCE_ROOT; };
+		75E65E8AA6D089BEED1F90C3 /* NotificationService.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = NotificationServiceExtension/NotificationService.swift; sourceTree = SOURCE_ROOT; };
+		9BDEAB5F779C5E4FAB191FC0 /* EncryptionService.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = IWish/Services/EncryptionService.swift; sourceTree = SOURCE_ROOT; };
+		C812F20E7CEF5BE767472D4D /* KeychainService.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = IWish/Services/KeychainService.swift; sourceTree = SOURCE_ROOT; };
 		C90615EF2F8D5AC1005AC61C /* IWish.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = IWish.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		C90616032F8D817C005AC61C /* IWishTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = IWishTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
+		SE0000000000000000000002 /* ShareExtension.appex */ = {isa = PBXFileReference; explicitFileType = "wrapper.app-extension"; includeInIndex = 0; path = ShareExtension.appex; sourceTree = BUILT_PRODUCTS_DIR; };
 /* End PBXFileReference section */
 
 /* Begin PBXFileSystemSynchronizedBuildFileExceptionSet section */
@@ -35,6 +80,14 @@
 				Info.plist,
 			);
 			target = C90615EE2F8D5AC1005AC61C /* IWish */;
+		};
+		SE0000000000000000000020 /* Exceptions for "ShareExtension" folder in "ShareExtension" target */ = {
+			isa = PBXFileSystemSynchronizedBuildFileExceptionSet;
+			membershipExceptions = (
+				Info.plist,
+				ShareExtension.entitlements,
+			);
+			target = SE0000000000000000000001 /* ShareExtension */;
 		};
 /* End PBXFileSystemSynchronizedBuildFileExceptionSet section */
 
@@ -49,12 +102,30 @@
 		};
 		C90616042F8D817C005AC61C /* IWishTests */ = {
 			isa = PBXFileSystemSynchronizedRootGroup;
+			exceptions = (
+			);
 			path = IWishTests;
+			sourceTree = "<group>";
+		};
+		SE0000000000000000000003 /* ShareExtension */ = {
+			isa = PBXFileSystemSynchronizedRootGroup;
+			exceptions = (
+				SE0000000000000000000020 /* Exceptions for "ShareExtension" folder in "ShareExtension" target */,
+			);
+			path = ShareExtension;
 			sourceTree = "<group>";
 		};
 /* End PBXFileSystemSynchronizedRootGroup section */
 
 /* Begin PBXFrameworksBuildPhase section */
+		C8450B2EA35A21C49B978999 /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				C62893F10DA62182A11943E4 /* Foundation.framework in Frameworks */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 		C90615EC2F8D5AC1005AC61C /* Frameworks */ = {
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
@@ -63,6 +134,8 @@
 				FB00CA012FB0000000000001 /* FirebaseAuth in Frameworks */,
 				FB00CA022FB0000000000001 /* FirebaseFirestore in Frameworks */,
 				FB00CA062FB0000000000001 /* FirebaseRemoteConfig in Frameworks */,
+				FB00CA072FB0000000000001 /* FirebaseMessaging in Frameworks */,
+				FB00CA092FB0000000000001 /* FirebaseAI in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -73,15 +146,41 @@
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
+		SE000000000000000000000B /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 /* End PBXFrameworksBuildPhase section */
 
 /* Begin PBXGroup section */
+		1590DA15216C0D573D86D027 /* Frameworks */ = {
+			isa = PBXGroup;
+			children = (
+				51592CAD3D7B427CAAF8BBD4 /* iOS */,
+			);
+			name = Frameworks;
+			sourceTree = "<group>";
+		};
+		51592CAD3D7B427CAAF8BBD4 /* iOS */ = {
+			isa = PBXGroup;
+			children = (
+				61AAC249AD0DB515F465A632 /* Foundation.framework */,
+			);
+			name = iOS;
+			sourceTree = "<group>";
+		};
 		C90615E62F8D5AC1005AC61C = {
 			isa = PBXGroup;
 			children = (
 				C90615F12F8D5AC1005AC61C /* IWish */,
+				SE0000000000000000000003 /* ShareExtension */,
 				C90616042F8D817C005AC61C /* IWishTests */,
 				C90615F02F8D5AC1005AC61C /* Products */,
+				1590DA15216C0D573D86D027 /* Frameworks */,
+				D311C84C194E143828310D4C /* NotificationServiceExtension */,
 			);
 			sourceTree = "<group>";
 		};
@@ -90,13 +189,44 @@
 			children = (
 				C90615EF2F8D5AC1005AC61C /* IWish.app */,
 				C90616032F8D817C005AC61C /* IWishTests.xctest */,
+				SE0000000000000000000002 /* ShareExtension.appex */,
+				723F1675D870DDE653E69ADE /* NotificationServiceExtension.appex */,
 			);
 			name = Products;
+			sourceTree = "<group>";
+		};
+		D311C84C194E143828310D4C /* NotificationServiceExtension */ = {
+			isa = PBXGroup;
+			children = (
+				75E65E8AA6D089BEED1F90C3 /* NotificationService.swift */,
+				72B858948B1B8E5B64E7338E /* Info.plist */,
+				1067DD557F6FC29DFC868FE3 /* NotificationServiceExtension.entitlements */,
+				9BDEAB5F779C5E4FAB191FC0 /* EncryptionService.swift */,
+				C812F20E7CEF5BE767472D4D /* KeychainService.swift */,
+			);
+			name = NotificationServiceExtension;
 			sourceTree = "<group>";
 		};
 /* End PBXGroup section */
 
 /* Begin PBXNativeTarget section */
+		A9AA80B14AB45223926676AD /* NotificationServiceExtension */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = 5A1FB3EF5CEC0CD6CDF1CB25 /* Build configuration list for PBXNativeTarget "NotificationServiceExtension" */;
+			buildPhases = (
+				10D49EA361A24B76B3271CA9 /* Sources */,
+				C8450B2EA35A21C49B978999 /* Frameworks */,
+				8FC6353C1D7C03A8A7230BBC /* Resources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+			);
+			name = NotificationServiceExtension;
+			productName = NotificationServiceExtension;
+			productReference = 723F1675D870DDE653E69ADE /* NotificationServiceExtension.appex */;
+			productType = "com.apple.product-type.app-extension";
+		};
 		C90615EE2F8D5AC1005AC61C /* IWish */ = {
 			isa = PBXNativeTarget;
 			buildConfigurationList = C90615FC2F8D5AC1005AC61C /* Build configuration list for PBXNativeTarget "IWish" */;
@@ -104,10 +234,13 @@
 				C90615EB2F8D5AC1005AC61C /* Sources */,
 				C90615EC2F8D5AC1005AC61C /* Frameworks */,
 				C90615ED2F8D5AC1005AC61C /* Resources */,
+				SE0000000000000000000004 /* Embed Foundation Extensions */,
 			);
 			buildRules = (
 			);
 			dependencies = (
+				SE0000000000000000000007 /* PBXTargetDependency */,
+				CB7A9E04FDCFC853CACA319E /* PBXTargetDependency */,
 			);
 			fileSystemSynchronizedGroups = (
 				C90615F12F8D5AC1005AC61C /* IWish */,
@@ -118,6 +251,8 @@
 				FB00CA032FB0000000000001 /* FirebaseAuth */,
 				FB00CA042FB0000000000001 /* FirebaseFirestore */,
 				FB00CA052FB0000000000001 /* FirebaseRemoteConfig */,
+				FB00CA082FB0000000000001 /* FirebaseMessaging */,
+				FB00CA0A2FB0000000000001 /* FirebaseAI */,
 			);
 			productName = IWish;
 			productReference = C90615EF2F8D5AC1005AC61C /* IWish.app */;
@@ -140,11 +275,29 @@
 				C90616042F8D817C005AC61C /* IWishTests */,
 			);
 			name = IWishTests;
-			packageProductDependencies = (
-			);
 			productName = IWishTests;
 			productReference = C90616032F8D817C005AC61C /* IWishTests.xctest */;
 			productType = "com.apple.product-type.bundle.unit-test";
+		};
+		SE0000000000000000000001 /* ShareExtension */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = SE0000000000000000000008 /* Build configuration list for PBXNativeTarget "ShareExtension" */;
+			buildPhases = (
+				SE000000000000000000000D /* Sources */,
+				SE000000000000000000000B /* Frameworks */,
+				SE000000000000000000000C /* Resources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+			);
+			fileSystemSynchronizedGroups = (
+				SE0000000000000000000003 /* ShareExtension */,
+			);
+			name = ShareExtension;
+			productName = ShareExtension;
+			productReference = SE0000000000000000000002 /* ShareExtension.appex */;
+			productType = "com.apple.product-type.app-extension";
 		};
 /* End PBXNativeTarget section */
 
@@ -163,6 +316,9 @@
 						CreatedOnToolsVersion = 26.4;
 						TestTargetID = C90615EE2F8D5AC1005AC61C;
 					};
+					SE0000000000000000000001 = {
+						CreatedOnToolsVersion = 26.4;
+					};
 				};
 			};
 			buildConfigurationList = C90615EA2F8D5AC1005AC61C /* Build configuration list for PBXProject "IWish" */;
@@ -172,6 +328,14 @@
 				en,
 				Base,
 				ru,
+				es,
+				de,
+				fr,
+				it,
+				ja,
+				"zh-Hans",
+				ko,
+				"pt-BR",
 			);
 			mainGroup = C90615E62F8D5AC1005AC61C;
 			minimizedProjectReferenceProxies = 1;
@@ -185,12 +349,21 @@
 			projectRoot = "";
 			targets = (
 				C90615EE2F8D5AC1005AC61C /* IWish */,
+				SE0000000000000000000001 /* ShareExtension */,
 				C90616022F8D817C005AC61C /* IWishTests */,
+				A9AA80B14AB45223926676AD /* NotificationServiceExtension */,
 			);
 		};
 /* End PBXProject section */
 
 /* Begin PBXResourcesBuildPhase section */
+		8FC6353C1D7C03A8A7230BBC /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 		C90615ED2F8D5AC1005AC61C /* Resources */ = {
 			isa = PBXResourcesBuildPhase;
 			buildActionMask = 2147483647;
@@ -205,9 +378,26 @@
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
+		SE000000000000000000000C /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 /* End PBXResourcesBuildPhase section */
 
 /* Begin PBXSourcesBuildPhase section */
+		10D49EA361A24B76B3271CA9 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				EF8728A7D748A79F6B096D04 /* NotificationService.swift in Sources */,
+				DBF88237FB4544CCD5076E48 /* EncryptionService.swift in Sources */,
+				744CD339091AF20D4D5D3B65 /* KeychainService.swift in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 		C90615EB2F8D5AC1005AC61C /* Sources */ = {
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
@@ -222,6 +412,13 @@
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
+		SE000000000000000000000D /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 /* End PBXSourcesBuildPhase section */
 
 /* Begin PBXTargetDependency section */
@@ -230,9 +427,75 @@
 			target = C90615EE2F8D5AC1005AC61C /* IWish */;
 			targetProxy = C90616072F8D817C005AC61C /* PBXContainerItemProxy */;
 		};
+		CB7A9E04FDCFC853CACA319E /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			name = NotificationServiceExtension;
+			target = A9AA80B14AB45223926676AD /* NotificationServiceExtension */;
+			targetProxy = 9D11388B52CA273484F7AD0B /* PBXContainerItemProxy */;
+		};
+		SE0000000000000000000007 /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = SE0000000000000000000001 /* ShareExtension */;
+			targetProxy = SE0000000000000000000006 /* PBXContainerItemProxy */;
+		};
 /* End PBXTargetDependency section */
 
 /* Begin XCBuildConfiguration section */
+		8FEABB01DA9617CC15CE711E /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				CLANG_ENABLE_OBJC_WEAK = NO;
+				CODE_SIGN_ENTITLEMENTS = NotificationServiceExtension/NotificationServiceExtension.entitlements;
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 61;
+				DEVELOPMENT_TEAM = N8VX7T6P4D;
+				ENABLE_USER_SCRIPT_SANDBOXING = NO;
+				GENERATE_INFOPLIST_FILE = NO;
+				INFOPLIST_FILE = NotificationServiceExtension/Info.plist;
+				IPHONEOS_DEPLOYMENT_TARGET = 26.0;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/../../Frameworks",
+				);
+				MARKETING_VERSION = 1.2.1;
+				PRODUCT_BUNDLE_IDENTIFIER = RUGyron.IWish.NotificationServiceExtension;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SDKROOT = iphoneos;
+				SKIP_INSTALL = YES;
+				SWIFT_EMIT_LOC_STRINGS = NO;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = "1,2";
+			};
+			name = Debug;
+		};
+		C4B8B0ED6AB02F2DCA251FAB /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				CLANG_ENABLE_OBJC_WEAK = NO;
+				CODE_SIGN_ENTITLEMENTS = NotificationServiceExtension/NotificationServiceExtension.entitlements;
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 61;
+				DEVELOPMENT_TEAM = N8VX7T6P4D;
+				ENABLE_USER_SCRIPT_SANDBOXING = NO;
+				GENERATE_INFOPLIST_FILE = NO;
+				INFOPLIST_FILE = NotificationServiceExtension/Info.plist;
+				IPHONEOS_DEPLOYMENT_TARGET = 26.0;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/../../Frameworks",
+				);
+				MARKETING_VERSION = 1.2.1;
+				PRODUCT_BUNDLE_IDENTIFIER = RUGyron.IWish.NotificationServiceExtension;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SDKROOT = iphoneos;
+				SKIP_INSTALL = YES;
+				SWIFT_EMIT_LOC_STRINGS = NO;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = "1,2";
+				VALIDATE_PRODUCT = YES;
+			};
+			name = Release;
+		};
 		C90615FA2F8D5AC1005AC61C /* Debug */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
@@ -362,14 +625,12 @@
 				CODE_SIGN_ENTITLEMENTS = IWish/IWish.entitlements;
 				CODE_SIGN_IDENTITY = "Apple Development";
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 24;
+				CURRENT_PROJECT_VERSION = 61;
 				DEVELOPMENT_TEAM = N8VX7T6P4D;
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = IWish/Info.plist;
-				INFOPLIST_KEY_NSCameraUsageDescription = "Чтобы сфотографировать обложку для желания";
 				INFOPLIST_KEY_CFBundleDisplayName = "I Wish";
-				INFOPLIST_KEY_NSPhotoLibraryUsageDescription = "Чтобы выбрать фото для обложки желания";
 				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
 				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
 				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
@@ -380,7 +641,7 @@
 					"$(inherited)",
 					"@executable_path/Frameworks",
 				);
-				MARKETING_VERSION = 1.1.1;
+				MARKETING_VERSION = 1.2.1;
 				PRODUCT_BUNDLE_IDENTIFIER = RUGyron.IWish;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				PROVISIONING_PROFILE_SPECIFIER = "";
@@ -402,14 +663,12 @@
 				CODE_SIGN_ENTITLEMENTS = IWish/IWish.entitlements;
 				CODE_SIGN_IDENTITY = "Apple Development";
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 24;
+				CURRENT_PROJECT_VERSION = 61;
 				DEVELOPMENT_TEAM = N8VX7T6P4D;
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = IWish/Info.plist;
-				INFOPLIST_KEY_NSCameraUsageDescription = "Чтобы сфотографировать обложку для желания";
 				INFOPLIST_KEY_CFBundleDisplayName = "I Wish";
-				INFOPLIST_KEY_NSPhotoLibraryUsageDescription = "Чтобы выбрать фото для обложки желания";
 				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
 				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
 				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
@@ -420,7 +679,7 @@
 					"$(inherited)",
 					"@executable_path/Frameworks",
 				);
-				MARKETING_VERSION = 1.1.1;
+				MARKETING_VERSION = 1.2.1;
 				PRODUCT_BUNDLE_IDENTIFIER = RUGyron.IWish;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				PROVISIONING_PROFILE_SPECIFIER = "";
@@ -439,10 +698,10 @@
 			buildSettings = {
 				BUNDLE_LOADER = "$(TEST_HOST)";
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 24;
+				CURRENT_PROJECT_VERSION = 61;
 				DEVELOPMENT_TEAM = N8VX7T6P4D;
 				GENERATE_INFOPLIST_FILE = YES;
-				MARKETING_VERSION = 1.1.1;
+				MARKETING_VERSION = 1.2.1;
 				PRODUCT_BUNDLE_IDENTIFIER = RUGyron.IWishTests;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				STRING_CATALOG_GENERATE_SYMBOLS = NO;
@@ -450,7 +709,7 @@
 				SWIFT_EMIT_LOC_STRINGS = NO;
 				SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY = YES;
 				SWIFT_VERSION = 5.0;
-				TARGETED_DEVICE_FAMILY = "1";
+				TARGETED_DEVICE_FAMILY = 1;
 				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/IWish.app/$(BUNDLE_EXECUTABLE_FOLDER_PATH)/IWish";
 			};
 			name = Debug;
@@ -460,10 +719,10 @@
 			buildSettings = {
 				BUNDLE_LOADER = "$(TEST_HOST)";
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 24;
+				CURRENT_PROJECT_VERSION = 61;
 				DEVELOPMENT_TEAM = N8VX7T6P4D;
 				GENERATE_INFOPLIST_FILE = YES;
-				MARKETING_VERSION = 1.1.1;
+				MARKETING_VERSION = 1.2.1;
 				PRODUCT_BUNDLE_IDENTIFIER = RUGyron.IWishTests;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				STRING_CATALOG_GENERATE_SYMBOLS = NO;
@@ -471,14 +730,85 @@
 				SWIFT_EMIT_LOC_STRINGS = NO;
 				SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY = YES;
 				SWIFT_VERSION = 5.0;
-				TARGETED_DEVICE_FAMILY = "1";
+				TARGETED_DEVICE_FAMILY = 1;
 				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/IWish.app/$(BUNDLE_EXECUTABLE_FOLDER_PATH)/IWish";
+			};
+			name = Release;
+		};
+		SE0000000000000000000009 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				CODE_SIGN_ENTITLEMENTS = ShareExtension/ShareExtension.entitlements;
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 61;
+				DEBUG_INFORMATION_FORMAT = dwarf;
+				DEVELOPMENT_TEAM = N8VX7T6P4D;
+				GENERATE_INFOPLIST_FILE = NO;
+				INFOPLIST_FILE = ShareExtension/Info.plist;
+				IPHONEOS_DEPLOYMENT_TARGET = 26.0;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+					"@executable_path/../../Frameworks",
+				);
+				MARKETING_VERSION = 1.2.1;
+				MTL_ENABLE_DEBUG_INFO = INCLUDE_SOURCE;
+				MTL_FAST_MATH = YES;
+				PRODUCT_BUNDLE_IDENTIFIER = RUGyron.IWish.ShareExtension;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SKIP_INSTALL = YES;
+				SWIFT_ACTIVE_COMPILATION_CONDITIONS = "DEBUG $(inherited)";
+				SWIFT_APPROACHABLE_CONCURRENCY = YES;
+				SWIFT_DEFAULT_ACTOR_ISOLATION = MainActor;
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				SWIFT_OPTIMIZATION_LEVEL = "-Onone";
+				SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY = YES;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = "1,2";
+			};
+			name = Debug;
+		};
+		SE000000000000000000000A /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				CODE_SIGN_ENTITLEMENTS = ShareExtension/ShareExtension.entitlements;
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 61;
+				DEBUG_INFORMATION_FORMAT = "dwarf-with-dsym";
+				DEVELOPMENT_TEAM = N8VX7T6P4D;
+				GENERATE_INFOPLIST_FILE = NO;
+				INFOPLIST_FILE = ShareExtension/Info.plist;
+				IPHONEOS_DEPLOYMENT_TARGET = 26.0;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+					"@executable_path/../../Frameworks",
+				);
+				MARKETING_VERSION = 1.2.1;
+				PRODUCT_BUNDLE_IDENTIFIER = RUGyron.IWish.ShareExtension;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SKIP_INSTALL = YES;
+				SWIFT_APPROACHABLE_CONCURRENCY = YES;
+				SWIFT_DEFAULT_ACTOR_ISOLATION = MainActor;
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY = YES;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = "1,2";
 			};
 			name = Release;
 		};
 /* End XCBuildConfiguration section */
 
 /* Begin XCConfigurationList section */
+		5A1FB3EF5CEC0CD6CDF1CB25 /* Build configuration list for PBXNativeTarget "NotificationServiceExtension" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				C4B8B0ED6AB02F2DCA251FAB /* Release */,
+				8FEABB01DA9617CC15CE711E /* Debug */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
 		C90615EA2F8D5AC1005AC61C /* Build configuration list for PBXProject "IWish" */ = {
 			isa = XCConfigurationList;
 			buildConfigurations = (
@@ -502,6 +832,15 @@
 			buildConfigurations = (
 				C906160A2F8D817C005AC61C /* Debug */,
 				C906160B2F8D817C005AC61C /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+		SE0000000000000000000008 /* Build configuration list for PBXNativeTarget "ShareExtension" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				SE0000000000000000000009 /* Debug */,
+				SE000000000000000000000A /* Release */,
 			);
 			defaultConfigurationIsVisible = 0;
 			defaultConfigurationName = Release;
@@ -547,6 +886,16 @@
 			isa = XCSwiftPackageProductDependency;
 			package = FB00CA002FB0000000000001 /* XCRemoteSwiftPackageReference "firebase-ios-sdk" */;
 			productName = FirebaseRemoteConfig;
+		};
+		FB00CA082FB0000000000001 /* FirebaseMessaging */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = FB00CA002FB0000000000001 /* XCRemoteSwiftPackageReference "firebase-ios-sdk" */;
+			productName = FirebaseMessaging;
+		};
+		FB00CA0A2FB0000000000001 /* FirebaseAI */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = FB00CA002FB0000000000001 /* XCRemoteSwiftPackageReference "firebase-ios-sdk" */;
+			productName = FirebaseAI;
 		};
 /* End XCSwiftPackageProductDependency section */
 	};

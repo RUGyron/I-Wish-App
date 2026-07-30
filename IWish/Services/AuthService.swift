@@ -25,6 +25,11 @@ final class AuthService: NSObject {
     private var _refreshToken: String?
     private var _isAppleSignedIn: Bool = false
     private var currentNonce: String?
+    private weak var firestore: FirestoreService?
+
+    func attach(firestore: FirestoreService) {
+        self.firestore = firestore
+    }
 
     /// Firebase Web API key — НЕ secret (REST-key, не service-account), но единственный
     /// источник правды — `GoogleService-Info.plist`. Раньше дублировался hardcoded.
@@ -64,11 +69,17 @@ final class AuthService: NSObject {
 
         if let user = Auth.auth().currentUser, !user.isAnonymous {
             _uid = user.uid
+            _isAppleSignedIn = true
             authLog.info("Found Keychain session: \(user.uid, privacy: .private)")
-            Task {
-                await verifyAndRestore(uid: user.uid)
-                isLoading = false
+            // Splash ВСЕГДА снимается мгновенно. Network-операции (token refresh, имя из
+            // Firestore, userLocale) в фоне — не блокируют UI. Если имени нет нигде, gate
+            // на NameRecovery поставит фоновая задача, юзер увидит main UI на пару секунд
+            // и потом shield, что лучше чем минута splash на data-loss.
+            if userName != nil && userName != "Пользователь" {
+                requiresNameRecovery = false
             }
+            isLoading = false
+            Task { await verifyAndRestore(uid: user.uid) }
         } else {
             isLoading = false
             authLog.info("No session, will show Sign in with Apple")
@@ -90,11 +101,22 @@ final class AuthService: NSObject {
         }
 
         // Fallback на Firebase displayName — Apple отдал его при первом sign-in,
-        // Firebase Auth хранит у себя. Содержимое не идёт в наш Firestore (нашу БД).
+        // Firebase Auth хранит у себя.
         if userName == nil, let dn = Auth.auth().currentUser?.displayName, !dn.isEmpty {
             userName = dn
             KeychainService.saveUserName(dn)
             authLog.info("Restored name from Firebase displayName: \(dn, privacy: .private)")
+        }
+
+        // Серверный fallback: users/{uid}.displayName в Firestore (открытое поле, пишется
+        // при первом sign-in). Покрывает кейс: новый девайс / Keychain не синкнулся / Firebase
+        // displayName потерян. Имя в Firestore — серверная истина пока юзер сам не удалил аккаунт.
+        if userName == nil, let fs = firestore {
+            if let dn = try? await fs.fetchUserDisplayName(uid: uid), !dn.isEmpty, dn != "Пользователь" {
+                userName = dn
+                KeychainService.saveUserName(dn)
+                authLog.info("Restored name from Firestore users/\(uid, privacy: .private).displayName")
+            }
         }
 
         // v1.1: имя — обязательное условие. Если не получили — gate на re-auth.
@@ -103,6 +125,12 @@ final class AuthService: NSObject {
             authLog.info("No usable name after restore — requiring name recovery")
         } else {
             requiresNameRecovery = false
+        }
+
+        // Освежить userLocale при каждом restore — юзер мог сменить язык iPhone'а.
+        // Серверный CF использует это для locale-aware push wording.
+        if let fs = firestore {
+            try? await fs.setUserLocale(uid: uid, locale: CurrentLocale.identifier())
         }
 
         authLog.info("Restored: uid=\(uid, privacy: .private), name=\(self.userName ?? "nil", privacy: .private)")
@@ -212,21 +240,43 @@ final class AuthService: NSObject {
                 }
             }
 
-            // 4. Try email as last resort
-            if resolvedName == nil {
-                if let email = authResult.user.email, !email.isEmpty {
-                    resolvedName = email.components(separatedBy: "@").first
+            // 4. Серверная истина: users/{uid}.displayName в Firestore. Пишется ниже после
+            //    первого успешного sign-in и не стирается при signOut → выдерживает любой
+            //    перелогин/новый девайс пока юзер сам не удалил аккаунт.
+            if resolvedName == nil, let fs = firestore {
+                if let dn = try? await fs.fetchUserDisplayName(uid: authResult.user.uid),
+                   !dn.isEmpty, dn != "Пользователь" {
+                    resolvedName = dn
+                    authLog.info("Resolved name from Firestore users/{uid}.displayName")
                 }
             }
 
-            // v1.1: имя — обязательное условие. Без него gate на re-auth, не fallback на "Пользователь".
+            // v1.1: имя — обязательное условие. Без него gate на re-auth, не fallback на email/"Пользователь".
+            // (Email от Apple через privaterelay = бессмысленный hash-prefix, не показываем.)
             if let finalName = resolvedName, !finalName.isEmpty, finalName != "Пользователь" {
                 userName = finalName
                 KeychainService.saveUserName(finalName)
                 requiresNameRecovery = false
+
+                // Persist в Firebase Auth profile (серверная истина) — Apple отдаёт fullName
+                // только при ПЕРВОМ sign-in, дальше credential.fullName == nil навсегда.
+                // Firebase сам собирает displayName из credential.fullName на первом signIn,
+                // но не всегда надёжно (PersonNameComponents vs String) — пишем явно.
+                if authResult.user.displayName != finalName {
+                    let change = authResult.user.createProfileChangeRequest()
+                    change.displayName = finalName
+                    try? await change.commitChanges()
+                }
+
+                // Persist в Firestore users/{uid}.displayName — наш собственный серверный fallback.
+                // Открытым полем (не E2E), это OK: имя нужно для атрибуции в shared и push wording.
+                if let fs = firestore {
+                    try? await fs.setUserDisplayName(uid: authResult.user.uid, displayName: finalName)
+                    // userLocale — для locale-aware push в Cloud Function.
+                    try? await fs.setUserLocale(uid: authResult.user.uid, locale: CurrentLocale.identifier())
+                }
             } else {
                 userName = nil
-                KeychainService.deleteUserName()
                 requiresNameRecovery = true
                 authLog.info("Sign-in без имени — переход в name recovery flow")
             }
@@ -259,8 +309,12 @@ final class AuthService: NSObject {
         _isAppleSignedIn = false
         userName = nil
         requiresNameRecovery = false
-        KeychainService.deleteUserName()
-        UserDefaults.standard.removeObject(forKey: "auth_userName")
+        // НЕ стираем displayName из iCloud Keychain / Firestore / Firebase Auth profile.
+        // Apple отдаёт fullName ТОЛЬКО при первом sign-in навсегда — если мы потеряем имя
+        // при signOut, повторный signIn покажет shield "удалите прилу". Это была плохая UX:
+        // имя — серверная истина, привязанная к Apple userIdentifier; стираем её только
+        // при полном удалении аккаунта (AccountDeletionService).
+        // UserDefaults["auth_userName"] не трогаем — legacy migration ключ.
     }
 
     enum AuthError: LocalizedError {
@@ -269,8 +323,8 @@ final class AuthService: NSObject {
 
         var errorDescription: String? {
             switch self {
-            case .missingCredential: return "Не удалось получить данные Apple ID"
-            case .notAuthenticated: return "Необходимо войти через Apple ID"
+            case .missingCredential: return String(localized: "Couldn’t get Apple ID data")
+            case .notAuthenticated: return String(localized: "Sign in with Apple ID is required")
             }
         }
     }

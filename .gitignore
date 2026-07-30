@@ -31,7 +31,11 @@ fastlane/test_output
 # Brainstorming scratch (Superpowers)
 .superpowers/
 
+# Cloud Functions deps (87 MB, restore via `npm install` in functions/)
+functions/node_modules/
+
 # Internal AI working notes — never push
 CLAUDE.md
+HANDOFF-prod-bugs-v120.md
 firebase-debug.log
 build 2/

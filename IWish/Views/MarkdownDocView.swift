@@ -24,7 +24,7 @@ struct MarkdownDocView: View {
     private func load() {
         guard let url = Bundle.main.url(forResource: resourceName, withExtension: "md"),
               let text = try? String(contentsOf: url, encoding: .utf8) else {
-            blocks = [.paragraph("Документ недоступен")]
+            blocks = [.paragraph(String(localized: "Document unavailable"))]
             return
         }
         blocks = parseMarkdown(text)

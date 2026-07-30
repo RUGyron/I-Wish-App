@@ -15,6 +15,7 @@ enum ModelContainerFactory {
             Wishlist.self,
             Item.self,
             AppSettings.self,
+            PendingOperation.self,
         ])
         let config = ModelConfiguration(
             schema: schema,

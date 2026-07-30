@@ -13,6 +13,7 @@ import FirebaseCore
 
 @main
 struct IWishApp: App {
+    @UIApplicationDelegateAdaptor(IWishAppDelegate.self) var appDelegate
     let container: ModelContainer
     @State private var pendingShareURL: String?
     @State private var showingJoinFromLink = false
@@ -44,6 +45,8 @@ struct IWishApp: App {
                     JoinWishlistSheet(initialURL: pendingShareURL)
                 }
                 .task {
+                    // One-time: ключи существующих списков → shared keychain group для NSE.
+                    AppServices.shared.data?.migrateSharedKeychainIfNeeded()
                     // v1.1 one-time migration backfill — гонится в фоне, не блокирует UI.
                     // updateItem использует preserve-unknown-keys → не теряет ничего.
                     await AppServices.shared.data?.runV11BackfillIfNeeded()
@@ -84,7 +87,20 @@ struct IWishApp: App {
             showingJoinFromLink = true
             return
         }
+
+        // Push deeplink: iwish://wishlist/{id} или iwish://wishlist/{id}/item/{itemID}.
+        // Парсится в RootView.handlePushDeeplink через NotificationCenter.
+        if url.scheme == "iwish", url.host() == "wishlist" {
+            NotificationCenter.default.post(name: .iwishPushDeeplink, object: url)
+            return
+        }
     }
+}
+
+extension Notification.Name {
+    /// Запрос навигации к конкретному вишлисту/желанию из push-уведомления.
+    /// object = URL вида iwish://wishlist/{id} либо iwish://wishlist/{id}/item/{itemID}.
+    static let iwishPushDeeplink = Notification.Name("iwishPushDeeplink")
 }
 
 extension Notification.Name {

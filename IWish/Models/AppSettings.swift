@@ -23,6 +23,37 @@ final class AppSettings {
     // App icon
     var selectedAppIconRaw: String = "light"
 
+    // Push notifications
+    /// Глобальный switch уведомлений. Если false — пуши не идут ни от одного вишлиста.
+    var pushNotificationsEnabled: Bool = true
+    /// Дефолт для новых вишлистов: включать ли уведомления при создании.
+    var newWishlistNotificationsDefault: Bool = true
+
+    // URL parsing — какие поля автозаполнять при paste ссылки.
+    var parseFillTitle: Bool = true
+    var parseFillImage: Bool = true
+    var parseFillPrice: Bool = true
+    var parseFillDescription: Bool = true
+    /// Режим автозаполнения при вставке ссылки:
+    /// "off" — не заполнять; "empty" — только пустые (default); "overwrite" — всегда перезаписывать.
+    var parseFillModeRaw: String = "empty"
+    /// Legacy boolean — оставлен на случай если кто-то читает старое поле. Не используется.
+    var parseOverwriteFilled: Bool = false
+
+    /// Стиль pending-sync indicator: "pill" | "stripe" | "clock" | "faded".
+    /// Юзер выбирает в Settings → Дизайн → Pending indicator.
+    var pendingIndicatorStyleRaw: String = "pill"
+
+    var parseFillMode: ParseFillMode {
+        get { ParseFillMode(rawValue: parseFillModeRaw) ?? .empty }
+        set { parseFillModeRaw = newValue.rawValue }
+    }
+
+    var pendingIndicatorStyle: PendingIndicatorStyle {
+        get { PendingIndicatorStyle(rawValue: pendingIndicatorStyleRaw) ?? .pill }
+        set { pendingIndicatorStyleRaw = newValue.rawValue }
+    }
+
     // MARK: - Computed bridges
 
     var themeMode: ThemeMode {

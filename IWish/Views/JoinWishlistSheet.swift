@@ -36,9 +36,9 @@ struct JoinWishlistSheet: View {
                     Image(systemName: "qrcode.viewfinder")
                         .font(.system(size: 48))
                         .foregroundStyle(.tint)
-                    Text("Присоединиться к списку")
+                    Text("Join a wishlist")
                         .font(.title3.weight(.semibold))
-                    Text("Отсканируй QR-код или вставь ссылку из буфера")
+                    Text("Scan a QR code or paste a link from the clipboard")
                         .font(.subheadline)
                         .foregroundStyle(.secondary)
                         .multilineTextAlignment(.center)
@@ -49,7 +49,7 @@ struct JoinWishlistSheet: View {
                     Button {
                         showingScanner = true
                     } label: {
-                        Label("Сканировать QR-код", systemImage: "qrcode.viewfinder")
+                        Label("Scan QR code", systemImage: "qrcode.viewfinder")
                             .frame(maxWidth: .infinity)
                     }
                     .buttonStyle(.borderedProminent)
@@ -58,7 +58,7 @@ struct JoinWishlistSheet: View {
                     Button {
                         pasteAndJoin()
                     } label: {
-                        Label("Вставить из буфера", systemImage: "doc.on.clipboard")
+                        Label("Paste from clipboard", systemImage: "doc.on.clipboard")
                             .frame(maxWidth: .infinity)
                     }
                     .buttonStyle(.bordered)
@@ -71,12 +71,12 @@ struct JoinWishlistSheet: View {
                 Spacer()
             }
             .background(Theme.background.ignoresSafeArea())
-            .navigationTitle("Присоединиться")
+            .navigationTitle("Join")
             .navigationBarTitleDisplayMode(.inline)
             .fontDesign(.rounded)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
-                    Button("Закрыть") { dismiss() }
+                    Button("Close") { dismiss() }
                 }
             }
             .fullScreenCover(isPresented: $showingScanner) {
@@ -111,7 +111,7 @@ struct JoinWishlistSheet: View {
 
     private func pasteAndJoin() {
         guard let clipboard = UIPasteboard.general.string, !clipboard.isEmpty else {
-            toast.error("Буфер обмена пуст")
+            toast.error(String(localized: "Clipboard is empty"))
             return
         }
         joinByLink(clipboard)
@@ -120,7 +120,7 @@ struct JoinWishlistSheet: View {
     private func joinByLink(_ link: String) {
         let trimmed = link.trimmingCharacters(in: .whitespacesAndNewlines)
         guard let url = URL(string: trimmed) else {
-            toast.error("Неверная ссылка")
+            toast.error(String(localized: "Invalid link"))
             return
         }
 
@@ -141,7 +141,7 @@ struct JoinWishlistSheet: View {
         }
 
         guard let id = shortID else {
-            toast.error("Неверная ссылка")
+            toast.error(String(localized: "Invalid link"))
             return
         }
 
@@ -166,7 +166,7 @@ struct JoinWishlistSheet: View {
         }()
 
         guard let keyValue, let key = EncryptionService.key(fromFragment: keyValue) else {
-            toast.error("Ссылка повреждена — нет ключа доступа")
+            toast.error(String(localized: "Link is broken — access key missing"))
             return
         }
 
@@ -175,7 +175,7 @@ struct JoinWishlistSheet: View {
             do {
                 guard let info = try await services.firestore.resolveInviteLink(shortID: id, key: key) else {
                     joinStatus = .idle
-                    toast.error("Приглашение недействительно или истекло")
+                    toast.error(String(localized: "Invitation is invalid or expired"))
                     return
                 }
                 resolvedInfo = info
@@ -184,7 +184,7 @@ struct JoinWishlistSheet: View {
                 showingInvitePreview = true
             } catch {
                 joinStatus = .idle
-                toast.error("Не удалось расшифровать приглашение")
+                toast.error(String(localized: "Couldn’t decrypt the invitation"))
             }
         }
     }
@@ -195,13 +195,13 @@ struct JoinWishlistSheet: View {
             do {
                 guard let uid = services.auth.uid else {
                     showingInvitePreview = false
-                    toast.error("Необходимо войти через Apple ID")
+                    toast.error(String(localized: "Sign in with Apple ID is required"))
                     return
                 }
 
                 guard let userName = services.auth.userName, !userName.isEmpty, userName != "Пользователь" else {
                     showingInvitePreview = false
-                    toast.error("Не удалось получить ваше имя — войдите заново")
+                    toast.error(String(localized: "Couldn’t read your name — please sign in again"))
                     return
                 }
 
@@ -210,7 +210,7 @@ struct JoinWishlistSheet: View {
                 let memberships = try await services.firestore.fetchMyMemberships(userUID: uid)
                 if memberships.contains(where: { $0.wishlistID == info.wishlistID }) {
                     showingInvitePreview = false
-                    toast.success("Вы уже участник этого списка")
+                    toast.success(String(localized: "You’re already a member of this list"))
                     try? await Task.sleep(for: .seconds(0.5))
                     dismiss()
                     return
@@ -285,12 +285,12 @@ struct JoinWishlistSheet: View {
                 try context.save()
 
                 showingInvitePreview = false
-                toast.success("Присоединились к «\(info.wishlistName)»")
+                toast.success(String(format: String(localized: "Joined “%@”"), info.wishlistName))
                 try? await Task.sleep(for: .seconds(0.5))
                 dismiss()
             } catch {
                 showingInvitePreview = false
-                toast.error("Не удалось присоединиться: \(error.localizedDescription)")
+                toast.error(String(format: String(localized: "Couldn’t join: %@"), error.localizedDescription))
             }
         }
     }
@@ -408,7 +408,7 @@ final class QRScannerViewController: UIViewController, AVCaptureMetadataOutputOb
 
         // Title label above cutout
         let titleLabel = UILabel()
-        titleLabel.text = "Сканируй QR-код"
+        titleLabel.text = String(localized: "Scan the QR code")
         titleLabel.textColor = .white
         titleLabel.font = .systemFont(ofSize: 20, weight: .semibold)
         titleLabel.textAlignment = .center
@@ -527,13 +527,13 @@ final class QRScannerViewController: UIViewController, AVCaptureMetadataOutputOb
         icon.heightAnchor.constraint(equalToConstant: 56).isActive = true
 
         let title = UILabel()
-        title.text = "Нет доступа к камере"
+        title.text = String(localized: "No camera access")
         title.textColor = .white
         title.font = .systemFont(ofSize: 20, weight: .semibold)
         title.textAlignment = .center
 
         let desc = UILabel()
-        desc.text = "Чтобы отсканировать QR-код, разрешите приложению доступ к камере в Настройках."
+        desc.text = String(localized: "To scan QR codes, allow camera access in Settings.")
         desc.textColor = .lightGray
         desc.font = .systemFont(ofSize: 15)
         desc.numberOfLines = 0
@@ -541,7 +541,7 @@ final class QRScannerViewController: UIViewController, AVCaptureMetadataOutputOb
 
         let settingsBtn = UIButton(type: .system)
         var settingsConfig = UIButton.Configuration.borderedProminent()
-        settingsConfig.title = "Открыть Настройки"
+        settingsConfig.title = String(localized: "Open Settings")
         settingsConfig.cornerStyle = .large
         settingsBtn.configuration = settingsConfig
         settingsBtn.addAction(UIAction { [weak self] _ in
@@ -551,7 +551,7 @@ final class QRScannerViewController: UIViewController, AVCaptureMetadataOutputOb
         }, for: .touchUpInside)
 
         let cancelBtn = UIButton(type: .system)
-        cancelBtn.setTitle("Закрыть", for: .normal)
+        cancelBtn.setTitle(String(localized: "Close"), for: .normal)
         cancelBtn.setTitleColor(.lightGray, for: .normal)
         cancelBtn.titleLabel?.font = .systemFont(ofSize: 16, weight: .medium)
         cancelBtn.addAction(UIAction { [weak self] _ in

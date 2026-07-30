@@ -8,7 +8,7 @@ struct PrivacyDisclosureView: View {
                     Image(systemName: "lock.shield.fill")
                         .font(.system(size: 56))
                         .foregroundStyle(.tint)
-                    Text("Ваши данные — только ваши")
+                    Text("Your data — yours only")
                         .font(.title2.weight(.semibold))
                         .multilineTextAlignment(.center)
                 }
@@ -18,44 +18,44 @@ struct PrivacyDisclosureView: View {
                 Group {
                     section(
                         icon: "lock.fill",
-                        title: "Контент шифруется на устройстве",
-                        body: "Имена списков, желания, фотки, цены, описания, ссылки — всё шифруется AES-256 прямо на вашем iPhone до того, как улетит в облако. На сервере хранятся только нечитаемые байты."
+                        title: String(localized: "Content is encrypted on device"),
+                        body: String(localized: "List names, wishes, photos, prices, descriptions, links — everything is encrypted with AES-256 right on your iPhone before it flies to the cloud. Only unreadable bytes are stored on the server.")
                     )
 
                     section(
                         icon: "icloud.fill",
-                        title: "Ключи живут в iCloud Keychain",
-                        body: "Ключ шифрования каждого списка генерируется локально и сохраняется в iCloud Keychain. Apple синхронизирует его между вашими Apple ID устройствами через end-to-end защищённый канал. Apple ключи видит только в зашифрованном виде, разработчик — никогда."
+                        title: String(localized: "Keys live in iCloud Keychain"),
+                        body: String(localized: "An encryption key for each list is generated locally and saved to iCloud Keychain. Apple syncs it between your Apple ID devices through an end-to-end secure channel. Apple sees keys only in encrypted form, the developer — never.")
                     )
 
                     section(
                         icon: "server.rack",
-                        title: "Что мы видим в облаке",
-                        body: "Данные хранятся в Google Firebase. Разработчик через консоль Firebase может узнать только техническую информацию: количество списков, время создания, размер зашифрованных блобов и связи «кто с кем поделился». Содержимое — нет."
+                        title: String(localized: "What we see in the cloud"),
+                        body: String(localized: "Data is stored on Google Firebase. Through the Firebase console the developer can see only technical info: list counts, creation times, size of encrypted blobs, and “who shared with whom” links. The content itself — no.")
                     )
 
                     section(
                         icon: "person.text.rectangle",
-                        title: "Имя в общих списках",
-                        body: "Если вы делитесь списком, ваше имя записывается в Firebase в открытом виде в документ membership — чтобы участники видели реальные имена друг друга. Без этого они отображались бы как безличный «Участник». Имя не привязано к содержимому списков, разработчик видит только сами имена. Если списками не делитесь — имя в Firebase не попадает."
+                        title: String(localized: "Name in shared lists"),
+                        body: String(localized: "If you share a list, your name is written to Firebase in plaintext in the membership document — so participants see each other’s real names. Without that they would show as an impersonal “Participant”. The name is not tied to list contents — the developer sees only the names themselves. If you don’t share lists, your name doesn’t end up in Firebase.")
                     )
 
                     section(
                         icon: "qrcode",
-                        title: "Шеринг через QR-код",
-                        body: "Когда вы делитесь списком, ключ шифрования встраивается в QR-код или ссылку (после `#`) и не отправляется на сервер. Получатель сканирует QR — ключ оказывается у него локально, и его iPhone сам расшифровывает содержимое."
+                        title: String(localized: "Sharing via QR code"),
+                        body: String(localized: "When you share a list, the encryption key is embedded in the QR code or link (after `#`) and is not sent to the server. The recipient scans the QR — the key ends up on their device locally, and their iPhone decrypts the content itself.")
                     )
 
                     section(
                         icon: "exclamationmark.triangle.fill",
-                        title: "У нас нет копии ваших ключей",
-                        body: "Если вы потеряете все Apple ID устройства и сбросите iCloud Keychain — данные станут нечитаемыми навсегда. Это плата за то, что разработчик никогда не может в них заглянуть."
+                        title: String(localized: "We don’t have a copy of your keys"),
+                        body: String(localized: "If you lose all your Apple ID devices and reset iCloud Keychain — the data becomes unreadable forever. That’s the price for the developer never being able to peek inside.")
                     )
 
                     section(
                         icon: "eye.slash.fill",
-                        title: "Без трекинга и аналитики",
-                        body: "Никакой аналитики, крашлитики, рекламы. Приложение общается только с серверами Firebase для синхронизации (зашифрованной) и Apple для авторизации."
+                        title: String(localized: "No tracking or analytics"),
+                        body: String(localized: "No analytics, crashlytics, ads. The app talks only to Firebase servers for sync (encrypted) and Apple for sign-in.")
                     )
                 }
                 .padding(.horizontal)
@@ -64,10 +64,10 @@ struct PrivacyDisclosureView: View {
                     Image(systemName: "chevron.left.forwardslash.chevron.right")
                         .font(.caption)
                         .foregroundStyle(.tertiary)
-                    Text("Исходный код открыт и проверяем")
+                    Text("Source code is open and auditable")
                         .font(.caption.weight(.medium))
                         .foregroundStyle(.secondary)
-                    Text("github.com/RUGyron/I-Wish-App")
+                    Text(verbatim: "github.com/RUGyron/I-Wish-App")
                         .font(.caption2)
                         .foregroundStyle(.tertiary)
                         .textSelection(.enabled)
@@ -78,7 +78,7 @@ struct PrivacyDisclosureView: View {
             }
         }
         .background(Theme.background)
-        .navigationTitle("Как мы храним данные")
+        .navigationTitle("How we store your data")
         .navigationBarTitleDisplayMode(.inline)
     }
 

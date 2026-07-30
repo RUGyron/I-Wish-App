@@ -18,7 +18,7 @@ struct WishlistArchiveView: View {
         NavigationStack {
             Group {
                 if archivedWishlists.isEmpty {
-                    ContentUnavailableView("Архив пуст", systemImage: "archivebox")
+                    ContentUnavailableView("Archive is empty", systemImage: "archivebox")
                         .frame(maxWidth: .infinity, maxHeight: .infinity)
                         .background(Theme.background)
                         .onAppear { dismiss() }
@@ -46,7 +46,7 @@ struct WishlistArchiveView: View {
                             .swipeActions(edge: .trailing) {
                                 Button(role: .destructive) {
                                     wishlistToDelete = wishlist
-                                } label: { Label("Удалить", systemImage: "trash") }
+                                } label: { Label("Delete", systemImage: "trash") }
 
                                 Button {
                                     isPerformingAction = true
@@ -58,7 +58,7 @@ struct WishlistArchiveView: View {
                                         }
                                         isPerformingAction = false
                                     }
-                                } label: { Label("Восстановить", systemImage: "arrow.uturn.backward") }
+                                } label: { Label("Restore", systemImage: "arrow.uturn.backward") }
                                 .tint(.blue)
                             }
                         }
@@ -66,21 +66,21 @@ struct WishlistArchiveView: View {
                 }
             }
             .warmBackground()
-            .navigationTitle("Архив списков")
+            .navigationTitle("Archived lists")
             .navigationBarTitleDisplayMode(.inline)
             .fontDesign(.rounded)
             .toolbar {
                 ToolbarItem(placement: .confirmationAction) {
-                    Button("Готово") { dismiss() }
+                    Button("Done") { dismiss() }
                 }
             }
             .loadingOverlay(isPerformingAction)
             .confirmationDialog(
-                "Удалить «\(wishlistToDelete?.name ?? "")»?",
+                "Delete “\(wishlistToDelete?.name ?? "")”?",
                 isPresented: Binding(get: { wishlistToDelete != nil }, set: { if !$0 { wishlistToDelete = nil } }),
                 titleVisibility: .visible
             ) {
-                Button("Удалить", role: .destructive) {
+                Button("Delete", role: .destructive) {
                     guard let wl = wishlistToDelete else { return }
                     isPerformingAction = true
                     Task {

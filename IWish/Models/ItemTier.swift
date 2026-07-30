@@ -26,9 +26,9 @@ enum ItemTier: String, Codable, CaseIterable, Sendable, Identifiable {
 
     var label: String {
         switch self {
-        case .must:  return "Обязательно"
-        case .maybe: return "Пока думаю"
-        case .idea:  return "Просто идея"
+        case .must:  return String(localized: "Must have")
+        case .maybe: return String(localized: "Maybe")
+        case .idea:  return String(localized: "Just an idea")
         }
     }
 

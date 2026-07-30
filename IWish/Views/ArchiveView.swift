@@ -15,7 +15,7 @@ struct ArchiveView: View {
         NavigationStack {
             Group {
                 if archivedItems.isEmpty {
-                    ContentUnavailableView("Архив пуст", systemImage: "archivebox")
+                    ContentUnavailableView("Archive is empty", systemImage: "archivebox")
                         .frame(maxWidth: .infinity, maxHeight: .infinity)
                         .background(Theme.background)
                         .onAppear { dismiss() }
@@ -34,13 +34,13 @@ struct ArchiveView: View {
                                 Button(role: .destructive) {
                                     context.delete(item)
                                     try? context.save()
-                                } label: { Label("Удалить", systemImage: "trash") }
+                                } label: { Label("Delete", systemImage: "trash") }
 
                                 Button {
                                     item.isArchived = false
                                     item.updatedAt = .now
                                     try? context.save()
-                                } label: { Label("Восстановить", systemImage: "arrow.uturn.backward") }
+                                } label: { Label("Restore", systemImage: "arrow.uturn.backward") }
                                     .tint(.blue)
                             }
                         }
@@ -48,12 +48,12 @@ struct ArchiveView: View {
                 }
             }
             .warmBackground()
-            .navigationTitle("Архив")
+            .navigationTitle("Archive")
             .navigationBarTitleDisplayMode(.inline)
             .fontDesign(.rounded)
             .toolbar {
                 ToolbarItem(placement: .confirmationAction) {
-                    Button("Готово") { dismiss() }
+                    Button("Done") { dismiss() }
                 }
             }
         }

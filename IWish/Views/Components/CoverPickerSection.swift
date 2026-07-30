@@ -21,17 +21,17 @@ struct CoverPickerSection: View {
             Menu {
                 if UIImagePickerController.isSourceTypeAvailable(.camera) {
                     Button { showingCamera = true } label: {
-                        Label("Камера", systemImage: "camera")
+                        Label("Camera", systemImage: "camera")
                     }
                 }
                 Button { showingPhotoPicker = true } label: {
-                    Label("Галерея", systemImage: "photo.on.rectangle")
+                    Label("Photos", systemImage: "photo.on.rectangle")
                 }
                 Button {
                     emojiDraft = emoji ?? ""
                     showingEmojiInput = true
                 } label: {
-                    Label("Эмодзи", systemImage: "face.smiling")
+                    Label("Emoji", systemImage: "face.smiling")
                 }
                 if hasSelection {
                     Divider()
@@ -39,7 +39,7 @@ struct CoverPickerSection: View {
                         imageData = nil
                         emoji = nil
                     } label: {
-                        Label("Убрать обложку", systemImage: "trash")
+                        Label("Remove cover", systemImage: "trash")
                     }
                 }
             } label: {
@@ -57,7 +57,7 @@ struct CoverPickerSection: View {
                             .frame(width: 36, height: 36)
                     }
 
-                    Label(hasSelection ? "Сменить обложку" : "Выбрать обложку",
+                    Label(hasSelection ? String(localized: "Change cover") : String(localized: "Choose cover"),
                           systemImage: "photo")
                     Spacer()
                 }
@@ -67,7 +67,7 @@ struct CoverPickerSection: View {
             // Inline emoji input (only when active)
             if showingEmojiInput {
                 HStack {
-                    TextField("Введи эмодзи", text: $emojiDraft)
+                    TextField("Type an emoji", text: $emojiDraft)
                         .onChange(of: emojiDraft) { _, newValue in
                             if let last = newValue.last, last.isEmoji {
                                 emoji = String(last)
@@ -75,7 +75,7 @@ struct CoverPickerSection: View {
                             }
                         }
                         .onSubmit { showingEmojiInput = false }
-                    Button("Готово") { showingEmojiInput = false }
+                    Button("Done") { showingEmojiInput = false }
                         .font(.subheadline)
                 }
             }

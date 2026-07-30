@@ -8,8 +8,8 @@ enum AppIconVariant: String, Codable, CaseIterable, Sendable, Identifiable {
 
     var label: String {
         switch self {
-        case .light: return "Светлая"
-        case .dark:  return "Тёмная"
+        case .light: return String(localized: "Light")
+        case .dark:  return String(localized: "Dark")
         }
     }
 
